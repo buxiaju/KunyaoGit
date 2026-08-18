@@ -53,7 +53,7 @@
 需要 Node.js ≥ 20、Git ≥ 2.30。
 
 ```bash
-git clone https://github.com/kunyao/KunyaoGit.git
+git clone https://github.com/buxiaju/KunyaoGit.git
 cd KunyaoGit
 npm install
 npm run dev     # 开发模式（带热更新）
