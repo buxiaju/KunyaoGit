@@ -7,6 +7,10 @@
 !include "FileFunc.nsh"
 !include "x64.nsh"
 
+SetCompressor /SOLID lzma
+SetCompressorDictSize 64
+SetDatablockOptimize on
+
 !ifndef APP_VERSION
   !define APP_VERSION "0.1.0"
 !endif
@@ -64,8 +68,12 @@ Section "-Install" SecInstall
   SectionIn RO
   SetOutPath "$INSTDIR"
 
+  ; Clean leftover from earlier build (old layout had resources/app/ dir, new uses resources/app.asar file)
+  IfFileExists "$INSTDIR\resources\app\*.*" 0 +2
+    RMDir /r "$INSTDIR\resources\app"
+
   ; Copy all unpacked files except the existing uninstaller
-  File /r "..\release\win-unpacked\*.*"
+  File /r "..\release\win-unpacked-v2\*.*"
 
   ; Write uninstaller
   WriteUninstaller "$INSTDIR\Uninstall.exe"
