@@ -1,0 +1,89 @@
+{
+  "name": "kunyaogit",
+  "version": "0.1.0",
+  "private": true,
+  "description": "KunyaoGit - A cross-platform Git GUI client for GitHub and Gitee",
+  "main": "dist-electron/main.js",
+  "author": "kunyao",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build && electron-builder",
+    "build:win": "tsc -b && vite build && electron-builder --win",
+    "preview": "vite preview",
+    "typecheck": "tsc -b --noEmit",
+    "lint": "eslint . --ext .ts,.tsx --fix"
+  },
+  "dependencies": {
+    "@monaco-editor/react": "^4.6.0",
+    "@octokit/auth-token": "^5.1.0",
+    "@octokit/rest": "^21.0.2",
+    "axios": "^1.7.9",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
+    "diff2html": "^3.4.51",
+    "electron-store": "^8.2.0",
+    "lucide-react": "^0.469.0",
+    "nanoid": "^5.0.9",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^7.1.1",
+    "simple-git": "^3.27.0",
+    "zustand": "^5.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "electron": "^33.3.0",
+    "electron-builder": "^25.1.8",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7",
+    "vite-plugin-electron": "^0.29.0",
+    "vite-plugin-electron-renderer": "^0.14.6"
+  },
+  "build": {
+    "appId": "com.minimax.gitgui",
+    "productName": "GitGUI",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "${productName}-Setup-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "KunyaoGit",
+      "perMachine": false,
+      "allowElevation": true,
+      "deleteAppDataOnUninstall": true,
+      "createUninstallerDir": true
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "buxiaju",
+        "repo": "KunyaoGit",
+        "releaseType": "release"
+      }
+    ]
+  }
+}
