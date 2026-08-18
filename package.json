@@ -46,8 +46,8 @@
     "vite-plugin-electron-renderer": "^0.14.6"
   },
   "build": {
-    "appId": "com.minimax.gitgui",
-    "productName": "GitGUI",
+    "appId": "com.kunyao.kunyaogit",
+    "productName": "KunyaoGit",
     "directories": {
       "output": "release"
     },

@@ -12,6 +12,9 @@ dist-electron/
 release/
 out/
 
+# 本地工具（NSIS 编译器等，不入库）
+tools/
+
 # Electron
 .electron-cache/
 
@@ -42,3 +45,7 @@ coverage/
 *.dll
 *.exe
 *.pdb
+
+# 例外：发布资产中的安装包 / 便携包需要入库（供 Gitee Release 走 git 分发）
+!.release-assets/*.exe
+!.release-assets/*.zip

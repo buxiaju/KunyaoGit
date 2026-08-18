@@ -47,7 +47,16 @@
 ## 安装
 
 ### Windows（推荐）
-从 [Releases](https://github.com/buxiaju/KunyaoGit/releases) 下载 `KunyaoGit-Setup-0.1.0-x64.exe` 双击安装。
+从 [Releases](https://github.com/buxiaju/KunyaoGit/releases) 下载 `KunyaoGit-Setup-0.1.0-x64.exe` 双击安装（NSIS 安装包，~113 MB，含完整 Electron 运行时，会创建桌面和开始菜单快捷方式）。
+
+- GitHub: https://github.com/buxiaju/KunyaoGit/releases/download/v0.1.0/KunyaoGit-Setup-0.1.0-x64.exe
+- Gitee:  https://gitee.com/buxiaju/KunyaoGit/releases/v0.1.0 （在 `.release-assets/` 目录获取安装包）
+
+便携版（不需安装）见同 Release 的 `KunyaoGit-portable-v0.1.0.zip`（~3.5 MB，解压后运行 `kunyaogit.exe`）。
+
+### 系统要求
+- Windows 10 / 11（x64）
+- 已安装 Git（应用通过本地 Git 命令行调用，需要 `git` 在 PATH 中）
 
 ### 从源码运行
 需要 Node.js ≥ 20、Git ≥ 2.30。
