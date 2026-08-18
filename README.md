@@ -47,7 +47,7 @@
 ## 安装
 
 ### Windows（推荐）
-从 [Releases](https://github.com/kunyao/KunyaoGit/releases) 下载 `KunyaoGit-Setup-0.1.0-x64.exe` 双击安装。
+从 [Releases](https://github.com/buxiaju/KunyaoGit/releases) 下载 `KunyaoGit-Setup-0.1.0-x64.exe` 双击安装。
 
 ### 从源码运行
 需要 Node.js ≥ 20、Git ≥ 2.30。
