@@ -142,6 +142,14 @@ const api = {
     getVersion: () => ipcRenderer.invoke('app:get-version'),
     openExternal: (url: string) => ipcRenderer.invoke('app:open-external', url),
   },
+
+  // 更新检查
+  update: {
+    check: () => ipcRenderer.invoke(IPC.UPDATE_CHECK),
+    checkSilent: () => ipcRenderer.invoke(IPC.UPDATE_CHECK_SILENT),
+    dismiss: (version: string) => ipcRenderer.invoke(IPC.UPDATE_DISMISS, version),
+    open: (url: string) => ipcRenderer.invoke(IPC.UPDATE_OPEN, url),
+  },
 };
 
 contextBridge.exposeInMainWorld('gitgui', api);

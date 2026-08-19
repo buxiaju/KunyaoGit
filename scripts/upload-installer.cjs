@@ -28,14 +28,17 @@ if (ASSETS.length === 0) {
 
 const RELEASE_BODY = `# KunyaoGit v${VERSION}
 
-首个公开版本（Windows x64）。
+## v0.2.0 新增
+- ✨ **自动更新检查** — 同时检查 GitHub 和 Gitee 的最新 release，发现新版本可在 应用内一键跳转下载
+- ✨ **专属应用图标** — Jade 绿 + K + Git 分支头尾节点，绿松石质感
+- 🐛 **修复安装包缺 node_modules** — 之前首次安装报 \`Cannot find module 'electron-store'\`；改用 asar 打包后正常
 
 ## 下载
-- **KunyaoGit-Setup-${VERSION}-x64.exe** — NSIS 安装包，118 MB，包含完整 Electron 运行时；提供桌面/开始菜单快捷方式、卸载入口。
-- **KunyaoGit-portable-v${VERSION}.zip** — 便携版（3.5 MB，仅源码 + Electron 入口，需要本机已安装 Node.js 与 Electron）。
+- **KunyaoGit-Setup-${VERSION}-x64.exe** — NSIS 安装包（推荐），双击安装，含专属图标、桌面/开始菜单快捷方式、卸载入口
+- **KunyaoGit-portable-v${VERSION}.zip** — 便携版（3.5 MB，仅源码 + Electron 入口，需要本机已安装 Node.js 与 Electron）
 
 ## 安装
-下载 Setup .exe，双击运行 → 选择安装目录 → 安装完成。
+下载 Setup .exe → 双击运行 → 选择安装目录 → 安装完成。
 
 ## 系统要求
 - Windows 10 / 11（x64）
@@ -50,9 +53,12 @@ const RELEASE_BODY = `# KunyaoGit v${VERSION}
 - Release 管理
 - 内容搜索
 - 自动 CHANGELOG 生成
+- 自动更新检查（启动后 1.5s 静默检测，发现新版本弹窗提示）
 
 ## 安装 Token
 打开应用 → 设置 → 选择 GitHub / Gitee → 填入 Personal Access Token → 测试并保存。
+
+> Gitee 公开 release 列表 API 对匿名请求返回 404；如果你在 设置 → Gitee 里配了 token，更新检查会同时拉取 Gitee 端数据。
 
 ## 仓库
 - GitHub: https://github.com/buxiaju/KunyaoGit

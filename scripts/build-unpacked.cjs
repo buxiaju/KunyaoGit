@@ -44,7 +44,7 @@ function rmrf(p) {
   fs.rmSync(p, { recursive: true, force: true });
 }
 
-function main() {
+async function main() {
   if (!fs.existsSync(SOURCE_ELECTRON_DIST)) throw new Error('node_modules/electron/dist 缺失');
   if (!fs.existsSync(DIST) || !fs.existsSync(DIST_ELECTRON)) throw new Error('dist/ 或 dist-electron/ 缺失');
   if (!fs.existsSync(ASAR_BIN)) throw new Error('@electron/asar 未安装');
@@ -64,6 +64,31 @@ function main() {
 
   log('2) 重命名 electron.exe -> ' + PRODUCT + '.exe');
   fs.copyFileSync(path.join(SOURCE_ELECTRON_DIST, 'electron.exe'), path.join(TARGET, PRODUCT + '.exe'));
+
+  log('2.5) 嵌入应用图标到 kunyaogit.exe');
+  const iconIco = path.join(ROOT, 'assets', 'icon.ico');
+  if (fs.existsSync(iconIco)) {
+    try {
+      // rcedit 5.x is ESM-only, use dynamic import from CJS
+      const rceditModule = await import('rcedit');
+      const rcedit = rceditModule.rcedit || rceditModule.default;
+      await rcedit(path.join(TARGET, PRODUCT + '.exe'), {
+        icon: iconIco,
+        'version-string': {
+          ProductName: 'KunyaoGit',
+          CompanyName: 'kunyao',
+          FileDescription: 'KunyaoGit - Git GUI client for GitHub and Gitee',
+          LegalCopyright: 'Copyright (c) 2026 kunyao',
+          OriginalFilename: PRODUCT + '.exe',
+        },
+      });
+      log('   图标已嵌入');
+    } catch (e) {
+      log('   嵌入失败（可忽略）:', e.message);
+    }
+  } else {
+    log('   跳过（找不到 assets/icon.ico）');
+  }
 
   log('3) 准备 resources/ 目录');
   fs.mkdirSync(APP_RESOURCES, { recursive: true });

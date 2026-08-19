@@ -9,6 +9,7 @@ import { registerGithubHandlers } from './ipc/github.js';
 import { registerGiteeHandlers } from './ipc/gitee.js';
 import { registerReleaseHandlers } from './ipc/release.js';
 import { registerDialogHandlers } from './ipc/dialog.js';
+import { registerUpdateHandlers } from './ipc/update.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -80,7 +81,7 @@ function createWindow() {
   });
 }
 
-app.setAppUserModelId('com.minimax.gitgui');
+app.setAppUserModelId('com.kunyao.kunyaogit');
 
 app.whenReady().then(() => {
   setupCsp();
@@ -94,6 +95,7 @@ app.whenReady().then(() => {
   registerGiteeHandlers();
   registerReleaseHandlers();
   registerDialogHandlers();
+  registerUpdateHandlers();
 
   // 暴露给渲染进程的安全 API
   ipcMain.handle('app:get-platform', () => process.platform);

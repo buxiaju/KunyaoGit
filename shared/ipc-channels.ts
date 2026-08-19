@@ -87,6 +87,12 @@ export const IPC = {
   // 通用
   APP_OPEN_PATH: 'app:open-path',
   APP_SHELL_OPEN: 'app:shell-open',
+
+  // 更新检查
+  UPDATE_CHECK: 'update:check',
+  UPDATE_CHECK_SILENT: 'update:check-silent',
+  UPDATE_DISMISS: 'update:dismiss',
+  UPDATE_OPEN: 'update:open',
 } as const;
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC];

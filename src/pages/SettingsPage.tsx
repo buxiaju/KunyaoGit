@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useSettingsStore } from '../stores/settings';
-import { Github, Globe, Save, CheckCircle2, XCircle, Loader2, FolderOpen, Eye, EyeOff } from 'lucide-react';
+import { Github, Globe, Save, CheckCircle2, XCircle, Loader2, FolderOpen, Eye, EyeOff, RefreshCw, Download, ExternalLink, Info } from 'lucide-react';
 import { toast } from '../components/common/Toast';
+import type { AppUpdateInfo } from '../../shared/types';
 
 export default function SettingsPage() {
   const { settings, save, setAuth, clearAuth } = useSettingsStore();
@@ -14,9 +15,14 @@ export default function SettingsPage() {
   const [testing, setTesting] = useState<'git' | 'github' | 'gitee' | null>(null);
   const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
+  const [currentVersion, setCurrentVersion] = useState('');
+  const [updateInfo, setUpdateInfo] = useState<AppUpdateInfo | null>(null);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+
   useEffect(() => {
     setGitPath(settings.gitPath || '');
     setDefaultCloneDir(settings.defaultCloneDir || '');
+    window.gitgui.app.getVersion().then(setCurrentVersion);
   }, [settings]);
 
   const saveGeneral = async () => {
@@ -84,6 +90,25 @@ export default function SettingsPage() {
       }
     } finally {
       setTesting(null);
+    }
+  };
+
+  const checkUpdate = async () => {
+    setCheckingUpdate(true);
+    try {
+      const r = (await window.gitgui.update.check()) as AppUpdateInfo;
+      setUpdateInfo(r);
+      if (!r.latest) {
+        toast.warn('未能获取最新版本信息');
+      } else if (r.hasUpdate) {
+        toast.success(`发现新版本 v${r.latest.version}`);
+      } else {
+        toast.info(`已是最新版本（v${r.currentVersion}）`);
+      }
+    } catch (e: any) {
+      toast.error('检查更新失败：' + (e?.message || String(e)));
+    } finally {
+      setCheckingUpdate(false);
     }
   };
 
@@ -227,10 +252,80 @@ export default function SettingsPage() {
         </section>
 
         {/* 关于 */}
-        <section className="panel p-4 text-sm text-gray-500">
-          <h2 className="text-base font-medium text-gray-300 mb-2">关于</h2>
-          <p>GitGUI v0.1.0 — 一个支持 GitHub 和 Gitee 的 Git 桌面客户端</p>
-          <p className="mt-1 text-xs">使用 Electron + React + TypeScript 构建</p>
+        <section className="panel p-4 space-y-3 text-sm text-gray-500">
+          <div className="flex items-center gap-2">
+            <Info size={16} />
+            <h2 className="text-base font-medium text-gray-300">关于</h2>
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-gray-300">KunyaoGit v{currentVersion || '...'}</div>
+              <p className="text-xs mt-0.5">支持 GitHub 和 Gitee 的 Git 桌面客户端</p>
+            </div>
+            <button onClick={checkUpdate} disabled={checkingUpdate} className="btn-secondary">
+              {checkingUpdate ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+              检查更新
+            </button>
+          </div>
+
+          {updateInfo?.latest && (
+            <div className={`p-3 rounded border ${updateInfo.hasUpdate ? 'border-amber-700/50 bg-amber-900/20' : 'border-emerald-700/40 bg-emerald-900/15'}`}>
+              <div className="flex items-center gap-2 mb-1">
+                {updateInfo.hasUpdate ? (
+                  <>
+                    <Download size={14} className="text-amber-400" />
+                    <span className="text-amber-200 font-medium">新版本 v{updateInfo.latest.version} 可用</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 size={14} className="text-emerald-400" />
+                    <span className="text-emerald-200">已是最新版本</span>
+                  </>
+                )}
+                <span className="text-xs text-gray-500">via {updateInfo.latest.platform === 'github' ? 'GitHub' : 'Gitee'}</span>
+              </div>
+              {updateInfo.latest.body && (
+                <pre className="text-xs text-gray-300 whitespace-pre-wrap font-sans max-h-40 overflow-auto bg-black/20 p-2 rounded mt-1">
+                  {updateInfo.latest.body}
+                </pre>
+              )}
+              <div className="flex items-center gap-2 mt-2">
+                <button
+                  onClick={() => window.gitgui.update.open(updateInfo.latest!.htmlUrl)}
+                  className="btn-primary text-xs"
+                >
+                  <ExternalLink size={12} /> 打开 Release 页面
+                </button>
+                {updateInfo.hasUpdate && (
+                  <button
+                    onClick={() => {
+                      window.gitgui.update.dismiss(updateInfo.latest!.version);
+                      toast.info('已忽略该版本');
+                    }}
+                    className="btn-ghost text-xs"
+                  >
+                    忽略此版本
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {updateInfo?.sources && (
+            <div className="text-xs space-y-0.5 pt-1">
+              {updateInfo.sources.map((s) => (
+                <div key={s.platform} className="flex items-center gap-1.5 text-gray-500">
+                  <span className={s.ok ? 'text-emerald-500' : 'text-red-500'}>
+                    {s.ok ? '✓' : '✕'}
+                  </span>
+                  <span>{s.platform === 'github' ? 'GitHub' : 'Gitee'}：</span>
+                  <span>{s.ok ? (s.release ? `v${s.release.version}` : '无 release') : (s.error || '失败')}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <p className="text-xs pt-1">使用 Electron + React + TypeScript 构建</p>
         </section>
       </div>
     </div>
