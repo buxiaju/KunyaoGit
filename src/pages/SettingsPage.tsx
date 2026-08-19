@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSettingsStore } from '../stores/settings';
+import { useUpdateStore } from '../stores/update';
 import { Github, Globe, Save, CheckCircle2, XCircle, Loader2, FolderOpen, Eye, EyeOff, RefreshCw, Download, ExternalLink, Info } from 'lucide-react';
 import { toast } from '../components/common/Toast';
 import type { AppUpdateInfo } from '../../shared/types';
@@ -289,12 +290,20 @@ export default function SettingsPage() {
                   {updateInfo.latest.body}
                 </pre>
               )}
-              <div className="flex items-center gap-2 mt-2">
+              <div className="flex items-center gap-2 mt-2 flex-wrap">
+                {updateInfo.hasUpdate && (
+                  <button
+                    onClick={() => useUpdateStore.getState().show(updateInfo)}
+                    className="btn-primary text-xs"
+                  >
+                    <Download size={12} /> 立即下载并安装
+                  </button>
+                )}
                 <button
                   onClick={() => window.gitgui.update.open(updateInfo.latest!.htmlUrl)}
-                  className="btn-primary text-xs"
+                  className="btn-secondary text-xs"
                 >
-                  <ExternalLink size={12} /> 打开 Release 页面
+                  <ExternalLink size={12} /> 浏览器打开
                 </button>
                 {updateInfo.hasUpdate && (
                   <button

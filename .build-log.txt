@@ -1,0 +1,17 @@
+﻿  • electron-builder  version=25.1.8 os=10.0.19045
+  • loaded configuration  file=C:\A\03Projects\MiniMax\GitGUI\.build-config.json
+  • executing @electron/rebuild  electronVersion=33.4.11 arch=x64 buildFromSource=false appDir=./
+  • installing native dependencies  arch=x64
+  • completed installing native dependencies
+  • packaging       platform=win32 arch=x64 electron=33.4.11 appOutDir=release2\win-unpacked
+  • updating asar integrity executable resource  executablePath=release2\win-unpacked\KunyaoGit.exe
+  • signing with signtool.exe  path=release2\win-unpacked\KunyaoGit.exe
+  • no signing info identified, signing is skipped  signHook=false cscInfo=null
+  • building        target=nsis file=release2\KunyaoGit-Setup-0.2.2-x64.exe archs=x64 oneClick=false perMachine=false
+  • signing with signtool.exe  path=release2\win-unpacked\resources\elevate.exe
+  • no signing info identified, signing is skipped  signHook=false cscInfo=null
+  • signing with signtool.exe  path=release2\__uninstaller-nsis-kunyaogit.exe
+  • no signing info identified, signing is skipped  signHook=false cscInfo=null
+  • signing with signtool.exe  path=release2\KunyaoGit-Setup-0.2.2-x64.exe
+  • no signing info identified, signing is skipped  signHook=false cscInfo=null
+  • building block map  blockMapFile=release2\KunyaoGit-Setup-0.2.2-x64.exe.blockmap
