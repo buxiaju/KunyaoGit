@@ -190,4 +190,5 @@ export interface DownloadProgress {
   source?: 'gitee' | 'github';  // 当前正在下载的源
   message?: string;       // error/done 阶段的说明
   filePath?: string;      // done 阶段返回的本地安装包路径
+  speedBps?: number;      // 瞬时下载速率（字节/秒，downloading 阶段填）
 }

@@ -97,6 +97,8 @@ export const zh = {
     connecting: '正在连接下载源…',
     canceling: '正在取消…',
     canceled: '下载已取消',
+    totalSize: '共 {size}',
+    sizeUnknown: '大小未知',
   },
 
   // Repo page

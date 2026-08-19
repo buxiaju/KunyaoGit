@@ -11,6 +11,7 @@ dist/
 dist-electron/
 release/
 release-new/
+release-v024/
 release3/
 out/
 .build-config.json
