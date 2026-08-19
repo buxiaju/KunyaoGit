@@ -29,11 +29,11 @@
 
 | 维度 | 数值 |
 | --- | --- |
-| 当前版本 | `0.2.2`（见 `package.json`） |
+| 当前版本 | `0.2.3`（见 `package.json`） |
 | 维护者 | `buxiaju`（GitHub + Gitee 同名） |
 | 主仓库 | https://github.com/buxiaju/KunyaoGit |
 | 镜像 | https://gitee.com/buxiaju/KunyaoGit |
-| Release | GitHub 与 Gitee 都有 v0.1.0 / v0.2.0 / v0.2.1 / v0.2.2 |
+| Release | GitHub 与 Gitee 都有 v0.1.0 / v0.2.0 / v0.2.1 / v0.2.2 / v0.2.3 |
 | 平台目标 | Windows 10/11 x64（macOS / Linux 暂未验证） |
 | 包大小 | NSIS 安装包 ~92 MB，便携版 ~3.5 MB |
 | License | MIT |
@@ -48,6 +48,7 @@
 - Tag + Release 管理（GitHub / Gitee），含 Conventional Commits 自动生成 CHANGELOG
 - **自动更新检查**（GitHub + Gitee 双源，启动后 1.5s 静默）
 - **★ 应用内自动更新**（v0.2.2：多源下载 Gitee 优先 / GitHub 兜底 + 实时进度条 + 下载完成自动启动安装包）
+- **多语言切换**（v0.2.3：中文 / English，React Context + useI18n hook，设置页或侧边栏一键切换）
 - **专属应用图标**（Jade 绿 + K + Git 分支节点）
 
 ---
@@ -138,7 +139,7 @@ KunyaoGit/
 │   │   └── SettingsPage.tsx        # 设置（含 ★「关于 + 检查更新」卡片）
 │   ├── components/
 │   │   ├── Layout/
-│   │   │   └── Layout.tsx          # 侧边栏 + Outlet
+│   │   │   └── Layout.tsx          # 侧边栏 + Outlet + ★ 语言快捷切换按钮
 │   │   ├── common/
 │   │   │   ├── Toast.tsx           # 全局 Toaster（zustand 实现）
 │   │   │   └── UpdateDialog.tsx    # ★ 应用内更新对话框（询问/下载进度/完成/错误）
@@ -154,8 +155,12 @@ KunyaoGit/
 │   │   └── useUpdateCheck.ts       # ★ 启动 1.5s 后静默检查更新
 │   ├── stores/
 │   │   ├── repo.ts                 # 当前仓库信息
-│   │   ├── settings.ts             # 设置（theme / gitPath / auth / ...）
+│   │   ├── settings.ts             # 设置（theme / gitPath / auth / language / ...）
 │   │   └── update.ts               # ★ 更新对话框状态 + 下载/安装流程
+│   ├── i18n/                        # ★ v0.2.3：国际化（React Context + useI18n hook）
+│   │   ├── index.tsx                # I18nProvider / useI18n() / t() 函数
+│   │   ├── zh.ts                    # 中文翻译
+│   │   └── en.ts                    # 英文翻译
 │   └── styles/
 │       └── index.css               # Tailwind base + 自定义 utility (.btn-primary / .panel / .input)
 │
@@ -176,8 +181,9 @@ KunyaoGit/
 │   │   ├── publish-v020.cjs        #   一次性脚本（v0.2.0，已用过，保留作示例）
 │   │   ├── publish-v021.cjs        #   一次性脚本（v0.2.1，已用过）
 │   │   ├── publish-v022.cjs        #   一次性脚本（v0.2.2，已用过）
-│   │   ├── upload-installer.cjs    #   上传安装包到 GitHub Release（既有 release 更新）
-│   │   ├── update-gitee-body.cjs   #   更新 Gitee Release 描述
+│   │   ├── publish-v023.cjs        #   ★ v0.2.3：创建 GitHub Release + 流式上传安装包（集成日志）
+│   │   ├── upload-installer.cjs    #   上传安装包到 GitHub Release（既有 release 更新，旧版）
+│   │   ├── update-gitee-body.cjs   #   ★ v0.2.3：更新 Gitee Release body + 流式上传安装包（集成日志）
 │   │   ├── list-assets.cjs         #   列出指定 GitHub release 的 asset
 │   │   └── release-github.cjs      #   早期版本发布脚本（基本被 publish-* 替代）
 │   └── debug/                      # ★ 调试 / 测试相关
@@ -187,17 +193,21 @@ KunyaoGit/
 │       ├── test-launch-v2.ps1      #   调试：单跑 launch 测试
 │       ├── check-handle.ps1        #   调试：查文件锁
 │       ├── check-hex.ps1           #   调试：看文件头几字节
-│       └── reset-stage.ps1         #   调试：清理卡住的 win-unpacked/
+│       ├── reset-stage.ps1         #   调试：清理卡住的 win-unpacked/
+│       ├── clean-release.ps1       #   ★ v0.2.2：清理 release2/release3/ + 锁定的 win-unpacked/
+│       └── fix-nsis-languages.ps1  #   ★ v0.2.3：批量修复 NSIS 语言文件缺失的 MULTIUSER 段
 │
 ├── .release-assets/                # ★ 入库的"已发布"安装包（供 Gitee 走 git 分发）
 │   ├── KunyaoGit-Setup-0.1.0-x64.exe
 │   ├── KunyaoGit-Setup-0.2.0-x64.exe
 │   ├── KunyaoGit-Setup-0.2.1-x64.exe
 │   ├── KunyaoGit-Setup-0.2.2-x64.exe
+│   ├── KunyaoGit-Setup-0.2.3-x64.exe
 │   ├── KunyaoGit-portable-v0.1.0.zip
 │   ├── KunyaoGit-portable-v0.2.0.zip
 │   ├── KunyaoGit-portable-v0.2.1.zip
-│   └── KunyaoGit-portable-v0.2.2.zip
+│   ├── KunyaoGit-portable-v0.2.2.zip
+│   └── KunyaoGit-portable-v0.2.3.zip
 │
 ├── docs/                           # ★ 项目文档（v0.2.2 新增）
 │   ├── api-reference.md            # window.gitgui API 完整参考
@@ -553,8 +563,8 @@ git push github master
 | `replace-installer.cjs` | `build/` | 替换已有 GitHub asset | `release/KunyaoGit-Setup-X.Y.Z-x64.exe` | 删旧 + 上传新 |
 | `calc-cache-dir.cjs` / `check-expected-hash.cjs` | `build/` | 历史调试，已用不到 | - | - |
 | `upload-installer.cjs` | `publish/` | 发版 | `release/KunyaoGit-Setup-X.Y.Z-x64.exe` | GitHub Release 上的 asset |
-| `publish-v020.cjs` / `v021.cjs` / `v022.cjs` | `publish/` | 首次发新 release（一次性） | 同上 | 创建 GitHub Release + 上传两个 asset |
-| `update-gitee-body.cjs` | `publish/` | 发版后 | 无 | 同步 Gitee Release body 为新版本内容 |
+| `publish-v020.cjs` / `v021.cjs` / `v022.cjs` / `v023.cjs` | `publish/` | 首次发新 release（一次性） | 同上 | 创建 GitHub Release + 流式上传 asset + 日志写入 publish-log.txt |
+| `update-gitee-body.cjs` | `publish/` | 发版后 | 无 | 同步 Gitee Release body + 流式上传安装包 attach file + 日志 |
 | `list-assets.cjs` | `publish/` | 查 GitHub Release | `env GH_VERSION` | 打印 asset 列表 |
 | `release-github.cjs` | `publish/` | 早期版本（已基本被 publish-* 替代） | - | - |
 | `test-update.cjs` | `debug/` | 调试 | 无 | 直接打 GitHub + Gitee release API |
@@ -577,44 +587,36 @@ git push github master
 
 ### 9.2 改 release body
 
-编辑 `scripts/publish/upload-installer.cjs` 顶部的 `RELEASE_BODY` 模板（GitHub 端用）。
+编辑 `scripts/publish/publish-v023.cjs` 顶部的 `RELEASE_BODY` 模板（GitHub 端用）。
+同时编辑 `scripts/publish/update-gitee-body.cjs` 顶部的 `RELEASE_BODY`（Gitee 端用，可略有差异）。
 
 ### 9.3 构建
 
 ```bash
-# 1. 跑生产 build
+# 1. 跑生产 build（tsc + vite + electron-builder 一条龙）
 cd C:\A\03Projects\MiniMax\GitGUI
-npx tsc -b
-npx vite build
+$env:ELECTRON_BUILDER_NSIS_DIR = "c:\A\03Projects\MiniMax\GitGUI\tools\nsis\nsis-3.11"
+npm run build:win
 
-# 2. 组 win-unpacked
-node scripts\build\build-unpacked.cjs
-
-# 3. 出 NSIS 安装包
-"C:\A\03Projects\MiniMax\GitGUI\tools\nsis\nsis-3.11\makensis.exe" /DAPP_VERSION=0.3.0 scripts\build\installer.nsi
-
-# 4. 出便携版 zip
-node scripts\build\package-portable.cjs
-
-# 5. 复制到 .release-assets/（Gitee 走 git 分发）
+# 2. 复制到 .release-assets/（供 Gitee 走 git 分发 + 发布脚本读取）
 copy /Y release\KunyaoGit-Setup-0.3.0-x64.exe .release-assets\
-copy /Y release\KunyaoGit-portable-v0.3.0.zip .release-assets\
 ```
+
+> **注意**：如果 `release/win-unpacked/resources/default_app.asar` 被 IDE 文件监视器锁定导致构建失败，运行
+> `powershell -ExecutionPolicy Bypass -File scripts\debug\clean-release.ps1` 清理后重试，
+> 或临时改 `package.json` 的 `build.directories.output` 为新目录构建后再移回。
+> NSIS 语言文件缺失 MULTIUSER 段时运行 `fix-nsis-languages.ps1` 批量补齐。
 
 ### 9.4 上传
 
 ```bash
-# 准备 token
-set GH_TOKEN=github_pat_XXX
-set GT_TOKEN=721ddfdc2165332edc7a79b18537c2b3   # Gitee（也支持内嵌在脚本里）
+# 准备 token（GH_TOKEN 自动从 git remote github URL 提取，也可手动设）
+set GT_TOKEN=a0d56558c30d9a083fe33282b946cf95   # Gitee（也支持内嵌在脚本里）
 
-# GitHub：创建 release + 上传
-node scripts\publish\publish-v020.cjs   # 或新建一个 scripts\publish\publish-v030.cjs
-# 已有 release：只更新 body / 替换 asset
-node scripts\publish\upload-installer.cjs
-node scripts\build\replace-installer.cjs
+# GitHub：创建 release + 流式上传安装包（日志写入 publish-log.txt）
+node scripts\publish\publish-v023.cjs
 
-# Gitee：更新 release body
+# Gitee：更新 release body + 流式上传安装包 attach file（日志写入 publish-log.txt）
 node scripts\publish\update-gitee-body.cjs
 
 # 提交 + push
@@ -776,7 +778,7 @@ await rcedit(path, opts);
 | GitHub PAT | `%APPDATA%\gitgui\gitgui-settings.json` → `auth.github.token` | 用户在 UI 里填，**不进仓库** |
 | Gitee Token | 同上 → `auth.gitee.token` | 同上 |
 | `GH_TOKEN` | 环境变量 | 只在跑发布脚本时临时 `set` |
-| `GT_TOKEN` | 脚本里硬编码 | **不该这样做**，但实际是这样——在 `package-portable.cjs` / `update-gitee-body.cjs` 里硬编了 `721ddfdc2165332edc7a79b18537c2b3`。**未来应改成 `process.env.GT_TOKEN`** |
+| `GT_TOKEN` | `process.env.GT_TOKEN` 或脚本内 fallback | v0.2.3 起 `update-gitee-body.cjs` 优先读环境变量，fallback 为硬编码值 `a0d56558...`（v0.2.3 更新的令牌） |
 
 ### 12.2 系统要求（用户侧）
 
