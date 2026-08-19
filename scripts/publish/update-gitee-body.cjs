@@ -28,7 +28,15 @@ function log(msg) {
 
 const RELEASE_BODY = `# KunyaoGit v${VERSION}
 
-## v0.2.4 新特性
+## v0.2.5 新特性
+- 🎨 **三主题切换**（暗色 / 深蓝 / 亮色）— 设置页一键切换，整套 UI 实时跟随，包括 Monaco 代码编辑器：
+  - **暗色**（默认）—— 原汁原味的 KunyaoGit 暗灰，emerald 品牌色
+  - **深蓝** —— 深海 navy 背景，blue 系 primary，沉稳又有色彩
+  - **亮色** —— 浅白底，emerald 品牌色，适合白天 / 投影
+- 🔧 **零业务代码迁移实现** —— 通过 CSS 变量 + 选择器覆盖，所有现有 \`bg-gray-XXX\` / \`text-gray-XXX\` 等 Tailwind class 不动一行，自动随主题切换。
+- 💾 **主题自动持久化** —— 跟语言设置一样存到 electron-store，下次启动保留。
+
+## v0.2.4 新特性（沿用）
 - ⚡ **下载速度大幅提升（3~6 倍）** — 应用内更新下载器重构：
   - 多源 HEAD 并行探活，直接跳过 Gitee raw 对大文件返 HTML 的死路，省掉 8s 等超时
   - HTTP Range 多连接分段下载（4 路并发），单连接瓶颈消失
@@ -164,13 +172,22 @@ async function main() {
   log('========== Gitee Release 发布开始 ==========');
   log(`版本: ${VERSION}  Tag: ${TAG}`);
 
-  // 1. 查找 release
+  // 1. 查找 release（per_page=100 避免被默认 20 截断找不到之前的 release）
   const list = await req({
     hostname: 'gitee.com', method: 'GET',
-    path: `/api/v5/repos/${GT_OWNER}/${REPO}/releases?access_token=${GT_TOKEN}`,
+    path: `/api/v5/repos/${GT_OWNER}/${REPO}/releases?access_token=${GT_TOKEN}&per_page=100`,
     headers: { 'User-Agent': 'KunyaoGit-publish' },
   });
   let r = (list.json || []).find(x => x.tag_name === TAG);
+  // 兜底：分页再查一次
+  if (!r) {
+    const list2 = await req({
+      hostname: 'gitee.com', method: 'GET',
+      path: `/api/v5/repos/${GT_OWNER}/${REPO}/releases?access_token=${GT_TOKEN}&per_page=100&page=2`,
+      headers: { 'User-Agent': 'KunyaoGit-publish' },
+    });
+    r = (list2.json || []).find(x => x.tag_name === TAG);
+  }
 
   if (!r) {
     // 创建 release

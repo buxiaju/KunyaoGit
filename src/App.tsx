@@ -11,6 +11,7 @@ import { useEffect, useCallback } from 'react';
 import { Toaster } from './components/common/Toast';
 import { UpdateDialog } from './components/common/UpdateDialog';
 import { useUpdateCheck } from './hooks/useUpdateCheck';
+import { useThemeSync } from './hooks/useTheme';
 import { I18nProvider, type Lang } from './i18n';
 
 export default function App() {
@@ -23,6 +24,7 @@ export default function App() {
   }, [loadSettings]);
 
   useUpdateCheck();
+  useThemeSync();
 
   const setLang = useCallback(
     (l: Lang) => {

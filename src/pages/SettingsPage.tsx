@@ -2,9 +2,11 @@ import { useState, useEffect } from 'react';
 import { useSettingsStore } from '../stores/settings';
 import { useUpdateStore } from '../stores/update';
 import { useI18n } from '../i18n';
-import { Github, Globe, Save, CheckCircle2, XCircle, Loader2, FolderOpen, Eye, EyeOff, RefreshCw, Download, ExternalLink, Info, Languages } from 'lucide-react';
+import { Github, Globe, Save, CheckCircle2, XCircle, Loader2, FolderOpen, Eye, EyeOff, RefreshCw, Download, ExternalLink, Info, Languages, Palette, Check } from 'lucide-react';
 import { toast } from '../components/common/Toast';
 import type { AppUpdateInfo } from '../../shared/types';
+import { THEME_LIST, setTheme } from '../hooks/useTheme';
+import type { Theme } from '../../shared/types';
 
 export default function SettingsPage() {
   const { t, lang, setLang } = useI18n();
@@ -134,6 +136,35 @@ export default function SettingsPage() {
               >
                 <Languages size={14} /> English
               </button>
+            </div>
+          </Field>
+
+          {/* Theme selector */}
+          <Field label={t('settings.theme')} hint={t('settings.themeHint')}>
+            <div className="flex gap-3 flex-wrap">
+              {THEME_LIST.map((th) => {
+                const active = settings.theme === th.value;
+                return (
+                  <button
+                    key={th.value}
+                    onClick={() => setTheme(th.value as Theme)}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-md border transition-all ${
+                      active
+                        ? 'border-primary-500 ring-2 ring-primary-500/50'
+                        : 'border-gray-700 hover:border-gray-600'
+                    }`}
+                    style={{
+                      backgroundColor: th.swatch.bg,
+                      color: th.swatch.fg,
+                    }}
+                    title={lang === 'zh' ? th.labelZh : th.labelEn}
+                  >
+                    <Palette size={14} style={{ color: th.swatch.primary }} />
+                    <span className="text-sm font-medium">{lang === 'zh' ? th.labelZh : th.labelEn}</span>
+                    {active && <Check size={14} style={{ color: th.swatch.primary }} />}
+                  </button>
+                );
+              })}
             </div>
           </Field>
 

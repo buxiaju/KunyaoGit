@@ -79,7 +79,7 @@ export interface AuthConfig {
 }
 
 export interface AppSettings {
-  theme: 'dark' | 'light';
+  theme: Theme;
   language: 'zh' | 'en';
   gitPath?: string;
   defaultCloneDir: string;
@@ -88,6 +88,8 @@ export interface AppSettings {
   diffView: 'unified' | 'split';
   auth: AuthConfig;
 }
+
+export type Theme = 'dark' | 'ocean' | 'light';
 
 export interface ReleaseInfo {
   tag: string;
