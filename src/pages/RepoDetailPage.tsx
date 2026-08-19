@@ -61,7 +61,7 @@ export default function RepoDetailPage() {
     if (r.ok) {
       toast.success(t('repoDetail.cloneSuccess', { path: r.data.path }));
       await openRepo(r.data.path);
-      nav('/');
+      nav('/repo');
     } else {
       toast.error(t('repoDetail.cloneFailed', { error: r.error }));
     }

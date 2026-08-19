@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRepoStore } from '../../stores/repo';
 import { useI18n } from '../../i18n';
-import { CheckSquare, Square, RotateCcw, Plus, Minus, FileText, Edit2, Trash2, AlertCircle, Copy, Upload } from 'lucide-react';
+import { CheckSquare, Square, RotateCcw, Plus, Minus, FileText, Edit2, Trash2, AlertCircle, Copy, Upload, ChevronDown, Github, Globe, GitBranch, Loader2 } from 'lucide-react';
 import { toast } from '../common/Toast';
 
 const STATUS_META = {
@@ -14,9 +14,22 @@ const STATUS_META = {
 } as const;
 
 export default function ChangesPanel() {
-  const { current, status, refreshStatus, selectFile, selectedFile } = useRepoStore();
+  const { current, status, refreshStatus, selectFile, selectedFile, remotes } = useRepoStore();
   const { t } = useI18n();
   const [commitMsg, setCommitMsg] = useState('');
+  const [pushMenuOpen, setPushMenuOpen] = useState(false);
+  const [pushingRemote, setPushingRemote] = useState<string | null>(null);
+  const pushMenuRef = useRef<HTMLDivElement>(null);
+
+  // 点击外部关闭 Push 下拉
+  useEffect(() => {
+    if (!pushMenuOpen) return;
+    const close = (e: MouseEvent) => {
+      if (pushMenuRef.current && !pushMenuRef.current.contains(e.target as Node)) setPushMenuOpen(false);
+    };
+    window.addEventListener('mousedown', close);
+    return () => window.removeEventListener('mousedown', close);
+  }, [pushMenuOpen]);
 
   if (!current) return null;
 
@@ -76,7 +89,7 @@ export default function ChangesPanel() {
     }
   };
 
-  const commitAndPush = async () => {
+  const commitAndPush = async (remote?: { name: string; url: string; type: 'github' | 'gitee' | 'other' }) => {
     if (!commitMsg.trim()) {
       toast.warn(t('repo.commitMsgRequired'));
       return;
@@ -93,12 +106,21 @@ export default function ChangesPanel() {
     toast.success(t('repo.committed', { hash: r.data.hash.slice(0, 7) }));
     setCommitMsg('');
     await refreshStatus();
-    const p = await window.gitgui.git.push(current.path);
-    if (p.ok) {
-      toast.success(t('repo.pushedToRemote'));
-      await refreshStatus();
-    } else {
-      toast.error(t('repo.pushFailed', { error: p.error }));
+    if (remote) setPushingRemote(remote.name);
+    try {
+      const branch = useRepoStore.getState().branches.find((b) => b.current)?.name;
+      const p = remote
+        ? await window.gitgui.git.push(current.path, { remote: remote.name, branch, setUpstream: true })
+        : await window.gitgui.git.push(current.path);
+      if (p.ok) {
+        toast.success(remote ? t('repo.pushedToRemoteName', { remote: remote.name }) : t('repo.pushedToRemote'));
+        await refreshStatus();
+      } else {
+        toast.error(t('repo.pushFailed', { error: p.error }));
+      }
+    } finally {
+      setPushingRemote(null);
+      setPushMenuOpen(false);
     }
   };
 
@@ -172,9 +194,44 @@ export default function ChangesPanel() {
           <span className="text-xs text-gray-500">{t('repo.filesStaged', { count: staged.length })}</span>
           <div className="flex items-center gap-1.5">
             <button onClick={commit} className="btn-secondary text-xs">{t('repo.commit')}</button>
-            <button onClick={commitAndPush} disabled={staged.length === 0} className="btn-primary text-xs">
-              <Upload size={12} /> {t('repo.commitAndPush')}
-            </button>
+            <div className="relative" ref={pushMenuRef}>
+              <div className="flex">
+                <button onClick={() => commitAndPush()} disabled={staged.length === 0 || pushingRemote !== null} className="btn-primary text-xs rounded-r-none">
+                  {pushingRemote ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                  {t('repo.commitAndPush')}
+                </button>
+                <button
+                  onClick={() => setPushMenuOpen(!pushMenuOpen)}
+                  disabled={staged.length === 0 || pushingRemote !== null}
+                  className="btn-primary text-xs rounded-l-none border-l border-primary-700/60 px-1"
+                  title={t('repo.pushToHint')}
+                >
+                  <ChevronDown size={11} />
+                </button>
+              </div>
+              {pushMenuOpen && (
+                <div className="absolute right-0 bottom-full mb-1 z-50 min-w-[200px] rounded-md border border-gray-700 bg-gray-900 shadow-xl py-1">
+                  <div className="px-3 py-1 text-[10px] uppercase tracking-wide text-gray-500">{t('repo.commitPushToLabel')}</div>
+                  {remotes.length === 0 ? (
+                    <div className="px-3 py-2 text-xs text-gray-500">{t('repo.noRemoteConfigured')}</div>
+                  ) : (
+                    remotes.map((r) => {
+                      const Icon = r.type === 'github' ? Github : r.type === 'gitee' ? Globe : GitBranch;
+                      return (
+                        <button
+                          key={r.name}
+                          onClick={() => commitAndPush(r)}
+                          className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-gray-800"
+                        >
+                          <Icon size={12} className={r.type === 'github' ? 'text-gray-300' : r.type === 'gitee' ? 'text-red-400' : 'text-gray-500'} />
+                          <span className="flex-1 truncate">{t('repo.pushToName', { name: r.name })}</span>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

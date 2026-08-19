@@ -53,7 +53,7 @@ export default function RemotePage() {
     if (r.ok) {
       toast.success(t('remote.cloneSuccess', { path: r.data.path }));
       await openRepo(r.data.path);
-      nav('/');
+      nav('/repo');
     } else {
       toast.error(t('remote.cloneFailed', { error: r.error }));
     }

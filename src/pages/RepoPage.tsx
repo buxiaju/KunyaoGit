@@ -9,20 +9,33 @@ import EditorPane from '../components/repo/EditorPane';
 import BranchPanel from '../components/repo/BranchPanel';
 import ChangesPanel from '../components/repo/ChangesPanel';
 import RemotePanel from '../components/repo/RemotePanel';
-import { ArrowLeft, RefreshCw, GitBranch, GitPullRequest, Plus, Upload, X } from 'lucide-react';
+import { ArrowLeft, RefreshCw, GitBranch, GitPullRequest, Plus, Upload, X, ChevronDown, Github, Globe, Loader2 } from 'lucide-react';
 import { toast } from '../components/common/Toast';
 
 type Tab = 'changes' | 'history' | 'branches' | 'remote' | 'files';
 
 export default function RepoPage() {
-  const { current, refreshAll, status, branches, refreshFileTree, refreshStatus } = useRepoStore();
+  const { current, refreshAll, status, branches, refreshFileTree, refreshStatus, remotes } = useRepoStore();
   const { t } = useI18n();
   const nav = useNavigate();
   const [tab, setTab] = useState<Tab>('changes');
   const [refreshing, setRefreshing] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [pushMenuOpen, setPushMenuOpen] = useState(false);
+  const [pushingTo, setPushingTo] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const pushMenuRef = useRef<HTMLDivElement>(null);
+
+  // 点击外部关闭 Push 下拉
+  useEffect(() => {
+    if (!pushMenuOpen) return;
+    const close = (e: MouseEvent) => {
+      if (pushMenuRef.current && !pushMenuRef.current.contains(e.target as Node)) setPushMenuOpen(false);
+    };
+    window.addEventListener('mousedown', close);
+    return () => window.removeEventListener('mousedown', close);
+  }, [pushMenuOpen]);
 
   useEffect(() => {
     if (!current) nav('/');
@@ -107,6 +120,29 @@ export default function RepoPage() {
     }
   };
 
+  // 推送到指定 remote（GitHub / Gitee / ...）
+  const handlePushTo = async (remote: { name: string; url: string; type: 'github' | 'gitee' | 'other' }) => {
+    if (!current) return;
+    setPushMenuOpen(false);
+    setPushingTo(remote.name);
+    try {
+      const branch = branches.find((b) => b.current)?.name;
+      const r = await window.gitgui.git.push(current.path, {
+        remote: remote.name,
+        branch,
+        setUpstream: true,
+      });
+      if (r.ok) {
+        await refreshAll();
+        toast.success(t('repo.pushSuccessTo', { remote: remote.name }));
+      } else {
+        toast.error(t('repo.pushFailedTo', { remote: remote.name, error: r.error }));
+      }
+    } finally {
+      setPushingTo(null);
+    }
+  };
+
   const currentBranch = branches.find((b) => b.current);
   const stagedCount = status.filter((s) => s.staged).length;
   const changedCount = status.length;
@@ -168,7 +204,45 @@ export default function RepoPage() {
             <GitPullRequest size={14} /> Fetch
           </button>
           <button onClick={handlePull} className="btn-secondary">{t('repo.pull')}</button>
-          <button onClick={handlePush} className="btn-primary">{t('repo.push')}</button>
+          {/* Push：主按钮推默认 upstream，下拉选择指定 remote（GitHub / Gitee） */}
+          <div className="relative" ref={pushMenuRef}>
+            <div className="flex">
+              <button onClick={handlePush} className="btn-primary rounded-r-none" title={t('repo.pushHint')}>
+                {pushingTo ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+                {t('repo.push')}
+              </button>
+              <button
+                onClick={() => setPushMenuOpen(!pushMenuOpen)}
+                className="btn-primary rounded-l-none border-l border-primary-700/60 px-1.5"
+                title={t('repo.pushToHint')}
+              >
+                <ChevronDown size={12} />
+              </button>
+            </div>
+            {pushMenuOpen && (
+              <div className="absolute right-0 top-full mt-1 z-50 min-w-[220px] rounded-md border border-gray-700 bg-gray-900 shadow-xl py-1">
+                <div className="px-3 py-1 text-[10px] uppercase tracking-wide text-gray-500">{t('repo.pushToLabel')}</div>
+                {remotes.length === 0 ? (
+                  <div className="px-3 py-2 text-xs text-gray-500">{t('repo.noRemoteConfigured')}</div>
+                ) : (
+                  remotes.map((r) => {
+                    const Icon = r.type === 'github' ? Github : r.type === 'gitee' ? Globe : GitBranch;
+                    return (
+                      <button
+                        key={r.name}
+                        onClick={() => handlePushTo(r)}
+                        disabled={pushingTo !== null}
+                        className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-gray-800 disabled:opacity-50"
+                      >
+                        <Icon size={13} className={r.type === 'github' ? 'text-gray-300' : r.type === 'gitee' ? 'text-red-400' : 'text-gray-500'} />
+                        <span className="flex-1 truncate">{t('repo.pushToName', { name: r.name })}</span>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

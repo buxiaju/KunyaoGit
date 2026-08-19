@@ -40,6 +40,8 @@
 
 **核心能力**：
 - 本地 Git 全套操作（status / log / stage / commit / push / pull / fetch / branch / merge / stash / reset / 冲突解决）
+- **本地文件管理**（文件树：新建文件 / 新建文件夹 / 重命名 / 删除，右键菜单 + 工具栏；操作后自动刷新 git status）
+- **多 remote 推送**（Push 下拉可选择推送到指定 remote，如 GitHub / Gitee；「提交并推送」同样支持选择 remote）
 - GitHub + Gitee 双平台 REST API（Octokit + axios）
 - 远程仓库 Contents API（在线浏览 / 编辑 / 新建 / 删除文件）
 - Monaco Editor（VS Code 同款）做代码编辑

@@ -28,7 +28,17 @@ function log(msg) {
 
 const RELEASE_BODY = `# KunyaoGit v${VERSION}
 
-## v0.2.6 修复
+## v0.3.0 新特性
+- 📁 **本地文件管理** — 仓库「文件」页支持对本地仓库直接增删改：
+  - 文件树工具栏一键**新建文件 / 新建文件夹**，右键菜单可**新建 / 重命名 / 删除 / 打开编辑**
+  - 新建文件自动在 Monaco 中打开；操作后自动刷新 git 状态，「变更」页立即可见
+  - 删除 / 重命名自动同步 git status，正在编辑的文件随重命名跟随新路径
+- 🚀 **多远程推送（GitHub / Gitee）** — 顶部 **Push 按钮下拉选择要推送的远程**（github / gitee / origin…），一键推送到指定平台并自动建立 upstream；「提交并推送」同样支持选择远程
+- 🏠 **仓库入口优化** — 打开 / 克隆仓库后**自动进入仓库页**；首页新增「当前已打开仓库」入口卡片，侧边栏仓库卡片也可点击随时返回仓库
+- 🔄 **保存即刷新** — 编辑器保存文件后自动刷新工作区状态，改完立刻能在「变更」页暂存提交
+- 🔧 **构建修复** — 移除 package.json 的 UTF-8 BOM，修复 Vite/PostCSS 构建失败问题
+
+## v0.2.6 修复（沿用）
 - 🔧 **应用内更新器探活改用 GET 替代 HEAD** —— 很多 CDN / 防火墙对 HEAD 请求更敏感（直接 403 / 超时），改成 \`Range: bytes=0-0\` 的 GET 兼容性远好。206 响应里 \`Content-Range: bytes 0-0/{total}\` 直接给到总大小。
 - ⏱ **探活超时从 8s 提到 15s** —— 慢网络更稳。
 - 📋 **错误信息汇总所有源失败原因** —— 不再只显示最后一个错的源，所有源（gitee / github）的失败原因并列出来。
@@ -63,7 +73,7 @@ const RELEASE_BODY = `# KunyaoGit v${VERSION}
 - **KunyaoGit-portable-v${VERSION}.zip** — 便携版，仓库根目录 \`.release-assets/\` 下
 
 ## 升级
-- **v0.2.0 / v0.2.1 / v0.2.2 / v0.2.3 用户**：启动应用后会自动检查更新并弹窗，点"立即下载并安装"即可一键更新到 v${VERSION}。也可手动下载安装包覆盖安装。
+- **v0.2.0 ~ v0.2.6 用户**：启动应用后会自动检查更新并弹窗，点"立即下载并安装"即可一键更新到 v${VERSION}。也可手动下载安装包覆盖安装。
 - 应用内更新会优先从 Gitee 下载（国内快），失败时自动切换 GitHub 兜底。
 - 本版本（v0.2.4）开始，下载过程从单连接改为 4 路并发，实测提速 3~6 倍。
 
@@ -77,6 +87,8 @@ const RELEASE_BODY = `# KunyaoGit v${VERSION}
 ## 特性
 - 基础 Git 操作（克隆、提交、推送、拉取、分支、合并、冲突解决）
 - GitHub / Gitee 双平台集成（API + PAT 鉴权）
+- **本地文件管理（新建 / 重命名 / 删除 / Monaco 编辑）**
+- **多远程推送（Push 下拉选择 GitHub / Gitee）**
 - 远程仓库文件浏览 / 编辑（Monaco Editor）
 - 拖拽上传
 - 仓库创建 / 删除
@@ -85,6 +97,7 @@ const RELEASE_BODY = `# KunyaoGit v${VERSION}
 - 自动 CHANGELOG 生成
 - **应用内自动更新**（启动后静默检测，发现新版本弹窗 → 应用内下载 → 自动安装）
 - **多语言切换**（中文 / English）
+- **三主题切换**（暗色 / 深蓝 / 亮色）
 
 ## 仓库
 - GitHub: https://github.com/buxiaju/KunyaoGit

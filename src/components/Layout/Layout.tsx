@@ -1,5 +1,5 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { Home, FolderGit2, Globe, Tag, Settings, Github, ExternalLink, Languages } from 'lucide-react';
+import { Home, FolderGit2, Globe, Tag, Settings, Github, ExternalLink, Languages, ChevronRight } from 'lucide-react';
 import { useRepoStore } from '../../stores/repo';
 import { useSettingsStore } from '../../stores/settings';
 import { useI18n } from '../../i18n';
@@ -10,6 +10,12 @@ export default function Layout() {
   const settings = useSettingsStore((s) => s.settings);
   const nav = useNavigate();
   const { t, lang, setLang } = useI18n();
+
+  // 打开仓库成功后进入仓库页面
+  const handleOpenRepo = async () => {
+    await openRepoDialog();
+    if (useRepoStore.getState().current) nav('/repo');
+  };
 
   const NAV = [
     { to: '/', icon: Home, label: t('layout.navHome') },
@@ -29,22 +35,29 @@ export default function Layout() {
         </div>
 
         <div className="p-2">
-          <button onClick={openRepoDialog} className="btn-primary w-full justify-center">
+          <button onClick={handleOpenRepo} className="btn-primary w-full justify-center">
             {t('layout.openRepo')}
           </button>
         </div>
 
         {current && (
-          <div className="px-3 py-2 border-b border-gray-800">
-            <div className="text-xs text-gray-500">{t('layout.currentRepo')}</div>
-            <div className="text-sm font-medium truncate" title={current.path}>{current.name}</div>
+          <button
+            onClick={() => nav('/repo')}
+            className="w-full px-3 py-2 border-b border-gray-800 text-left hover:bg-gray-800/60 transition-colors group"
+            title={t('layout.enterRepo')}
+          >
+            <div className="text-xs text-gray-500 flex items-center justify-between">
+              {t('layout.currentRepo')}
+              <ChevronRight size={12} className="text-gray-600 group-hover:text-primary-400" />
+            </div>
+            <div className="text-sm font-medium truncate">{current.name}</div>
             {current.currentBranch && (
               <div className="text-xs text-gray-400 mt-0.5">
                 <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1.5" />
                 {current.currentBranch}
               </div>
             )}
-          </div>
+          </button>
         )}
 
         <nav className="flex-1 p-2 space-y-0.5">
