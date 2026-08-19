@@ -29,11 +29,11 @@
 
 | 维度 | 数值 |
 | --- | --- |
-| 当前版本 | `0.2.0`（见 `package.json`） |
+| 当前版本 | `0.2.2`（见 `package.json`） |
 | 维护者 | `buxiaju`（GitHub + Gitee 同名） |
 | 主仓库 | https://github.com/buxiaju/KunyaoGit |
 | 镜像 | https://gitee.com/buxiaju/KunyaoGit |
-| Release | GitHub 与 Gitee 都有 v0.1.0 / v0.2.0 |
+| Release | GitHub 与 Gitee 都有 v0.1.0 / v0.2.0 / v0.2.1 / v0.2.2 |
 | 平台目标 | Windows 10/11 x64（macOS / Linux 暂未验证） |
 | 包大小 | NSIS 安装包 ~92 MB，便携版 ~3.5 MB |
 | License | MIT |
@@ -47,6 +47,7 @@
 - 仓库创建 / 删除
 - Tag + Release 管理（GitHub / Gitee），含 Conventional Commits 自动生成 CHANGELOG
 - **自动更新检查**（GitHub + Gitee 双源，启动后 1.5s 静默）
+- **★ 应用内自动更新**（v0.2.2：多源下载 Gitee 优先 / GitHub 兜底 + 实时进度条 + 下载完成自动启动安装包）
 - **专属应用图标**（Jade 绿 + K + Git 分支节点）
 
 ---
@@ -139,7 +140,8 @@ KunyaoGit/
 │   │   ├── Layout/
 │   │   │   └── Layout.tsx          # 侧边栏 + Outlet
 │   │   ├── common/
-│   │   │   └── Toast.tsx           # 全局 Toaster（zustand 实现）
+│   │   │   ├── Toast.tsx           # 全局 Toaster（zustand 实现）
+│   │   │   └── UpdateDialog.tsx    # ★ 应用内更新对话框（询问/下载进度/完成/错误）
 │   │   └── repo/
 │   │       ├── BranchPanel.tsx     # 分支列表 + checkout / new / delete / merge
 │   │       ├── ChangesPanel.tsx    # 工作区文件状态 + stage / unstage / discard
@@ -152,7 +154,8 @@ KunyaoGit/
 │   │   └── useUpdateCheck.ts       # ★ 启动 1.5s 后静默检查更新
 │   ├── stores/
 │   │   ├── repo.ts                 # 当前仓库信息
-│   │   └── settings.ts             # 设置（theme / gitPath / auth / ...）
+│   │   ├── settings.ts             # 设置（theme / gitPath / auth / ...）
+│   │   └── update.ts               # ★ 更新对话框状态 + 下载/安装流程
 │   └── styles/
 │       └── index.css               # Tailwind base + 自定义 utility (.btn-primary / .panel / .input)
 │
@@ -160,32 +163,48 @@ KunyaoGit/
 │   ├── icon-master.png             # 1024×1024 主图标源
 │   └── icon.ico                    # 16/32/48/64/128/256 多尺寸
 │
-├── scripts/                        # 打包 / 发布 / 工具脚本（全部 .cjs / .ps1 / .nsi）
-│   ├── build-unpacked.cjs          # ★ 手工组 release/win-unpacked-v2/
-│   ├── build-icon.cjs              # PNG → .ico（多尺寸）
-│   ├── installer.nsi               # NSIS 脚本（KunyaoGit 安装包）
-│   ├── package-portable.cjs        # 打包便携版 zip + 在 Gitee 创建 release
-│   ├── upload-installer.cjs        # 上传安装包到 GitHub Release（既有 release 更新）
-│   ├── replace-installer.cjs       # 替换 GitHub Release 上的安装包 asset
-│   ├── publish-v020.cjs            # 一次性脚本（已用过，保留作示例）
-│   ├── update-gitee-body.cjs       # 更新 Gitee Release 描述
-│   ├── list-assets.cjs             # 列出指定 GitHub release 的 asset
-│   ├── release-github.cjs          # 早期版本发布脚本（基本被 publish-* 替代）
-│   ├── calc-cache-dir.cjs          # 计算 electron-builder 期望的 cache dir（调试用）
-│   ├── check-expected-hash.cjs     # 调试用
-│   ├── test-update.cjs             # 调试：直接调 GitHub + Gitee release API
-│   ├── test-gitee.cjs              # 调试：列 Gitee release
-│   ├── test-launch.ps1             # 调试：静默 install + 启动 5s + 卸载
-│   ├── test-launch-v2.ps1          # 调试：单跑 launch 测试
-│   ├── check-handle.ps1            # 调试：查文件锁
-│   ├── check-hex.ps1               # 调试：看文件头几字节
-│   └── reset-stage.ps1             # 调试：清理卡住的 win-unpacked/
+├── scripts/                        # 打包 / 发布 / 调试脚本（按职责分目录）
+│   ├── build/                      # ★ 构建相关
+│   │   ├── build-unpacked.cjs      #   手工组 release/win-unpacked-v2/（已弃用，v0.2.2 起走 electron-builder）
+│   │   ├── build-icon.cjs          #   PNG → .ico（多尺寸）
+│   │   ├── installer.nsi           #   NSIS 脚本（KunyaoGit 安装包，旧流程用）
+│   │   ├── package-portable.cjs    #   打包便携版 zip + 在 Gitee 创建 release
+│   │   ├── replace-installer.cjs   #   替换 GitHub Release 上的安装包 asset
+│   │   ├── calc-cache-dir.cjs      #   计算 electron-builder 期望的 cache dir（调试用）
+│   │   └── check-expected-hash.cjs #   调试用
+│   ├── publish/                    # ★ 发布相关
+│   │   ├── publish-v020.cjs        #   一次性脚本（v0.2.0，已用过，保留作示例）
+│   │   ├── publish-v021.cjs        #   一次性脚本（v0.2.1，已用过）
+│   │   ├── publish-v022.cjs        #   一次性脚本（v0.2.2，已用过）
+│   │   ├── upload-installer.cjs    #   上传安装包到 GitHub Release（既有 release 更新）
+│   │   ├── update-gitee-body.cjs   #   更新 Gitee Release 描述
+│   │   ├── list-assets.cjs         #   列出指定 GitHub release 的 asset
+│   │   └── release-github.cjs      #   早期版本发布脚本（基本被 publish-* 替代）
+│   └── debug/                      # ★ 调试 / 测试相关
+│       ├── test-update.cjs         #   调试：直接调 GitHub + Gitee release API
+│       ├── test-gitee.cjs          #   调试：列 Gitee release
+│       ├── test-launch.ps1         #   调试：静默 install + 启动 5s + 卸载
+│       ├── test-launch-v2.ps1      #   调试：单跑 launch 测试
+│       ├── check-handle.ps1        #   调试：查文件锁
+│       ├── check-hex.ps1           #   调试：看文件头几字节
+│       └── reset-stage.ps1         #   调试：清理卡住的 win-unpacked/
 │
 ├── .release-assets/                # ★ 入库的"已发布"安装包（供 Gitee 走 git 分发）
 │   ├── KunyaoGit-Setup-0.1.0-x64.exe
 │   ├── KunyaoGit-Setup-0.2.0-x64.exe
+│   ├── KunyaoGit-Setup-0.2.1-x64.exe
+│   ├── KunyaoGit-Setup-0.2.2-x64.exe
 │   ├── KunyaoGit-portable-v0.1.0.zip
-│   └── KunyaoGit-portable-v0.2.0.zip
+│   ├── KunyaoGit-portable-v0.2.0.zip
+│   ├── KunyaoGit-portable-v0.2.1.zip
+│   └── KunyaoGit-portable-v0.2.2.zip
+│
+├── docs/                           # ★ 项目文档（v0.2.2 新增）
+│   ├── api-reference.md            # window.gitgui API 完整参考
+│   ├── features.md                 # 功能详解
+│   ├── installation.md             # 安装部署指南
+│   ├── user-guide.md               # 用户操作指南
+│   └── development-guide.md        # 开发规范与注意事项
 │
 ├── tools/                          # ★ gitignored（本地工具，NSIS 编译器）
 │   └── nsis/nsis-3.11/
@@ -312,7 +331,7 @@ KunyaoGit/
 
 `settings:get` / `settings:set` / `settings:test-git` / `settings:test-auth` / `dialog:show-open` / `dialog:show-save` / `app:open-path` / `app:shell-open` / `app:get-platform` / `app:get-version` / `app:open-external`
 
-### ★ 更新检查（v0.2.0 新增）
+### ★ 更新检查 + 应用内下载安装（v0.2.0 检查 / v0.2.2 应用内下载安装）
 
 | 通道 | 渲染层调用 | 主进程实现 |
 | --- | --- | --- |
@@ -320,6 +339,10 @@ KunyaoGit/
 | `update:check-silent` | `gitgui.update.checkSilent()` | 同上，但 6 小时内不重复请求（基于 electron-store 时间戳） |
 | `update:dismiss` | `gitgui.update.dismiss(version)` | 持久化到 `updateDismissedVersion`，下次同版本不再问 |
 | `update:open` | `gitgui.update.open(url)` | `shell.openExternal` |
+| `update:download` | `gitgui.update.download(version, onProgress)` | ★ v0.2.2：多源下载（Gitee raw 优先 / GitHub release 兜底），跟随重定向，流式写入 `%TEMP%` |
+| `update:download-progress` | （主→渲染事件） | ★ v0.2.2：`{ phase, percent, bytesReceived, totalBytes, source, message, filePath }` |
+| `update:install` | `gitgui.update.install(filePath)` | ★ v0.2.2：`shell.openPath(installer)` 启动安装包 → 1.5s 后 `app.quit()` 退出 |
+| `update:cancel-download` | `gitgui.update.cancelDownload()` | ★ v0.2.2：取消正在进行的 `https.get` 请求 |
 
 ---
 
@@ -341,7 +364,7 @@ KunyaoGit/
 11. 组件 mount 时批量触发 git:status / git:branches / git:log
 ```
 
-### 6.2 自动更新检查
+### 6.2 自动更新检查 + 应用内下载安装（v0.2.2）
 
 ```
 App 启动
@@ -361,11 +384,30 @@ compareVersion(current, latest) 选最高
    ↓
 返回 { hasUpdate, currentVersion, latest, sources, dismissed }
    ↓
-App 层逻辑：
+App 层逻辑（v0.2.2 重写）：
   - 无更新 → 静默
-  - 有更新 + 未 dismiss → confirm() 弹窗
-    - 确定 → update.open(htmlUrl) → shell.openExternal
-    - 取消 → update.dismiss(ver) → 写入 electron-store
+  - 有更新 + 未 dismiss → useUpdateStore.show(info) → 弹出 UpdateDialog
+     ↓
+  ┌─ 询问阶段 (phase='prompt')
+  │  用户点"立即下载并安装" → startDownload()
+  │  用户点"浏览器打开"     → update.open(htmlUrl) → shell.openExternal
+  │  用户点"忽略此版本"     → update.dismiss(ver) → electron-store
+  │  用户关闭对话框          → hide()
+  │
+  ├─ 下载阶段 (phase='downloading')
+  │  update.download(version, onProgress)
+  │  ├─ 主进程 downloadSources(ver)：Gitee raw 优先 → GitHub release 兜底
+  │  ├─ getFollow() 跟随 3xx 重定向（最多 8 次）
+  │  ├─ 流式写入 %TEMP%\KunyaoGit-Setup-{ver}-x64.exe
+  │  └─ 进度事件 → sender.send(UPDATE_DOWNLOAD_PROGRESS, { phase, percent, ... })
+  │  用户点"取消" → update.cancelDownload() → req.destroy()
+  │
+  ├─ 完成阶段 (phase='done')
+  │  下载成功 → setTimeout(800ms) → install()
+  │  → update.install(filePath) → shell.openPath(installer) → app.quit()
+  │
+  └─ 错误阶段 (phase='error')
+     显示错误信息 → 用户可"重试"或"浏览器打开"
 ```
 
 ### 6.3 安装包构建（重点）
@@ -377,7 +419,7 @@ npm run build  (tsc -b && vite build)
    ↓
 产出 dist/  +  dist-electron/
    ↓
-node scripts/build-unpacked.cjs
+node scripts/build/build-unpacked.cjs
    ├─ 复制 node_modules/electron/dist/* → release/win-unpacked-v2/
    ├─ 重命名 electron.exe → kunyaogit.exe
    ├─ 嵌入 assets/icon.ico 到 kunyaogit.exe（rcedit）
@@ -386,7 +428,7 @@ node scripts/build-unpacked.cjs
    ├─ asar pack app-stage/ → resources/app.asar
    └─ 清空 app-stage/
    ↓
-node scripts/installer.nsi  (makensis.exe /DAPP_VERSION=X.Y.Z)
+node scripts/build/installer.nsi  (makensis.exe /DAPP_VERSION=X.Y.Z)
    ├─ 复制 win-unpacked-v2/*  →  安装目录
    ├─ 写 Uninstaller.exe
    ├─ 写 HKLM 注册表（添加/移除程序）
@@ -404,9 +446,9 @@ release/KunyaoGit-Setup-X.Y.Z-x64.exe  +  KunyaoGit-portable-vX.Y.Z.zip
 # 1. 改 package.json 的 version
 
 # 2. 构建
-node scripts/build-unpacked.cjs
-"C:\A\03Projects\MiniMax\GitGUI\tools\nsis\nsis-3.11\makensis.exe" /DAPP_VERSION=X.Y.Z scripts\installer.nsi
-node scripts/package-portable.cjs        # 创建 zip + 在 Gitee 建 release
+node scripts/build/build-unpacked.cjs
+"C:\A\03Projects\MiniMax\GitGUI\tools\nsis\nsis-3.11\makensis.exe" /DAPP_VERSION=X.Y.Z scripts\build\installer.nsi
+node scripts/build/package-portable.cjs        # 创建 zip + 在 Gitee 建 release
 
 # 3. 复制到 .release-assets/（Gitee 走 git 分发）
 copy release\KunyaoGit-Setup-X.Y.Z-x64.exe .release-assets\
@@ -414,12 +456,12 @@ copy release\KunyaoGit-portable-vX.Y.Z.zip .release-assets\
 
 # 4. 上传 GitHub
 set GH_TOKEN=github_pat_XXX
-node scripts\upload-installer.cjs    # 更新 body + 跳过已存在的 asset
+node scripts\publish\upload-installer.cjs    # 更新 body + 跳过已存在的 asset
 # 或首次发布：
-node scripts\publish-v020.cjs        # 创建 release + 上传两个 asset
+node scripts\publish\publish-v020.cjs        # 创建 release + 上传两个 asset
 
 # 5. 更新 Gitee Release 描述
-node scripts\update-gitee-body.cjs
+node scripts\publish\update-gitee-body.cjs
 
 # 6. 提交 + push
 git add .release-assets/ package.json
@@ -430,11 +472,32 @@ git push github master
 
 ---
 
-## 7. 构建管线（重点中的重点）
+## 7. 构建管线（v0.2.2 回归 electron-builder + NSIS env var）
 
-> **为什么不用 `electron-builder`？** 它的子进程 `app-builder-bin`（Go 写的）会硬编码从 `github.com` 下载 `electron-vXX-win32-x64.zip`，当前网络环境对 github 443 不可靠（间歇超时）。所以我们手写脚本绕过。
+> **v0.2.2 变化**：之前因 `app-builder-bin` 从 GitHub 下载超时而绕开 `electron-builder`。v0.2.2 起回归 `electron-builder`（开启 Windows 开发者模式解决 winCodeSign 符号链接 + `ELECTRON_BUILDER_NSIS_DIR` env var 指向本地 NSIS 绕过下载）。
 
-### 7.1 `build-unpacked.cjs` — 手工组 `release/win-unpacked-v2/`
+### 7.1 `electron-builder` 流程（v0.2.2）
+
+```
+1. npm run typecheck   (tsc -b，类型检查)
+2. npx vite build       (renderer → dist/ + main/preload → dist-electron/)
+3. npm run build:win    (electron-builder --win)
+   ├─ @electron/rebuild (native 依赖重编)
+   ├─ packaging → release/win-unpacked/KunyaoGit.exe (嵌入 icon.ico)
+   ├─ winCodeSign 下载+解压（需开发者模式，否则符号链接失败）
+   ├─ NSIS 编译（读 ELECTRON_BUILDER_NSIS_DIR 指向的 makensis.exe）
+   │   ├─ 复制 win-unpacked → 安装包
+   │   ├─ 写 Uninstaller.exe
+   │   ├─ 写注册表 + 快捷方式
+   │   └─ LZMA 压缩
+   └─ 产出 release/KunyaoGit-Setup-X.Y.Z-x64.exe (~86 MB)
+```
+
+**关键 env var / 配置**：
+- `ELECTRON_BUILDER_NSIS_DIR` = 本地 NSIS 目录（如 `C:\Users\...\Cache\nsis\209911007` 或 `tools\nsis\nsis-3.11`）
+- 输出目录由 `package.json` 的 `build.directories.output` 配置为 `release/`（如需本地覆盖，可创建 `.build-config.json` 覆盖 `directories.output`，该文件已 gitignore）
+
+### 7.2 旧脚本 `build-unpacked.cjs`（已弃用，保留作参考）
 
 七步走，详见脚本注释：
 
@@ -460,7 +523,7 @@ git push github master
 | 卸载段 | 删文件 + 删注册表 + 删快捷方式 |
 | `SetCompressor /SOLID lzma` + `SetCompressorDictSize 64` | 整包 LZMA 压缩，~92 MB |
 
-调用：`makensis.exe /DAPP_VERSION=0.2.0 scripts/installer.nsi`
+调用：`makensis.exe /DAPP_VERSION=0.2.0 scripts/build/installer.nsi`
 
 ### 7.3 `package-portable.cjs` — 便携版 zip
 
@@ -479,25 +542,25 @@ git push github master
 
 ## 8. 脚本逐个说明
 
-> 所有脚本都是 `node scripts/xxx.cjs` 跑。Windows 路径下注意 `cmd /c` + 双引号。
+> 所有脚本都是 `node scripts/build/xxx.cjs` / `node scripts/publish/xxx.cjs` / `node scripts/debug/xxx.cjs` 跑。Windows 路径下注意 `cmd /c` + 双引号。
 
-| 脚本 | 何时跑 | 输入 | 输出 |
-| --- | --- | --- | --- |
-| `build-unpacked.cjs` | 每次打包 | `dist/`, `dist-electron/`, `assets/icon.ico` | `release/win-unpacked-v2/` |
-| `installer.nsi` | 每次打包 | `release/win-unpacked-v2/`, `assets/icon.ico` | `release/KunyaoGit-Setup-X.Y.Z-x64.exe` |
-| `package-portable.cjs` | 每次打包 | `dist/`, `dist-electron/` | `release/KunyaoGit-portable-vX.Y.Z.zip` + 在 Gitee 建 release |
-| `build-icon.cjs` | 换图标时 | `assets/icon-master.png` | `assets/icon.ico` |
-| `upload-installer.cjs` | 发版 | `release/KunyaoGit-Setup-X.Y.Z-x64.exe` | GitHub Release 上的 asset |
-| `publish-v020.cjs` | 首次发新 release | 同上 | 创建 GitHub Release + 上传两个 asset |
-| `replace-installer.cjs` | 替换已有 GitHub asset | `release/KunyaoGit-Setup-X.Y.Z-x64.exe` | 删旧 + 上传新 |
-| `update-gitee-body.cjs` | 发版后 | 无 | 同步 Gitee Release body 为新版本内容 |
-| `list-assets.cjs` | 查 GitHub Release | `env GH_VERSION` | 打印 asset 列表 |
-| `release-github.cjs` | 早期版本（已基本被 publish-* 替代） | - | - |
-| `test-update.cjs` | 调试 | 无 | 直接打 GitHub + Gitee release API |
-| `test-gitee.cjs` | 调试 | 无 | 列 Gitee release |
-| `test-launch.ps1` / `test-launch-v2.ps1` | 调试 | `release/win-unpacked-v2/kunyaogit.exe` 或 install-test 目录 | 启动 5s 后 kill |
-| `check-handle.ps1` / `check-hex.ps1` / `reset-stage.ps1` | 调试文件锁 | win-unpacked 目录 | 诊断 / 强清 |
-| `calc-cache-dir.cjs` / `check-expected-hash.cjs` | 历史调试，已用不到 | - | - |
+| 脚本 | 目录 | 何时跑 | 输入 | 输出 |
+| --- | --- | --- | --- | --- |
+| `build-unpacked.cjs` | `build/` | 每次打包（旧流程） | `dist/`, `dist-electron/`, `assets/icon.ico` | `release/win-unpacked-v2/` |
+| `installer.nsi` | `build/` | 每次打包（旧流程） | `release/win-unpacked-v2/`, `assets/icon.ico` | `release/KunyaoGit-Setup-X.Y.Z-x64.exe` |
+| `package-portable.cjs` | `build/` | 每次打包 | `dist/`, `dist-electron/` | `release/KunyaoGit-portable-vX.Y.Z.zip` + 在 Gitee 建 release |
+| `build-icon.cjs` | `build/` | 换图标时 | `assets/icon-master.png` | `assets/icon.ico` |
+| `replace-installer.cjs` | `build/` | 替换已有 GitHub asset | `release/KunyaoGit-Setup-X.Y.Z-x64.exe` | 删旧 + 上传新 |
+| `calc-cache-dir.cjs` / `check-expected-hash.cjs` | `build/` | 历史调试，已用不到 | - | - |
+| `upload-installer.cjs` | `publish/` | 发版 | `release/KunyaoGit-Setup-X.Y.Z-x64.exe` | GitHub Release 上的 asset |
+| `publish-v020.cjs` / `v021.cjs` / `v022.cjs` | `publish/` | 首次发新 release（一次性） | 同上 | 创建 GitHub Release + 上传两个 asset |
+| `update-gitee-body.cjs` | `publish/` | 发版后 | 无 | 同步 Gitee Release body 为新版本内容 |
+| `list-assets.cjs` | `publish/` | 查 GitHub Release | `env GH_VERSION` | 打印 asset 列表 |
+| `release-github.cjs` | `publish/` | 早期版本（已基本被 publish-* 替代） | - | - |
+| `test-update.cjs` | `debug/` | 调试 | 无 | 直接打 GitHub + Gitee release API |
+| `test-gitee.cjs` | `debug/` | 调试 | 无 | 列 Gitee release |
+| `test-launch.ps1` / `test-launch-v2.ps1` | `debug/` | 调试 | `release/win-unpacked-v2/kunyaogit.exe` 或 install-test 目录 | 启动 5s 后 kill |
+| `check-handle.ps1` / `check-hex.ps1` / `reset-stage.ps1` | `debug/` | 调试文件锁 | win-unpacked 目录 | 诊断 / 强清 |
 
 ---
 
@@ -514,7 +577,7 @@ git push github master
 
 ### 9.2 改 release body
 
-编辑 `scripts/upload-installer.cjs` 顶部的 `RELEASE_BODY` 模板（GitHub 端用）。
+编辑 `scripts/publish/upload-installer.cjs` 顶部的 `RELEASE_BODY` 模板（GitHub 端用）。
 
 ### 9.3 构建
 
@@ -525,13 +588,13 @@ npx tsc -b
 npx vite build
 
 # 2. 组 win-unpacked
-node scripts\build-unpacked.cjs
+node scripts\build\build-unpacked.cjs
 
 # 3. 出 NSIS 安装包
-"C:\A\03Projects\MiniMax\GitGUI\tools\nsis\nsis-3.11\makensis.exe" /DAPP_VERSION=0.3.0 scripts\installer.nsi
+"C:\A\03Projects\MiniMax\GitGUI\tools\nsis\nsis-3.11\makensis.exe" /DAPP_VERSION=0.3.0 scripts\build\installer.nsi
 
 # 4. 出便携版 zip
-node scripts\package-portable.cjs
+node scripts\build\package-portable.cjs
 
 # 5. 复制到 .release-assets/（Gitee 走 git 分发）
 copy /Y release\KunyaoGit-Setup-0.3.0-x64.exe .release-assets\
@@ -546,13 +609,13 @@ set GH_TOKEN=github_pat_XXX
 set GT_TOKEN=721ddfdc2165332edc7a79b18537c2b3   # Gitee（也支持内嵌在脚本里）
 
 # GitHub：创建 release + 上传
-node scripts\publish-v020.cjs   # 或新建一个 scripts\publish-v030.cjs
+node scripts\publish\publish-v020.cjs   # 或新建一个 scripts\publish\publish-v030.cjs
 # 已有 release：只更新 body / 替换 asset
-node scripts\upload-installer.cjs
-node scripts\replace-installer.cjs
+node scripts\publish\upload-installer.cjs
+node scripts\build\replace-installer.cjs
 
 # Gitee：更新 release body
-node scripts\update-gitee-body.cjs
+node scripts\publish\update-gitee-body.cjs
 
 # 提交 + push
 git add .release-assets\ package.json README.md
@@ -599,9 +662,9 @@ taskkill /IM kunyaogit.exe /F
 ### 10.3 改图标
 
 1. 改 `assets/icon-master.png`（保持 1024×1024）
-2. `node scripts\build-icon.cjs assets\icon-master.png assets\icon.ico`
-3. 重新 `node scripts\build-unpacked.cjs`（rcedit 会重嵌图标）
-4. 重新 `node scripts\installer.nsi`
+2. `node scripts\build\build-icon.cjs assets\icon-master.png assets\icon.ico`
+3. 重新 `node scripts\build\build-unpacked.cjs`（rcedit 会重嵌图标）
+4. 重新 `node scripts\build\installer.nsi`
 5. 发版
 
 ### 10.4 加一个新的 npm 依赖
@@ -616,8 +679,8 @@ taskkill /IM kunyaogit.exe /F
 
 1. `npm i -D electron@<new>`
 2. `npx tsc -b && npx vite build`
-3. `node scripts\build-unpacked.cjs`（rcedit / asar 都要重新嵌）
-4. `node scripts\installer.nsi`
+3. `node scripts\build\build-unpacked.cjs`（rcedit / asar 都要重新嵌）
+4. `node scripts\build\installer.nsi`
 5. **彻底测一遍**：安装 → 启动 → 所有 Git 操作 → 自动更新检查
 6. `node_modules/electron/dist/*` 内的 chrome sandbox / ffmpeg / 等二进制都会换版本
 
@@ -625,7 +688,7 @@ taskkill /IM kunyaogit.exe /F
 
 `build-unpacked.cjs` 目前是 Windows only（依赖 `electron.exe`、`rcedit`）。要做 macOS：
 
-1. 复制 `scripts/build-unpacked.cjs` 为 `build-unpacked-darwin.cjs`
+1. 复制 `scripts/build/build-unpacked.cjs` 为 `build/build-unpacked-darwin.cjs`
 2. 改用 `KunyaoGit.app/Contents/MacOS/KunyaoGit` 结构
 3. `rcedit` 替换为 `fileicon`（macOS 专属 setIcon 工具）
 4. `installer.nsi` 改写为 `installer-dmg.sh`（hdiutil）
@@ -657,7 +720,7 @@ SyntaxError: Cannot use import statement outside a module
 ```powershell
 Get-Process kunyaogit,electron,node -ErrorAction SilentlyContinue | Stop-Process -Force
 ```
-如果还卡，重启 / `scripts/reset-stage.ps1`。
+如果还卡，重启 / `scripts/debug/reset-stage.ps1`。
 
 ### 11.4 NSIS 安装包超过 100 MB
 
