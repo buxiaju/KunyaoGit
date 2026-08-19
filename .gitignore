@@ -12,6 +12,7 @@ dist-electron/
 release/
 release-new/
 release-v024/
+release-v025/
 release3/
 out/
 .build-config.json
@@ -57,3 +58,5 @@ coverage/
 # 例外：发布资产中的安装包 / 便携包需要入库（供 Gitee Release 走 git 分发）
 !.release-assets/*.exe
 !.release-assets/*.zip
+
+release-v025/
