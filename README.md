@@ -1,8 +1,12 @@
 # KunyaoGit
 
+<p align="left">
+  <img src="assets/icon-master.png" width="96" alt="KunyaoGit icon" />
+</p>
+
 > 一个跨平台 Git 桌面客户端（Windows / macOS / Linux），深度集成 **GitHub** 和 **Gitee**（码云）。
 
-![Electron](https://img.shields.io/badge/Electron-33-9feaf9) ![React](https://img.shields.io/badge/React-18-61dafb) ![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178c6) ![License](https://img.shields.io/badge/license-MIT-green)
+![Electron](https://img.shields.io/badge/Electron-33-9feaf9) ![React](https://img.shields.io/badge/React-18-61dafb) ![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178c6) ![License](https://img.shields.io/badge/license-MIT-green) ![Version](https://img.shields.io/badge/version-v0.2.0-22c55e)
 
 ## 特性
 
@@ -34,11 +38,18 @@
 - 查看 / 删除历史 Release
 - 附件管理
 
+### 🔄 自动更新检查
+- 启动后 1.5 秒静默检查 GitHub + Gitee 最新 release
+- 发现新版本时弹窗提示，支持「打开下载页 / 忽略此版本」
+- 主进程做 6 小时节流，避免频繁请求
+- 在 设置 → 关于 中可手动「检查更新」，查看 release notes
+
 ### ⚙️ 其他
 - 双平台 Token 一站式管理
 - 自定义 Git 可执行路径
 - 暗色主题
 - 多语言基础（中文优先）
+- **专属应用图标**（Jade 绿 + K + Git 分支节点）
 
 ## 截图
 
@@ -47,12 +58,15 @@
 ## 安装
 
 ### Windows（推荐）
-从 [Releases](https://github.com/buxiaju/KunyaoGit/releases) 下载 `KunyaoGit-Setup-0.1.0-x64.exe` 双击安装（NSIS 安装包，~113 MB，含完整 Electron 运行时，会创建桌面和开始菜单快捷方式）。
+从 [Releases](https://github.com/buxiaju/KunyaoGit/releases) 下载最新版 `KunyaoGit-Setup-0.2.0-x64.exe` 双击安装（NSIS 安装包，~92 MB，含完整 Electron 运行时 + 专属图标，创建桌面和开始菜单快捷方式）。
 
-- GitHub: https://github.com/buxiaju/KunyaoGit/releases/download/v0.1.0/KunyaoGit-Setup-0.1.0-x64.exe
-- Gitee:  https://gitee.com/buxiaju/KunyaoGit/releases/v0.1.0 （在 `.release-assets/` 目录获取安装包）
+- GitHub: https://github.com/buxiaju/KunyaoGit/releases/download/v0.2.0/KunyaoGit-Setup-0.2.0-x64.exe
+- Gitee:  https://gitee.com/buxiaju/KunyaoGit/releases/v0.2.0 （在 `.release-assets/` 目录获取安装包）
 
-便携版（不需安装）见同 Release 的 `KunyaoGit-portable-v0.1.0.zip`（~3.5 MB，解压后运行 `kunyaogit.exe`）。
+便携版（不需安装）见同 Release 的 `KunyaoGit-portable-v0.2.0.zip`（~3.5 MB，解压后运行 `kunyaogit.exe`，需本机已安装 Node.js）。
+
+### 自动更新
+安装后启动时会自动检查新版本，发现后在应用内一键跳转下载页。如关闭了自动检查，可在 设置 → 关于 中手动「检查更新」。
 
 ### 系统要求
 - Windows 10 / 11（x64）
