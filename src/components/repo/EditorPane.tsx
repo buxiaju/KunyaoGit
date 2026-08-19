@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import Editor, { OnMount } from '@monaco-editor/react';
 import { useRepoStore } from '../../stores/repo';
 import { useI18n } from '../../i18n';
+import { useSettingsStore } from '../../stores/settings';
+import { monacoThemeFor } from '../../hooks/useTheme';
 import { Save, Loader2, FileCode, RefreshCw } from 'lucide-react';
 import { toast } from '../common/Toast';
 
@@ -21,6 +23,7 @@ function detectLanguage(path: string): string {
 export default function EditorPane() {
   const { current, selectedFile, fileContent, fileDirty, fileLoading, loadFile, saveFile, closeFile } = useRepoStore();
   const { t } = useI18n();
+  const theme = useSettingsStore((s) => s.settings.theme);
   const editorRef = useRef<any>(null);
   const [saving, setSaving] = useState(false);
 
@@ -29,6 +32,21 @@ export default function EditorPane() {
       loadFile(selectedFile);
     }
   }, [selectedFile, current, loadFile]);
+
+  // 主题切换时同步 Monaco 编辑器（不重建整个 Editor 实例，只调 setTheme）
+  useEffect(() => {
+    const apply = () => {
+      if (editorRef.current) {
+        const monaco = (editorRef.current as any).getModel()?.__$editorMonaco
+          || (window as any).monaco;
+        const t = monacoThemeFor(theme);
+        if (monaco?.editor?.setTheme) monaco.editor.setTheme(t);
+      }
+    };
+    window.addEventListener('kg-theme-change', apply);
+    apply();
+    return () => window.removeEventListener('kg-theme-change', apply);
+  }, [theme]);
 
   if (!current) return null;
 
@@ -100,7 +118,7 @@ export default function EditorPane() {
             path={selectedFile}
             language={detectLanguage(selectedFile)}
             value={fileContent}
-            theme="vs-dark"
+            theme={monacoThemeFor(theme)}
             onMount={handleMount}
             onChange={handleChange}
             options={{

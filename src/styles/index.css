@@ -2,13 +2,112 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================
+   主题系统（v0.2.5+）
+   3 套主题：dark（暗）/ ocean（深蓝）/ light（亮）
+   通过 <html data-theme="..."> 切换；CSS 变量在 :root 上定义
+   然后用 [data-theme] .bg-gray-XXX 等选择器覆盖 Tailwind 工具类
+   ============================================================ */
+
 @layer base {
+  /* 默认 / dark 主题 —— 保持原 KunyaoGit 暗色调 */
+  :root,
+  :root[data-theme="dark"] {
+    --bg-app:        rgb(17 24 39);          /* gray-900 */
+    --bg-panel:      rgb(31 41 55);          /* gray-800 */
+    --bg-elevated:   rgb(55 65 81);          /* gray-700 */
+    --bg-elevated-2: rgb(75 85 99);          /* gray-600 */
+    --bg-input:      rgb(31 41 55);          /* gray-800（input 背景） */
+    --bg-hover:      rgba(55 65 81 / 0.6);   /* gray-700/60 */
+    --bg-active:     rgba(55 65 81 / 0.6);   /* gray-700/60 */
+    --text-primary:  rgb(243 244 246);       /* gray-100 */
+    --text-secondary:rgb(229 231 235);       /* gray-200 */
+    --text-tertiary: rgb(209 213 219);       /* gray-300 */
+    --text-muted:    rgb(156 163 175);       /* gray-400 */
+    --text-faint:    rgb(107 114 128);       /* gray-500 */
+    --border:        rgb(55 65 81);          /* gray-700 */
+    --border-strong: rgb(31 41 55);          /* gray-800 */
+    --border-input:  rgb(55 65 81);          /* gray-700 */
+    --primary-400:   rgb(52 211 153);        /* emerald-400 */
+    --primary-500:   rgb(16 185 129);        /* emerald-500 */
+    --primary-600:   rgb(5 150 105);         /* emerald-600 */
+    --primary-700:   rgb(4 120 87);          /* emerald-700 */
+    --danger-400:    rgb(248 113 113);       /* red-400 */
+    --danger-600:    rgb(220 38 38);         /* red-600 */
+    --danger-700:    rgb(185 28 28);         /* red-700 */
+    --overlay:       rgba(0 0 0 / 0.6);
+    --scrollbar-thumb: rgba(148 163 184 / 0.2);
+    --scrollbar-thumb-hover: rgba(148 163 184 / 0.4);
+  }
+
+  /* 深蓝主题 —— 深海 navy，blue 系 primary */
+  :root[data-theme="ocean"] {
+    --bg-app:        rgb(8 47 73);            /* sky-900 */
+    --bg-panel:      rgb(12 74 110);          /* sky-800 */
+    --bg-elevated:   rgb(7 89 133);           /* sky-700 */
+    --bg-elevated-2: rgb(14 116 144);         /* sky-600 */
+    --bg-input:      rgb(12 74 110);
+    --bg-hover:      rgba(14 116 144 / 0.6);
+    --bg-active:     rgba(14 116 144 / 0.6);
+    --text-primary:  rgb(240 249 255);         /* sky-50 */
+    --text-secondary:rgb(224 242 254);         /* sky-100 */
+    --text-tertiary: rgb(186 230 253);         /* sky-200 */
+    --text-muted:    rgb(125 211 252);         /* sky-300 */
+    --text-faint:    rgb(56 189 248);          /* sky-400 */
+    --border:        rgb(7 89 133);            /* sky-700 */
+    --border-strong: rgb(12 74 110);           /* sky-800 */
+    --border-input:  rgb(7 89 133);
+    --primary-400:   rgb(96 165 250);          /* blue-400 */
+    --primary-500:   rgb(59 130 246);          /* blue-500 */
+    --primary-600:   rgb(37 99 235);           /* blue-600 */
+    --primary-700:   rgb(29 78 216);           /* blue-700 */
+    --danger-400:    rgb(248 113 113);         /* red-400 */
+    --danger-600:    rgb(220 38 38);           /* red-600 */
+    --danger-700:    rgb(185 28 28);           /* red-700 */
+    --overlay:       rgba(0 30 60 / 0.7);
+    --scrollbar-thumb: rgba(186 230 253 / 0.2);
+    --scrollbar-thumb-hover: rgba(186 230 253 / 0.4);
+  }
+
+  /* 亮色主题 —— 浅灰白，emerald 保持品牌色 */
+  :root[data-theme="light"] {
+    --bg-app:        rgb(255 255 255);
+    --bg-panel:      rgb(249 250 251);         /* gray-50 */
+    --bg-elevated:   rgb(243 244 246);         /* gray-100 */
+    --bg-elevated-2: rgb(229 231 235);         /* gray-200 */
+    --bg-input:      rgb(255 255 255);
+    --bg-hover:      rgba(243 244 246 / 0.8);
+    --bg-active:     rgba(229 231 235 / 0.8);
+    --text-primary:  rgb(17 24 39);            /* gray-900 */
+    --text-secondary:rgb(31 41 55);            /* gray-800 */
+    --text-tertiary: rgb(55 65 81);            /* gray-700 */
+    --text-muted:    rgb(107 114 128);         /* gray-500 */
+    --text-faint:    rgb(156 163 175);         /* gray-400 */
+    --border:        rgb(229 231 235);         /* gray-200 */
+    --border-strong: rgb(209 213 219);         /* gray-300 */
+    --border-input:  rgb(209 213 219);
+    --primary-400:   rgb(52 211 153);          /* emerald-400 */
+    --primary-500:   rgb(16 185 129);          /* emerald-500 */
+    --primary-600:   rgb(5 150 105);           /* emerald-600 */
+    --primary-700:   rgb(4 120 87);            /* emerald-700 */
+    --danger-400:    rgb(220 38 38);           /* red-600 in light bg */
+    --danger-600:    rgb(220 38 38);
+    --danger-700:    rgb(185 28 28);
+    --overlay:       rgba(0 0 0 / 0.4);
+    --scrollbar-thumb: rgba(107 114 128 / 0.2);
+    --scrollbar-thumb-hover: rgba(107 114 128 / 0.4);
+  }
+
   html, body, #root {
     height: 100%;
     overflow: hidden;
   }
   body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+    background-color: var(--bg-app);
+    color: var(--text-primary);
+    /* 平滑过渡主题切换 */
+    transition: background-color 0.15s ease, color 0.15s ease;
   }
   *::-webkit-scrollbar {
     width: 8px;
@@ -18,40 +117,150 @@
     background: transparent;
   }
   *::-webkit-scrollbar-thumb {
-    background: rgba(148, 163, 184, 0.2);
+    background: var(--scrollbar-thumb);
     border-radius: 4px;
   }
   *::-webkit-scrollbar-thumb:hover {
-    background: rgba(148, 163, 184, 0.4);
+    background: var(--scrollbar-thumb-hover);
   }
 }
+
+/* ============================================================
+   用 [data-theme] 选择器覆盖 Tailwind 的 gray 系 class
+   specificity: [data-theme] .class = (0,2,0) > .class (0,1,0)
+   这样切换 root data-theme 时，UI 颜色就会跟着变
+   ============================================================ */
+
+/* —— 背景 —— */
+[data-theme] .bg-gray-900 { background-color: var(--bg-app); }
+[data-theme] .bg-gray-800 { background-color: var(--bg-panel); }
+[data-theme] .bg-gray-700 { background-color: var(--bg-elevated); }
+[data-theme] .bg-gray-600 { background-color: var(--bg-elevated-2); }
+
+/* 带透明度的灰背景（/60, /40, /30 等） */
+[data-theme] .bg-gray-800\/60 { background-color: var(--bg-panel); opacity: 0.6; }
+[data-theme] .bg-gray-800\/40 { background-color: var(--bg-panel); opacity: 0.4; }
+[data-theme] .bg-gray-800\/30 { background-color: var(--bg-panel); opacity: 0.3; }
+[data-theme] .bg-gray-700\/60 { background-color: var(--bg-elevated); opacity: 0.6; }
+[data-theme] .bg-gray-700\/40 { background-color: var(--bg-elevated); opacity: 0.4; }
+[data-theme] .bg-black\/60  { background-color: var(--overlay); }
+[data-theme] .bg-black\/30  { background-color: var(--overlay); }
+
+/* —— 文字 —— */
+[data-theme] .text-gray-100 { color: var(--text-primary); }
+[data-theme] .text-gray-200 { color: var(--text-secondary); }
+[data-theme] .text-gray-300 { color: var(--text-tertiary); }
+[data-theme] .text-gray-400 { color: var(--text-muted); }
+[data-theme] .text-gray-500 { color: var(--text-faint); }
+
+/* —— 边框 —— */
+[data-theme] .border-gray-700 { border-color: var(--border); }
+[data-theme] .border-gray-800 { border-color: var(--border-strong); }
+[data-theme] .border-gray-700\/60 { border-color: var(--border); opacity: 0.6; }
+[data-theme] .border-gray-800\/60 { border-color: var(--border-strong); opacity: 0.6; }
+
+/* —— hover 态 —— */
+[data-theme] .hover\:bg-gray-700\/60:hover { background-color: var(--bg-hover); }
+[data-theme] .hover\:bg-gray-700:hover { background-color: var(--bg-elevated); }
+[data-theme] .hover\:bg-gray-600:hover { background-color: var(--bg-elevated-2); }
+[data-theme] .hover\:text-gray-100:hover { color: var(--text-primary); }
+[data-theme] .hover\:text-gray-300:hover { color: var(--text-tertiary); }
+[data-theme] .hover\:text-white:hover { color: var(--text-primary); }
+[data-theme] .hover\:border-primary-500:hover { border-color: var(--primary-500); }
+
+/* —— focus 态（input 边框） —— */
+[data-theme] .focus\:border-primary-500:focus { border-color: var(--primary-500); }
+[data-theme] .focus\:ring-primary-500\/50:focus { box-shadow: 0 0 0 1px var(--primary-500); }
+
+/* —— 透明黑（深色卡片里的预览背景等） —— */
+[data-theme] .bg-black\/30 { background-color: rgba(0 0 0 / 0.3); }
+[data-theme] .bg-black\/20 { background-color: rgba(0 0 0 / 0.2); }
+
+/* —— primary 颜色（深色下 emerald，ocean 下 blue，亮色下 emerald） —— */
+[data-theme] .bg-emerald-500 { background-color: var(--primary-500); }
+[data-theme] .bg-emerald-600 { background-color: var(--primary-600); }
+[data-theme] .bg-emerald-700 { background-color: var(--primary-700); }
+[data-theme] .hover\:bg-emerald-700:hover { background-color: var(--primary-700); }
+[data-theme] .text-emerald-400 { color: var(--primary-400); }
+[data-theme] .text-emerald-500 { color: var(--primary-500); }
+[data-theme] .text-emerald-300 { color: var(--primary-400); }
+[data-theme] .ring-emerald-500\/50 { box-shadow: 0 0 0 1px var(--primary-500); }
+[data-theme] .border-emerald-500\/30 { border-color: var(--primary-500); opacity: 0.3; }
+
+/* —— danger 颜色 —— */
+[data-theme] .bg-red-600 { background-color: var(--danger-600); }
+[data-theme] .bg-red-500 { background-color: var(--danger-600); }
+[data-theme] .hover\:bg-red-700:hover { background-color: var(--danger-700); }
+[data-theme] .text-red-400 { color: var(--danger-400); }
+[data-theme] .text-red-200 { color: var(--danger-400); }
+[data-theme] .text-red-300 { color: var(--danger-400); }
+
+/* ============================================================
+   组件 utility（依然用 Tailwind 组合）
+   ============================================================ */
 
 @layer components {
   .btn {
     @apply inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors;
   }
   .btn-primary {
-    @apply btn bg-primary-600 hover:bg-primary-700 text-white;
+    @apply btn;
+    background-color: var(--primary-600);
+    color: white;
+  }
+  .btn-primary:hover {
+    background-color: var(--primary-700);
   }
   .btn-secondary {
-    @apply btn bg-gray-700 hover:bg-gray-600 text-gray-100;
+    @apply btn;
+    background-color: var(--bg-elevated);
+    color: var(--text-primary);
+  }
+  .btn-secondary:hover {
+    background-color: var(--bg-elevated-2);
   }
   .btn-ghost {
-    @apply btn text-gray-300 hover:bg-gray-700/60 hover:text-white;
+    @apply btn;
+    color: var(--text-tertiary);
+  }
+  .btn-ghost:hover {
+    background-color: var(--bg-hover);
+    color: var(--text-primary);
   }
   .btn-danger {
-    @apply btn bg-red-600 hover:bg-red-700 text-white;
+    @apply btn;
+    background-color: var(--danger-600);
+    color: white;
+  }
+  .btn-danger:hover {
+    background-color: var(--danger-700, rgb(185 28 28));
   }
   .input {
-    @apply w-full px-3 py-1.5 rounded-md bg-gray-800 border border-gray-700 text-sm text-gray-100 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/50;
+    @apply w-full px-3 py-1.5 rounded-md text-sm;
+    background-color: var(--bg-input);
+    border: 1px solid var(--border-input);
+    color: var(--text-primary);
+  }
+  .input:focus {
+    border-color: var(--primary-500);
+    outline: none;
+    box-shadow: 0 0 0 1px var(--primary-500);
   }
   .panel {
-    @apply bg-gray-800/60 border border-gray-700/60 rounded-md;
+    background-color: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 0.375rem;
   }
   .tab {
-    @apply px-3 py-1.5 text-sm rounded-md text-gray-400 hover:text-gray-100 hover:bg-gray-700/40 cursor-pointer select-none;
+    @apply px-3 py-1.5 text-sm rounded-md cursor-pointer select-none transition-colors;
+    color: var(--text-muted);
+  }
+  .tab:hover {
+    color: var(--text-primary);
+    background-color: var(--bg-hover);
   }
   .tab-active {
-    @apply bg-gray-700/60 text-white;
+    background-color: var(--bg-active);
+    color: var(--text-primary);
   }
 }

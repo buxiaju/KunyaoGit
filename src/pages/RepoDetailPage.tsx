@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSettingsStore } from '../stores/settings';
 import { useRepoStore } from '../stores/repo';
 import { useI18n } from '../i18n';
+import { monacoThemeFor } from '../hooks/useTheme';
 import { Github, Globe, ArrowLeft, GitPullRequest, MessageSquare, ExternalLink, Lock, Unlock, RefreshCw, Loader2, GitMerge, GitBranch, User, Calendar, Tag, Folder, File as FileIcon, FolderGit2, Save, Plus, Trash2, Edit2, ChevronRight, Upload, X } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
@@ -275,6 +276,21 @@ function detectLang(path: string): string {
 
 function RemoteFileBrowser({ platform, owner, repo }: { platform: 'github' | 'gitee'; owner: string; repo: string }) {
   const { t } = useI18n();
+  const theme = useSettingsStore((s) => s.settings.theme);
+  const editorRef = useRef<any>(null);
+  // 同步 Monaco 主题
+  useEffect(() => {
+    const apply = () => {
+      if (editorRef.current) {
+        const monaco = (window as any).monaco;
+        const t = monacoThemeFor(theme);
+        if (monaco?.editor?.setTheme) monaco.editor.setTheme(t);
+      }
+    };
+    window.addEventListener('kg-theme-change', apply);
+    apply();
+    return () => window.removeEventListener('kg-theme-change', apply);
+  }, [theme]);
   const [cwd, setCwd] = useState('');
   const [files, setFiles] = useState<RemoteFile[]>([]);
   const [loading, setLoading] = useState(false);
@@ -579,7 +595,8 @@ function RemoteFileBrowser({ platform, owner, repo }: { platform: 'github' | 'gi
                 path={selected.path}
                 language={detectLang(selected.path)}
                 value={editing ? editedContent : content.content}
-                theme="vs-dark"
+                theme={monacoThemeFor(theme)}
+                onMount={(e) => { editorRef.current = e; }}
                 onChange={(v) => editing && setEditedContent(v || '')}
                 options={{
                   readOnly: !editing,
