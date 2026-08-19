@@ -49,7 +49,7 @@
 - 仓库创建 / 删除
 - Tag + Release 管理（GitHub / Gitee），含 Conventional Commits 自动生成 CHANGELOG
 - **自动更新检查**（GitHub + Gitee 双源，启动后 1.5s 静默）
-- **★ 应用内自动更新**（v0.2.2 多源下载 Gitee 优先 / GitHub 兜底 + 实时进度条 + 下载完成自动启动安装包；v0.2.4 4 路 Range 并发提速 3~6 倍 + 实时速率；v0.2.6 探活改 GET 兼容部分 CDN）
+- **★ 应用内自动更新**（v0.2.2 多源下载 Gitee 优先 / GitHub 兜底 + 实时进度条 + 下载完成自动启动安装包；v0.2.4 4 路 Range 并发提速 3~6 倍 + 实时速率；v0.2.6 探活改 GET 兼容部分 CDN；**v0.3.1 Gitee 源改走 Release 附件下载 + 连接阶段超时**）
 - **多语言切换**（v0.2.3：中文 / English，React Context + useI18n hook，设置页或侧边栏一键切换）
 - **三主题切换**（v0.2.5：暗色 / 深蓝 / 亮色，CSS 变量 + 选择器覆盖实现，零业务代码迁移）
 - **专属应用图标**（Jade 绿 + K + Git 分支节点）
@@ -353,7 +353,7 @@ KunyaoGit/
 | `update:check-silent` | `gitgui.update.checkSilent()` | 同上，但 6 小时内不重复请求（基于 electron-store 时间戳） |
 | `update:dismiss` | `gitgui.update.dismiss(version)` | 持久化到 `updateDismissedVersion`，下次同版本不再问 |
 | `update:open` | `gitgui.update.open(url)` | `shell.openExternal` |
-| `update:download` | `gitgui.update.download(version, onProgress)` | ★ v0.2.2：多源下载（Gitee raw 优先 / GitHub release 兜底），跟随重定向，流式写入 `%TEMP%`；★ v0.2.4 4 路 Range 并发提速 |
+| `update:download` | `gitgui.update.download(version, onProgress)` | ★ v0.2.2：多源下载（★ v0.3.1 起 Gitee 走 Release 附件下载优先 / GitHub release 兜底），跟随重定向，流式写入 `%TEMP%`；★ v0.2.4 4 路 Range 并发提速；★ v0.3.1 加连接建立阶段超时 |
 | `update:download-progress` | （主→渲染事件） | ★ v0.2.2：`{ phase, percent, bytesReceived, totalBytes, source, message, filePath }`；★ v0.2.4 加 `speedBps` 瞬时速率 |
 | `update:install` | `gitgui.update.install(filePath)` | ★ v0.2.2：`shell.openPath(installer)` 启动安装包 → 1.5s 后 `app.quit()` 退出 |
 | `update:cancel-download` | `gitgui.update.cancelDownload()` | ★ v0.2.2：取消正在进行的 `https.get` 请求 |
@@ -826,6 +826,27 @@ v0.2.6 改为 **`Range: bytes=0-0` GET** 探活（兼容性远好于 HEAD）：
 - 进度事件 100ms 节流（避免 IPC 通道被 90MB 文件的 ~1400 个 chunk 事件刷爆）
 
 **不要轻易把 chunk 数量改成 1** —— 那就退化成 v0.2.2 的单连接了，单连接 18s 体感非常糟糕。
+
+### 11.13 ★ v0.3.1 修复：Gitee 下载源必须走 Release 附件，不能用 raw 直链
+
+v0.2.2~v0.3.0 的 Gitee 下载源是 `https://gitee.com/{owner}/{repo}/raw/master/.release-assets/...`（走 git 分发的 raw 直链）。**这个源对 >50MB 大文件已失效**：
+
+- 实测 `Range: bytes=0-0` 对 86MB 安装包返回 **HTTP 403**（早期是返 HTML 提示页，后收紧为 403）
+- 结果：国内用户（GitHub 被墙）两个源全挂，报「所有下载源都失败」
+
+v0.3.1 起改为 **Gitee Release 附件下载 URL**（发布脚本 `update-gitee-body.cjs` 上传的 attach file）：
+
+```
+https://gitee.com/{owner}/{repo}/releases/download/v{ver}/{filename}
+```
+
+- 302 重定向到官方附件 CDN `foruda.gitee.com`（URL 带签名 token）
+- **不支持 Range**（忽略 Range 头返回 200 整文件）→ 探活拿到 Content-Length 后走 `downloadSingle` 单连接，实测 ~2MB/s，86MB 约 45s
+- 探活对 200 响应读完 header 立即 `res.destroy()`，不会把整文件拉下来
+
+**另一个 v0.3.1 修复：连接建立阶段超时**。`req.setTimeout()` 只对「已连接 socket 的空闲」计时，TCP 握手卡死（github.com 被墙、SYN 无响应）时会无限挂起。`requestFollow()` 现在监听 `socket` 事件，在 `socket.connecting` 时起整体计时器，`connect` 后清除（探活 15s / 下载 30s）。
+
+**注意**：应用内更新器代码是"旧代码下载新版本"，所以本修复只对安装 v0.3.1+ 的用户生效；v0.2.6/v0.3.0 用户需手动下载安装 v0.3.1 一次。
 
 ---
 
