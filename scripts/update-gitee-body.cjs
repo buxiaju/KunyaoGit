@@ -12,14 +12,16 @@ const REPO = 'KunyaoGit';
 
 const RELEASE_BODY = `# KunyaoGit v${VERSION}
 
-## v0.2.0 新增
-- ✨ **自动更新检查** — 同时检查 GitHub 和 Gitee 的最新 release，发现新版本可在应用内一键跳转下载
-- ✨ **专属应用图标** — Jade 绿 + K + Git 分支头尾节点，绿松石质感
-- 🐛 **修复安装包缺 node_modules** — 之前首次安装报 \`Cannot find module 'electron-store'\`；改用 asar 打包后正常
+## v0.2.1 修复
+- 🐛 **修复 v0.2.0 无法启动** — \`app:get-version\` IPC handler 在 update.ts 和 main.ts 中重复注册，启动时抛 \`Attempted to register a second handler\` 阻断了 \`createWindow()\`，导致进程在跑但窗口不显示。移除 update.ts 中的重复注册。
+- 🐛 **修复图标棋盘格背景** — 源图 \`icon-master.png\` 背景被烧成"白格+灰格"棋盘格（图像编辑器表示透明的符号被错误固化进位图），现改为真透明，在任何颜色任务栏/桌面上只显示 Jade 绿 logo，不再有一圈格子。
 
 ## 下载
 - **KunyaoGit-Setup-${VERSION}-x64.exe** — NSIS 安装包，仓库根目录 \`.release-assets/\` 下；推荐去 GitHub Release 下载（[https://github.com/buxiaju/KunyaoGit/releases/download/v${VERSION}/KunyaoGit-Setup-${VERSION}-x64.exe](https://github.com/buxiaju/KunyaoGit/releases/download/v${VERSION}/KunyaoGit-Setup-${VERSION}-x64.exe)）
 - **KunyaoGit-portable-v${VERSION}.zip** — 便携版（3.5 MB），仓库根目录 \`.release-assets/\` 下
+
+## 升级
+如果装的是 v0.2.0（双击没反应、看不到窗口），卸载后安装 v0.2.1 即可。v0.2.1 启动后会自动检查新版本。
 
 ## 安装
 下载 Setup .exe → 双击运行 → 选择安装目录 → 安装完成。
