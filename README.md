@@ -6,7 +6,7 @@
 
 > 一个跨平台 Git 桌面客户端（Windows / macOS / Linux），深度集成 **GitHub** 和 **Gitee**（码云）。
 
-![Electron](https://img.shields.io/badge/Electron-33-9feaf9) ![React](https://img.shields.io/badge/React-18-61dafb) ![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178c6) ![License](https://img.shields.io/badge/license-MIT-green) ![Version](https://img.shields.io/badge/version-v0.2.0-22c55e)
+![Electron](https://img.shields.io/badge/Electron-33-9feaf9) ![React](https://img.shields.io/badge/React-18-61dafb) ![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178c6) ![License](https://img.shields.io/badge/license-MIT-green) ![Version](https://img.shields.io/badge/version-v0.2.2-22c55e)
 
 ## 特性
 
@@ -43,6 +43,7 @@
 - 发现新版本时弹窗提示，支持「打开下载页 / 忽略此版本」
 - 主进程做 6 小时节流，避免频繁请求
 - 在 设置 → 关于 中可手动「检查更新」，查看 release notes
+- **★ 应用内自动更新**（v0.2.2）：弹窗内直接「立即下载并安装」，多源下载（Gitee 优先 / GitHub 兜底）带实时进度条，下载完成自动启动安装包并退出应用
 
 ### ⚙️ 其他
 - 双平台 Token 一站式管理
@@ -58,15 +59,15 @@
 ## 安装
 
 ### Windows（推荐）
-从 [Releases](https://github.com/buxiaju/KunyaoGit/releases) 下载最新版 `KunyaoGit-Setup-0.2.0-x64.exe` 双击安装（NSIS 安装包，~92 MB，含完整 Electron 运行时 + 专属图标，创建桌面和开始菜单快捷方式）。
+从 [Releases](https://github.com/buxiaju/KunyaoGit/releases) 下载最新版 `KunyaoGit-Setup-0.2.2-x64.exe` 双击安装（NSIS 安装包，~86 MB，含完整 Electron 运行时 + 专属图标，创建桌面和开始菜单快捷方式）。
 
-- GitHub: https://github.com/buxiaju/KunyaoGit/releases/download/v0.2.0/KunyaoGit-Setup-0.2.0-x64.exe
-- Gitee:  https://gitee.com/buxiaju/KunyaoGit/releases/v0.2.0 （在 `.release-assets/` 目录获取安装包）
+- GitHub: https://github.com/buxiaju/KunyaoGit/releases/download/v0.2.2/KunyaoGit-Setup-0.2.2-x64.exe
+- Gitee:  https://gitee.com/buxiaju/KunyaoGit/releases/v0.2.2 （在 `.release-assets/` 目录获取安装包）
 
-便携版（不需安装）见同 Release 的 `KunyaoGit-portable-v0.2.0.zip`（~3.5 MB，解压后运行 `kunyaogit.exe`，需本机已安装 Node.js）。
+便携版（不需安装）见同 Release 的 `KunyaoGit-portable-v0.2.2.zip`（~3.5 MB，解压后运行 `kunyaogit.exe`，需本机已安装 Node.js）。
 
 ### 自动更新
-安装后启动时会自动检查新版本，发现后在应用内一键跳转下载页。如关闭了自动检查，可在 设置 → 关于 中手动「检查更新」。
+安装后启动时会自动检查新版本，发现新版本后弹窗提示，可在弹窗内直接「立即下载并安装」（多源下载带进度条，下载完成自动启动安装包）。也可选择「打开下载页 / 忽略此版本」。如关闭了自动检查，可在 设置 → 关于 中手动「检查更新」。
 
 ### 系统要求
 - Windows 10 / 11（x64）
@@ -84,7 +85,7 @@ npm run dev     # 开发模式（带热更新）
 
 ### 自己打包
 ```bash
-npm run build:win   # 产出 release/KunyaoGit-Setup-0.1.0-x64.exe
+npm run build:win   # 产出 release/KunyaoGit-Setup-0.2.2-x64.exe
 ```
 
 ## 配置 GitHub / Gitee Token
@@ -123,15 +124,23 @@ KunyaoGit/
 │   ├── main.ts           # 窗口 + IPC 注册
 │   ├── preload.ts        # contextBridge 安全 API
 │   ├── ipc/              # IPC 处理器（按域拆分）
-│   └── services/         # 业务服务（Git 封装 / 配置 / CHANGELOG 生成）
+│   └── services/         # 业务服务（Git 封装 / 配置 / 更新检查）
 ├── src/                  # 渲染进程
 │   ├── components/       # 通用 + 仓库相关组件
 │   ├── pages/            # 路由页面
-│   ├── stores/           # Zustand 状态
+│   ├── stores/           # Zustand 状态（repo / settings / update）
+│   ├── hooks/            # 自定义 hooks（更新检查等）
 │   └── styles/           # Tailwind 入口
-├── shared/               # 渲染+主进程共享类型和常量
+├── shared/               # 渲染+主进程共享类型和 IPC 通道常量
+├── docs/                 # 项目文档（功能说明 / API 参考 / 安装 / 用户指南 / 开发指南）
+├── scripts/              # 打包 / 发布 / 调试脚本
+├── assets/               # 应用图标
+├── ARCHITECTURE.md       # 架构与维护手册（接手者必读）
+├── CONTRIBUTING.md       # 贡献指南
 └── ...
 ```
+
+> 更详细的结构说明见 [`ARCHITECTURE.md`](./ARCHITECTURE.md)，开发者文档见 [`docs/`](./docs/)。
 
 ## 路线图
 
@@ -141,6 +150,8 @@ KunyaoGit/
 - [x] 远程文件浏览 / 编辑
 - [x] 拖拽上传
 - [x] Release 管理
+- [x] 自动更新检查（GitHub + Gitee 双源）
+- [x] 应用内自动更新（下载 + 安装，v0.2.2）
 - [ ] 子模块管理
 - [ ] SSH key 管理
 - [ ] Git LFS 支持
@@ -150,7 +161,7 @@ KunyaoGit/
 
 ## 贡献
 
-欢迎提 Issue / PR。
+欢迎提 Issue / PR，贡献流程与规范见 [`CONTRIBUTING.md`](./CONTRIBUTING.md)。
 
 ## 许可
 
