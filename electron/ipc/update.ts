@@ -29,12 +29,13 @@ const GITHUB_REPO = 'buxiaju/KunyaoGit';
 const GITEE_REPO = 'buxiaju/KunyaoGit';
 const INSTALLER_NAME = (ver: string) => `KunyaoGit-Setup-${ver}-x64.exe`;
 
-// 下载源：Gitee raw（国内快）优先，GitHub CDN 兜底
+// 下载源：Gitee Release 附件（国内快，官方 CDN foruda.gitee.com）优先，GitHub Release 兜底。
+// ⚠️ 不要用 gitee.com/{owner}/{repo}/raw/... 直链：Gitee raw 对 >50MB 大文件直接 403 / 返 HTML（v0.3.1 起改走 release 附件）
 function downloadSources(ver: string): { platform: 'gitee' | 'github'; url: string }[] {
   return [
     {
       platform: 'gitee',
-      url: `https://gitee.com/${GITEE_REPO}/raw/master/.release-assets/${INSTALLER_NAME(ver)}`,
+      url: `https://gitee.com/${GITEE_REPO}/releases/download/v${ver}/${INSTALLER_NAME(ver)}`,
     },
     {
       platform: 'github',
@@ -115,8 +116,23 @@ function requestFollow(
         },
       );
       onRequest?.(req);
+      // 连接建立阶段也要超时：req.setTimeout 只对"已连接 socket 的空闲"计时，
+      // 如果 TCP 握手卡死（如 github.com 被墙），它会一直挂到系统级超时。
+      // 这里在 socket 尚未 connect 时起一个整体计时器，连上后清除。
+      let connectTimer: NodeJS.Timeout | undefined;
+      req.on('socket', (socket) => {
+        if (socket.connecting) {
+          connectTimer = setTimeout(() => req.destroy(new Error('连接超时')), timeoutMs);
+          socket.once('connect', () => {
+            if (connectTimer) clearTimeout(connectTimer);
+          });
+        }
+      });
       req.setTimeout?.(timeoutMs, () => req.destroy(new Error('连接超时')));
-      req.on('error', reject);
+      req.on('error', (e) => {
+        if (connectTimer) clearTimeout(connectTimer);
+        reject(e);
+      });
     };
     visit(initialUrl, maxRedirects);
   });
