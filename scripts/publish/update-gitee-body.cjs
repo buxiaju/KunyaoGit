@@ -28,7 +28,12 @@ function log(msg) {
 
 const RELEASE_BODY = `# KunyaoGit v${VERSION}
 
-## v0.2.5 新特性
+## v0.2.6 修复
+- 🔧 **应用内更新器探活改用 GET 替代 HEAD** —— 很多 CDN / 防火墙对 HEAD 请求更敏感（直接 403 / 超时），改成 \`Range: bytes=0-0\` 的 GET 兼容性远好。206 响应里 \`Content-Range: bytes 0-0/{total}\` 直接给到总大小。
+- ⏱ **探活超时从 8s 提到 15s** —— 慢网络更稳。
+- 📋 **错误信息汇总所有源失败原因** —— 不再只显示最后一个错的源，所有源（gitee / github）的失败原因并列出来。
+
+## v0.2.5 特性（沿用）
 - 🎨 **三主题切换**（暗色 / 深蓝 / 亮色）— 设置页一键切换，整套 UI 实时跟随，包括 Monaco 代码编辑器：
   - **暗色**（默认）—— 原汁原味的 KunyaoGit 暗灰，emerald 品牌色
   - **深蓝** —— 深海 navy 背景，blue 系 primary，沉稳又有色彩

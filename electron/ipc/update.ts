@@ -49,7 +49,7 @@ const MIN_CHUNK_SIZE = 1024 * 1024;     // 1MB 以下不分段，避免拆得太
 const PROGRESS_INTERVAL_MS = 100;       // 进度事件节流间隔
 const CHUNK_RETRY = 3;                  // 单 chunk 失败重试次数
 const CHUNK_RETRY_BACKOFF = 400;        // 失败重试退避基数（ms，指数递增）
-const PROBE_TIMEOUT_MS = 8000;          // HEAD 探活超时
+const PROBE_TIMEOUT_MS = 15000;         // Range 探活超时（GET 比 HEAD 慢，给宽点）
 const RANGE_TIMEOUT_MS = 30000;         // Range 下载每 chunk 30s 无数据视为超时
 
 // 模块级下载状态（用于取消 + 进度节流）
@@ -183,11 +183,11 @@ export function registerUpdateHandlers() {
     sendProgress(sender, { phase: 'preparing', percent: 0, bytesReceived: 0, totalBytes: 0 });
 
     const sources = downloadSources(version);
-    let lastErr: Error | null = null;
+    const failedSources: { platform: 'gitee' | 'github'; reason: string }[] = [];
 
-    // 策略：先并行 HEAD 探活所有源，挑出第一个 Content-Type 非 HTML 的源直接进入下载；
-    // HEAD 失败的源也尝试，但若所有源都不可用则走完兜底。
-    // 这样做能跳过 Gitee raw 总是返 HTML 的死路，省掉一个 ~8s 的等待。
+    // 策略：先并行 Range 探活所有源，挑出第一个 Content-Type 非 HTML 的源直接进入下载。
+    // 用 GET + Range: bytes=0-0 替代 HEAD，因为很多 CDN/防火墙对 HEAD 更敏感（直接 403/超时）。
+    // 206 响应里 Content-Range 直接给到 total，Content-Type/Accept-Ranges 头都在。
     interface ProbeResult {
       platform: 'gitee' | 'github';
       url: string;
@@ -199,11 +199,13 @@ export function registerUpdateHandlers() {
     const probed: ProbeResult[] = await Promise.all(
       sources.map(async (src): Promise<ProbeResult> => {
         try {
-          const r = await probeHead(src.url);
-          if (!r) return { platform: src.platform, url: src.url, ok: false, error: 'HEAD 失败', total: 0, supportsRange: false };
-          if (r.status !== 200) return { platform: src.platform, url: src.url, ok: false, error: `HTTP ${r.status}`, total: 0, supportsRange: false };
+          const r = await probeRange(src.url);
+          if (!r) return { platform: src.platform, url: src.url, ok: false, error: '请求失败（超时/网络）', total: 0, supportsRange: false };
+          if (r.status !== 200 && r.status !== 206) {
+            return { platform: src.platform, url: src.url, ok: false, error: `HTTP ${r.status}`, total: 0, supportsRange: false };
+          }
           if (src.platform === 'gitee' && /text\/html/i.test(r.contentType)) {
-            return { platform: src.platform, url: src.url, ok: false, error: 'Gitee raw 返 HTML', total: 0, supportsRange: false };
+            return { platform: src.platform, url: src.url, ok: false, error: 'Gitee raw 返 HTML（大文件受限）', total: 0, supportsRange: false };
           }
           if (r.contentLength <= 0) {
             return { platform: src.platform, url: src.url, ok: false, error: '缺 Content-Length', total: 0, supportsRange: false };
@@ -226,9 +228,9 @@ export function registerUpdateHandlers() {
 
     for (const probe of orderedSources) {
       if (active?.cancelled) break;
-      // 探活失败的源：失败原因能直接告诉用户
+      // 探活失败的源：把失败原因记到 failedSources，最后汇总给用户
       if (!probe.ok) {
-        lastErr = new Error(`${probe.platform}: ${probe.error}`);
+        failedSources.push({ platform: probe.platform, reason: probe.error || '未知' });
         continue;
       }
       try {
@@ -252,13 +254,17 @@ export function registerUpdateHandlers() {
         });
         return { filePath: destPath, source: probe.platform };
       } catch (err) {
-        lastErr = err as Error;
+        // 下载阶段失败：同样记到 failedSources
+        failedSources.push({ platform: probe.platform, reason: (err as Error).message });
         // 继续尝试下一个源
       }
     }
 
     active = null;
-    const msg = lastErr ? lastErr.message : '所有下载源都失败';
+    // 汇总错误：把所有源的失败原因列出来，方便用户判断是网络问题还是源问题
+    const msg = failedSources.length
+      ? `所有下载源都失败：${failedSources.map(s => `${s.platform}（${s.reason}）`).join('; ')}`
+      : '所有下载源都失败';
     sendProgress(sender, { phase: 'error', percent: 0, bytesReceived: 0, totalBytes: 0, message: msg });
     throw new Error(msg);
   });
@@ -374,30 +380,43 @@ async function tryDownloadFromSource(
   return { bytes, durationMs: duration };
 }
 
-// HEAD 探活：返回 { status, contentType, contentLength, acceptRanges }
-async function probeHead(url: string): Promise<{ status: number; contentType: string; contentLength: number; acceptRanges: boolean } | null> {
+// Range 探活：发 Range: bytes=0-0 的 GET，1 字节就好。
+// 用 GET 不用 HEAD，因为很多 CDN / 防火墙对 HEAD 更敏感（甚至直接 403/超时）。
+// 206 响应里 Content-Range: bytes 0-0/{total} 直接给到总大小；
+// 200 响应（服务器忽略 Range）则 Content-Length 是总大小，我们读完头立刻 destroy 响应
+// 避免真把 90MB 拉下来。
+async function probeRange(url: string): Promise<{ status: number; contentType: string; contentLength: number; acceptRanges: boolean } | null> {
   if (!active || active.cancelled) throw new Error('cancelled');
   try {
     const { res } = await requestFollow(
       url,
-      'HEAD',
-      {},
+      'GET',
+      { Range: 'bytes=0-0' },
       8,
       PROBE_TIMEOUT_MS,
       (req) => active?.inFlight.add(req),
     );
     const status = res.statusCode || 0;
     const contentType = String(res.headers['content-type'] || '');
-    const contentLength = Number(res.headers['content-length'] || 0);
     const ar = String(res.headers['accept-ranges'] || '').toLowerCase();
-    res.resume();
+    // 优先从 Content-Range 拿 total（206 才会有）
+    let total = 0;
+    const cr = res.headers['content-range'];
+    if (typeof cr === 'string') {
+      const m = /\/(\d+)\s*$/.exec(cr);
+      if (m) total = Number(m[1]);
+    }
+    // 200 响应（不支持 Range）的话 Content-Length 就是 total
+    if (!total) total = Number(res.headers['content-length'] || 0);
+    // 立即销毁响应，避免 200 情况把整文件拉下来
+    res.destroy();
     return {
       status,
       contentType,
-      contentLength,
-      acceptRanges: ar === 'bytes' || ar === 'none' ? ar === 'bytes' : false,
+      contentLength: total,
+      acceptRanges: status === 206 || ar === 'bytes',
     };
-  } catch {
+  } catch (e) {
     return null;
   }
 }
