@@ -95,6 +95,8 @@ export const en: TranslationDict = {
     connecting: 'Connecting to download source…',
     canceling: 'Canceling…',
     canceled: 'Download canceled',
+    totalSize: '{size} total',
+    sizeUnknown: 'size unknown',
   },
 
   repo: {

@@ -13,6 +13,13 @@ function fmtBytes(n: number): string {
   return (n / 1024 / 1024).toFixed(2) + ' MB';
 }
 
+function fmtSpeed(bps: number): string {
+  if (!bps || bps < 0) return '';
+  if (bps < 1024) return bps + ' B/s';
+  if (bps < 1024 * 1024) return (bps / 1024).toFixed(1) + ' KB/s';
+  return (bps / 1024 / 1024).toFixed(2) + ' MB/s';
+}
+
 export function UpdateDialog() {
   const { t } = useI18n();
   const { visible, info, phase, progress, error, hide, startDownload, cancelDownload } = useUpdateStore();
@@ -120,6 +127,7 @@ function DownloadPanel({ progress, onCancel }: { progress: DownloadProgress | nu
   const { t } = useI18n();
   const percent = progress?.percent ?? -1;
   const known = percent >= 0 && (progress?.totalBytes ?? 0) > 0;
+  const speedLabel = progress?.speedBps ? fmtSpeed(progress.speedBps) : '';
   return (
     <div className="space-y-3 py-1">
       <div className="flex items-center justify-between text-sm">
@@ -142,10 +150,11 @@ function DownloadPanel({ progress, onCancel }: { progress: DownloadProgress | nu
           <div className="h-full w-1/3 bg-emerald-500/70 animate-pulse rounded-full" />
         )}
       </div>
-      {/* 字节数 */}
+      {/* 字节数 / 速度 */}
       <div className="flex items-center justify-between text-xs text-gray-500">
         <span>{progress ? fmtBytes(progress.bytesReceived) : ''}</span>
-        <span>{known && progress ? '共 ' + fmtBytes(progress.totalBytes) : '大小未知'}</span>
+        <span className="text-emerald-400/80">{speedLabel}</span>
+        <span>{known && progress ? t('update.totalSize', { size: fmtBytes(progress.totalBytes) }) : t('update.sizeUnknown')}</span>
       </div>
       <button onClick={onCancel} className="btn-ghost text-xs">{t('update.cancel')}</button>
     </div>
