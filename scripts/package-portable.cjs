@@ -3,7 +3,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { execSync } = require('node:child_process');
+const { execFileSync } = require('node:child_process');
 const https = require('node:https');
 
 const ROOT = path.resolve(__dirname, '..');
@@ -31,12 +31,9 @@ function main() {
   log('打包', OUT_ZIP);
   // -Path 参数要存在，不能是空
   if (fs.existsSync(OUT_ZIP)) fs.unlinkSync(OUT_ZIP);
-  // Compress-Archive 在 PowerShell 里
-  const ps = `
-$ErrorActionPreference = 'Stop'
-Compress-Archive -Path '${DIST}','${DIST_ELECTRON}','${path.join(ROOT, 'package.json')}' -DestinationPath '${OUT_ZIP}' -Force
-`;
-  execSync(`powershell -NoProfile -Command "${ps.replace(/\n/g, '; ')}"`, { stdio: 'inherit', shell: 'cmd.exe' });
+  // 直接调 powershell.exe（不经过 cmd.exe，避免某些环境禁用 cmd）
+  const psScript = `$ErrorActionPreference = 'Stop'; Compress-Archive -Path '${DIST}','${DIST_ELECTRON}','${path.join(ROOT, 'package.json')}' -DestinationPath '${OUT_ZIP}' -Force`;
+  execFileSync('powershell.exe', ['-NoProfile', '-Command', psScript], { stdio: 'inherit' });
   const size = fs.statSync(OUT_ZIP).size;
   log('✅ 便携包完成', `${(size / 1024 / 1024).toFixed(2)} MB`);
   return OUT_ZIP;
