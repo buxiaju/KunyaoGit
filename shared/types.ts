@@ -156,3 +156,25 @@ export interface ChangelogGroup {
 }
 
 export type Result<T> = { ok: true; data: T } | { ok: false; error: string };
+
+export interface AppUpdateInfo {
+  hasUpdate: boolean;
+  currentVersion: string;
+  latest: {
+    tag: string;
+    version: string;
+    name: string;
+    body: string;
+    htmlUrl: string;
+    publishedAt?: string;
+    platform: 'github' | 'gitee';
+    assets: { name: string; size: number; downloadUrl: string }[];
+  } | null;
+  sources: {
+    platform: 'github' | 'gitee';
+    ok: boolean;
+    error?: string;
+    release?: AppUpdateInfo['latest'];
+  }[];
+  dismissed?: boolean;
+}

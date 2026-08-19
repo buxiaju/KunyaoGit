@@ -1,5 +1,5 @@
-// Upload NSIS installer to existing GitHub Release v0.1.0 (and update release body)
-// Usage: GH_TOKEN=xxx node scripts/upload-installer.cjs
+// Create v0.2.0 GitHub Release + upload NSIS installer + portable zip
+// Usage: GH_TOKEN=xxx node scripts/publish-v020.cjs
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -16,20 +16,12 @@ if (!TOKEN) { console.error('缺少 GH_TOKEN'); process.exit(1); }
 
 const INSTALLER = path.join(ROOT, 'release', `KunyaoGit-Setup-${VERSION}-x64.exe`);
 const PORTABLE  = path.join(ROOT, 'release', `KunyaoGit-portable-v${VERSION}.zip`);
-
-const ASSETS = [];
-if (fs.existsSync(INSTALLER)) ASSETS.push(INSTALLER);
-if (fs.existsSync(PORTABLE))  ASSETS.push(PORTABLE);
-
-if (ASSETS.length === 0) {
-  console.error('找不到任何待上传的产物');
-  process.exit(1);
-}
+if (!fs.existsSync(INSTALLER)) { console.error('missing', INSTALLER); process.exit(1); }
 
 const RELEASE_BODY = `# KunyaoGit v${VERSION}
 
 ## v0.2.0 新增
-- ✨ **自动更新检查** — 同时检查 GitHub 和 Gitee 的最新 release，发现新版本可在 应用内一键跳转下载
+- ✨ **自动更新检查** — 同时检查 GitHub 和 Gitee 的最新 release，发现新版本可在应用内一键跳转下载
 - ✨ **专属应用图标** — Jade 绿 + K + Git 分支头尾节点，绿松石质感
 - 🐛 **修复安装包缺 node_modules** — 之前首次安装报 \`Cannot find module 'electron-store'\`；改用 asar 打包后正常
 
@@ -74,7 +66,7 @@ function req(opts, body) {
         const text = Buffer.concat(cs).toString('utf-8');
         let json = null;
         try { json = JSON.parse(text); } catch {}
-        resolve({ status: res.statusCode, text, json, headers: res.headers });
+        resolve({ status: res.statusCode, text, json });
       });
     });
     r.on('error', reject);
@@ -89,43 +81,57 @@ async function main() {
   console.log('GET release', TAG);
   const tagUrl = new URL(`https://api.github.com/repos/${OWNER}/${REPO}/releases/tags/${TAG}`);
   const exists = await req({
-    hostname: tagUrl.hostname,
-    method: 'GET',
-    path: tagUrl.pathname,
-    headers: {
-      'Authorization': 'token ' + TOKEN,
-      'User-Agent': 'KunyaoGit-publish',
-      'Accept': 'application/vnd.github+json',
-    },
+    hostname: tagUrl.hostname, method: 'GET', path: tagUrl.pathname,
+    headers: { 'Authorization': 'token ' + TOKEN, 'User-Agent': 'KunyaoGit-publish', 'Accept': 'application/vnd.github+json' },
   });
-  if (exists.status !== 200) throw new Error('Release 不存在: ' + exists.status);
-  let release = exists.json;
-  console.log('找到 release', release.html_url);
 
-  // 更新 release body
+  let release;
+  if (exists.status === 200) {
+    console.log('Release 已存在，复用', exists.json.html_url);
+    release = exists.json;
+  } else if (exists.status === 404) {
+    console.log('创建 release', TAG);
+    const body = JSON.stringify({
+      tag_name: TAG,
+      name: `KunyaoGit v${VERSION}`,
+      body: RELEASE_BODY,
+      draft: false,
+      prerelease: false,
+    });
+    const r = await req({
+      hostname: 'api.github.com', method: 'POST', path: `/repos/${OWNER}/${REPO}/releases`,
+      headers: {
+        'Authorization': 'token ' + TOKEN, 'User-Agent': 'KunyaoGit-publish',
+        'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body),
+      },
+    }, body);
+    if (r.status !== 201) throw new Error('Create failed: ' + r.status + ' ' + r.text);
+    release = r.json;
+    console.log('✅ Release 创建', release.html_url);
+  } else {
+    throw new Error('GET release failed: ' + exists.status);
+  }
+
+  // 更新 body
   const body = JSON.stringify({ body: RELEASE_BODY });
   const upd = await req({
-    hostname: 'api.github.com',
-    method: 'PATCH',
-    path: `/repos/${OWNER}/${REPO}/releases/${release.id}`,
+    hostname: 'api.github.com', method: 'PATCH', path: `/repos/${OWNER}/${REPO}/releases/${release.id}`,
     headers: {
-      'Authorization': 'token ' + TOKEN,
-      'User-Agent': 'KunyaoGit-publish',
-      'Accept': 'application/vnd.github+json',
-      'Content-Type': 'application/json',
+      'Authorization': 'token ' + TOKEN, 'User-Agent': 'KunyaoGit-publish',
+      'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json',
       'Content-Length': Buffer.byteLength(body),
     },
   }, body);
   if (upd.status !== 200) throw new Error('Update body failed: ' + upd.status + ' ' + upd.text);
   release = upd.json;
-  console.log('✅ Release body 更新');
+  console.log('✅ body 已更新');
 
-  // 列出已存在的 asset
+  // 上传两个 asset
   const existingNames = new Set((release.assets || []).map(a => a.name));
   console.log('已有 assets:', [...existingNames].join(', ') || '(空)');
 
-  // 上传每个 asset
-  for (const f of ASSETS) {
+  for (const f of [INSTALLER, PORTABLE].filter(p => fs.existsSync(p))) {
     const fileName = path.basename(f);
     if (existingNames.has(fileName)) {
       console.log('跳过（已存在）:', fileName);
@@ -133,21 +139,15 @@ async function main() {
     }
     const fileSize = fs.statSync(f).size;
     const fileBuf = fs.readFileSync(f);
-    console.log(`上传 ${fileName} (${(fileSize / 1024 / 1024).toFixed(2)} MB)`);
-
+    console.log(`上传 ${fileName} (${(fileSize/1024/1024).toFixed(2)} MB)`);
     const baseUrl = release.upload_url.split('{')[0];
     const u = new URL(baseUrl);
     u.searchParams.set('name', fileName);
-    const uploadPath = u.pathname + u.search;
     const r2 = await req({
-      hostname: u.hostname,
-      method: 'POST',
-      path: uploadPath,
+      hostname: u.hostname, method: 'POST', path: u.pathname + u.search,
       headers: {
-        'Authorization': 'token ' + TOKEN,
-        'User-Agent': 'KunyaoGit-publish',
-        'Accept': 'application/vnd.github+json',
-        'Content-Type': 'application/octet-stream',
+        'Authorization': 'token ' + TOKEN, 'User-Agent': 'KunyaoGit-publish',
+        'Accept': 'application/vnd.github+json', 'Content-Type': 'application/octet-stream',
         'Content-Length': fileSize,
       },
     }, fileBuf);
@@ -156,7 +156,7 @@ async function main() {
     await sleep(500);
   }
 
-  console.log('\n🎉 全部完成！');
+  console.log('\n🎉 完成');
   console.log('Release:', release.html_url);
 }
 

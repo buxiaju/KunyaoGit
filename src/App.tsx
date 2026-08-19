@@ -9,12 +9,15 @@ import SettingsPage from './pages/SettingsPage';
 import { useSettingsStore } from './stores/settings';
 import { useEffect } from 'react';
 import { Toaster } from './components/common/Toast';
+import { useUpdateCheck } from './hooks/useUpdateCheck';
 
 export default function App() {
   const loadSettings = useSettingsStore((s) => s.load);
   useEffect(() => {
     loadSettings();
   }, [loadSettings]);
+
+  useUpdateCheck();
 
   return (
     <>
