@@ -3,6 +3,7 @@
 
 import { Download, X, ExternalLink, Loader2, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
 import { useUpdateStore } from '../../stores/update';
+import { useI18n } from '../../i18n';
 import type { DownloadProgress } from '../../../shared/types';
 
 function fmtBytes(n: number): string {
@@ -13,6 +14,7 @@ function fmtBytes(n: number): string {
 }
 
 export function UpdateDialog() {
+  const { t } = useI18n();
   const { visible, info, phase, progress, error, hide, startDownload, cancelDownload } = useUpdateStore();
 
   if (!visible || !info?.latest) return null;
@@ -35,7 +37,7 @@ export function UpdateDialog() {
         <div className="flex items-center justify-between px-5 py-3 border-b border-gray-800">
           <div className="flex items-center gap-2">
             <Download size={16} className="text-emerald-400" />
-            <h2 className="text-sm font-medium text-gray-100">发现新版本 v{latest.version}</h2>
+            <h2 className="text-sm font-medium text-gray-100">{t('update.foundNew', { version: latest.version })}</h2>
             <span className="text-xs text-gray-500">当前 v{cur}</span>
           </div>
           {phase !== 'downloading' && (
@@ -61,11 +63,11 @@ export function UpdateDialog() {
               </p>
               <div className="flex items-center gap-2">
                 <button onClick={startDownload} className="btn-primary">
-                  <Download size={14} /> 立即下载并安装
+                  <Download size={14} /> {t('update.downloadInstall')}
                 </button>
                 <button onClick={hide} className="btn-ghost">稍后</button>
                 <button onClick={openInBrowser} className="btn-secondary">
-                  <ExternalLink size={12} /> 浏览器打开
+                  <ExternalLink size={12} /> {t('update.openInBrowser')}
                 </button>
               </div>
             </>
@@ -81,8 +83,8 @@ export function UpdateDialog() {
             <div className="flex items-center gap-3 py-2">
               <CheckCircle2 size={20} className="text-emerald-400 flex-shrink-0" />
               <div className="flex-1">
-                <div className="text-sm text-gray-200">下载完成</div>
-                <div className="text-xs text-gray-500">正在启动安装程序，应用将自动退出以完成更新…</div>
+                <div className="text-sm text-gray-200">{t('update.downloadComplete')}</div>
+                <div className="text-xs text-gray-500">{t('update.startingInstaller')}</div>
               </div>
               <Loader2 size={16} className="animate-spin text-emerald-400" />
             </div>
@@ -94,16 +96,16 @@ export function UpdateDialog() {
               <div className="flex items-start gap-3 py-1">
                 <AlertCircle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
                 <div className="flex-1">
-                  <div className="text-sm text-red-200">下载失败</div>
+                  <div className="text-sm text-red-200">{t('update.downloadFailed')}</div>
                   <div className="text-xs text-gray-400 mt-1 break-all">{error}</div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 <button onClick={startDownload} className="btn-primary">
-                  <RefreshCw size={14} /> 重试
+                  <RefreshCw size={14} /> {t('update.retry')}
                 </button>
                 <button onClick={openInBrowser} className="btn-secondary">
-                  <ExternalLink size={12} /> 浏览器下载
+                  <ExternalLink size={12} /> {t('update.browserDownload')}
                 </button>
               </div>
             </>
@@ -115,6 +117,7 @@ export function UpdateDialog() {
 }
 
 function DownloadPanel({ progress, onCancel }: { progress: DownloadProgress | null; onCancel: () => void }) {
+  const { t } = useI18n();
   const percent = progress?.percent ?? -1;
   const known = percent >= 0 && (progress?.totalBytes ?? 0) > 0;
   return (
@@ -122,11 +125,10 @@ function DownloadPanel({ progress, onCancel }: { progress: DownloadProgress | nu
       <div className="flex items-center justify-between text-sm">
         <span className="text-gray-300 flex items-center gap-2">
           <Loader2 size={14} className="animate-spin text-emerald-400" />
-          下载中…
+          {known ? t('update.downloading', { percent }) : t('update.connecting')}
         </span>
         <span className="text-xs text-gray-500">
-          {progress?.source === 'gitee' ? 'Gitee' : progress?.source === 'github' ? 'GitHub' : ''}
-          {known ? ` ${percent}%` : ''}
+          {progress?.source === 'gitee' ? t('update.sourceGitee') : progress?.source === 'github' ? t('update.sourceGithub') : ''}
         </span>
       </div>
       {/* 进度条 */}
@@ -145,7 +147,7 @@ function DownloadPanel({ progress, onCancel }: { progress: DownloadProgress | nu
         <span>{progress ? fmtBytes(progress.bytesReceived) : ''}</span>
         <span>{known && progress ? '共 ' + fmtBytes(progress.totalBytes) : '大小未知'}</span>
       </div>
-      <button onClick={onCancel} className="btn-ghost text-xs">取消</button>
+      <button onClick={onCancel} className="btn-ghost text-xs">{t('update.cancel')}</button>
     </div>
   );
 }

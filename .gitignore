@@ -10,7 +10,9 @@ pnpm-debug.log*
 dist/
 dist-electron/
 release/
+release3/
 out/
+.build-config.json
 
 # 本地工具（NSIS 编译器等，不入库）
 tools/

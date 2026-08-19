@@ -7,21 +7,32 @@ import RepoDetailPage from './pages/RepoDetailPage';
 import ReleasesPage from './pages/ReleasesPage';
 import SettingsPage from './pages/SettingsPage';
 import { useSettingsStore } from './stores/settings';
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import { Toaster } from './components/common/Toast';
 import { UpdateDialog } from './components/common/UpdateDialog';
 import { useUpdateCheck } from './hooks/useUpdateCheck';
+import { I18nProvider, type Lang } from './i18n';
 
 export default function App() {
   const loadSettings = useSettingsStore((s) => s.load);
+  const lang = useSettingsStore((s) => s.settings.language);
+  const save = useSettingsStore((s) => s.save);
+
   useEffect(() => {
     loadSettings();
   }, [loadSettings]);
 
   useUpdateCheck();
 
+  const setLang = useCallback(
+    (l: Lang) => {
+      save({ language: l });
+    },
+    [save]
+  );
+
   return (
-    <>
+    <I18nProvider lang={lang} setLang={setLang}>
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<HomePage />} />
@@ -35,6 +46,6 @@ export default function App() {
       </Routes>
       <Toaster />
       <UpdateDialog />
-    </>
+    </I18nProvider>
   );
 }

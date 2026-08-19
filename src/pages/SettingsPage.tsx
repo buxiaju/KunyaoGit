@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useSettingsStore } from '../stores/settings';
 import { useUpdateStore } from '../stores/update';
-import { Github, Globe, Save, CheckCircle2, XCircle, Loader2, FolderOpen, Eye, EyeOff, RefreshCw, Download, ExternalLink, Info } from 'lucide-react';
+import { useI18n } from '../i18n';
+import { Github, Globe, Save, CheckCircle2, XCircle, Loader2, FolderOpen, Eye, EyeOff, RefreshCw, Download, ExternalLink, Info, Languages } from 'lucide-react';
 import { toast } from '../components/common/Toast';
 import type { AppUpdateInfo } from '../../shared/types';
 
 export default function SettingsPage() {
+  const { t, lang, setLang } = useI18n();
   const { settings, save, setAuth, clearAuth } = useSettingsStore();
   const [gitPath, setGitPath] = useState(settings.gitPath || '');
   const [defaultCloneDir, setDefaultCloneDir] = useState(settings.defaultCloneDir || '');
@@ -28,7 +30,7 @@ export default function SettingsPage() {
 
   const saveGeneral = async () => {
     await save({ gitPath: gitPath || undefined, defaultCloneDir });
-    toast.success('已保存');
+    toast.success(t('settings.saved'));
   };
 
   const pickDir = async () => {
@@ -37,12 +39,7 @@ export default function SettingsPage() {
   };
 
   const pickGit = async () => {
-    // 通过主进程打开文件选择对话框
-    const r = await window.gitgui.app.openPath as any;
-    // 借用打开仓库的目录选择（无法选单个文件，但 git 路径一般作为可选项让用户输入）
-    const p = prompt(
-      '输入 git 可执行文件路径\n留空使用 PATH 中的 git\n示例：C:\\Program Files\\Git\\bin\\git.exe'
-    );
+    const p = prompt(t('settings.gitPathPrompt'));
     if (p) setGitPath(p);
   };
 
@@ -53,7 +50,7 @@ export default function SettingsPage() {
       if (r.ok) {
         setTestResult({ ok: true, msg: `✅ ${r.version || 'OK'}` });
       } else {
-        setTestResult({ ok: false, msg: r.error || '失败' });
+        setTestResult({ ok: false, msg: r.error || t('common.error') });
       }
     } finally {
       setTesting(null);
@@ -68,9 +65,9 @@ export default function SettingsPage() {
       if (r.ok) {
         await setAuth('github', githubToken.trim(), (r.data as any).user);
         setGithubToken('');
-        toast.success(`已连接：@${(r.data as any).user}`);
+        toast.success(t('settings.connected', { user: (r.data as any).user }));
       } else {
-        toast.error('Token 无效：' + r.error);
+        toast.error(t('settings.tokenInvalid', { error: r.error || '' }));
       }
     } finally {
       setTesting(null);
@@ -85,9 +82,9 @@ export default function SettingsPage() {
       if (r.ok) {
         await setAuth('gitee', giteeToken.trim(), (r.data as any).login);
         setGiteeToken('');
-        toast.success(`已连接：@${(r.data as any).login}`);
+        toast.success(t('settings.connected', { user: (r.data as any).login }));
       } else {
-        toast.error('Token 无效：' + r.error);
+        toast.error(t('settings.tokenInvalid', { error: r.error || '' }));
       }
     } finally {
       setTesting(null);
@@ -100,14 +97,14 @@ export default function SettingsPage() {
       const r = (await window.gitgui.update.check()) as AppUpdateInfo;
       setUpdateInfo(r);
       if (!r.latest) {
-        toast.warn('未能获取最新版本信息');
+        toast.warn(t('settings.updateNotFound'));
       } else if (r.hasUpdate) {
-        toast.success(`发现新版本 v${r.latest.version}`);
+        toast.success(t('settings.updateFound', { version: r.latest.version }));
       } else {
-        toast.info(`已是最新版本（v${r.currentVersion}）`);
+        toast.info(t('settings.updateLatest', { version: r.currentVersion }));
       }
     } catch (e: any) {
-      toast.error('检查更新失败：' + (e?.message || String(e)));
+      toast.error(t('settings.updateCheckFailed', { error: e?.message || String(e) }));
     } finally {
       setCheckingUpdate(false);
     }
@@ -116,19 +113,37 @@ export default function SettingsPage() {
   return (
     <div className="h-full overflow-auto">
       <div className="max-w-2xl mx-auto p-6 space-y-6">
-        <h1 className="text-2xl font-semibold">设置</h1>
+        <h1 className="text-2xl font-semibold">{t('settings.title')}</h1>
 
         {/* 通用 */}
         <section className="panel p-4 space-y-3">
-          <h2 className="text-lg font-medium">通用</h2>
+          <h2 className="text-lg font-medium">{t('settings.general')}</h2>
 
-          <Field label="Git 可执行文件路径" hint="留空则使用 PATH 中的 git">
+          {/* Language selector */}
+          <Field label={t('settings.language')} hint={t('settings.languageHint')}>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setLang('zh')}
+                className={`btn-secondary ${lang === 'zh' ? 'ring-2 ring-primary-500' : ''}`}
+              >
+                <Languages size={14} /> 中文
+              </button>
+              <button
+                onClick={() => setLang('en')}
+                className={`btn-secondary ${lang === 'en' ? 'ring-2 ring-primary-500' : ''}`}
+              >
+                <Languages size={14} /> English
+              </button>
+            </div>
+          </Field>
+
+          <Field label={t('settings.gitPath')} hint={t('settings.gitPathHint')}>
             <div className="flex gap-2">
               <input className="input" value={gitPath} onChange={(e) => setGitPath(e.target.value)} placeholder="git" />
-              <button onClick={pickGit} className="btn-secondary">选择</button>
+              <button onClick={pickGit} className="btn-secondary">{t('settings.select')}</button>
               <button onClick={testGit} disabled={testing === 'git'} className="btn-ghost">
                 {testing === 'git' ? <Loader2 size={14} className="animate-spin" /> : null}
-                测试
+                {t('settings.test')}
               </button>
             </div>
             {testResult && (
@@ -138,17 +153,17 @@ export default function SettingsPage() {
             )}
           </Field>
 
-          <Field label="默认克隆目录" hint="从 URL 克隆时的目标目录">
+          <Field label={t('settings.defaultCloneDir')} hint={t('settings.defaultCloneDirHint')}>
             <div className="flex gap-2">
               <input className="input" value={defaultCloneDir} onChange={(e) => setDefaultCloneDir(e.target.value)} placeholder="D:\Projects" />
               <button onClick={pickDir} className="btn-secondary">
-                <FolderOpen size={14} /> 浏览
+                <FolderOpen size={14} /> {t('settings.browse')}
               </button>
             </div>
           </Field>
 
           <button onClick={saveGeneral} className="btn-primary">
-            <Save size={14} /> 保存
+            <Save size={14} /> {t('settings.save')}
           </button>
         </section>
 
@@ -157,24 +172,25 @@ export default function SettingsPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Github size={18} />
-              <h2 className="text-lg font-medium">GitHub</h2>
+              <h2 className="text-lg font-medium">{t('settings.github')}</h2>
             </div>
             {settings.auth?.github && (
               <div className="flex items-center gap-2 text-sm">
                 <CheckCircle2 size={14} className="text-emerald-400" />
                 <span>@{settings.auth.github.user}</span>
                 <button onClick={() => clearAuth('github')} className="text-xs text-red-400 hover:underline">
-                  断开
+                  {t('settings.disconnect')}
                 </button>
               </div>
             )}
           </div>
 
           <Field
-            label="Personal Access Token"
+            label={t('settings.tokenLabel')}
             hint={
               <span>
-                在 <a onClick={() => window.gitgui.app.openExternal('https://github.com/settings/tokens')} className="text-primary-400 cursor-pointer">GitHub Settings → Developer settings</a> 创建，需要 repo / read:user 权限
+                {t('settings.tokenHintGithub')} —{' '}
+                <a onClick={() => window.gitgui.app.openExternal('https://github.com/settings/tokens')} className="text-primary-400 cursor-pointer">GitHub Settings → Developer settings</a>
               </span>
             }
           >
@@ -185,7 +201,7 @@ export default function SettingsPage() {
                   type={showGh ? 'text' : 'password'}
                   value={githubToken}
                   onChange={(e) => setGithubToken(e.target.value)}
-                  placeholder={settings.auth?.github ? '已配置（输入新值覆盖）' : 'ghp_...'}
+                  placeholder={settings.auth?.github ? t('settings.tokenPlaceholderSet') : t('settings.tokenPlaceholderNew')}
                 />
                 <button
                   onClick={() => setShowGh(!showGh)}
@@ -196,7 +212,7 @@ export default function SettingsPage() {
               </div>
               <button onClick={testAndSaveGithub} disabled={testing === 'github' || !githubToken} className="btn-primary">
                 {testing === 'github' ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                测试并保存
+                {t('settings.testAndSave')}
               </button>
             </div>
           </Field>
@@ -207,24 +223,25 @@ export default function SettingsPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Globe size={18} className="text-red-400" />
-              <h2 className="text-lg font-medium">Gitee</h2>
+              <h2 className="text-lg font-medium">{t('settings.gitee')}</h2>
             </div>
             {settings.auth?.gitee && (
               <div className="flex items-center gap-2 text-sm">
                 <CheckCircle2 size={14} className="text-emerald-400" />
                 <span>@{settings.auth.gitee.user}</span>
                 <button onClick={() => clearAuth('gitee')} className="text-xs text-red-400 hover:underline">
-                  断开
+                  {t('settings.disconnect')}
                 </button>
               </div>
             )}
           </div>
 
           <Field
-            label="私人令牌"
+            label={t('settings.giteeTokenLabel')}
             hint={
               <span>
-                在 <a onClick={() => window.gitgui.app.openExternal('https://gitee.com/personal_access_tokens')} className="text-primary-400 cursor-pointer">Gitee 设置 → 私人令牌</a> 创建
+                {t('settings.tokenHintGitee')} —{' '}
+                <a onClick={() => window.gitgui.app.openExternal('https://gitee.com/personal_access_tokens')} className="text-primary-400 cursor-pointer">Gitee Settings → Personal Access Tokens</a>
               </span>
             }
           >
@@ -235,7 +252,7 @@ export default function SettingsPage() {
                   type={showGt ? 'text' : 'password'}
                   value={giteeToken}
                   onChange={(e) => setGiteeToken(e.target.value)}
-                  placeholder={settings.auth?.gitee ? '已配置' : '输入令牌'}
+                  placeholder={settings.auth?.gitee ? t('settings.tokenPlaceholderGiteeSet') : t('settings.tokenPlaceholderGiteeNew')}
                 />
                 <button
                   onClick={() => setShowGt(!showGt)}
@@ -246,7 +263,7 @@ export default function SettingsPage() {
               </div>
               <button onClick={testAndSaveGitee} disabled={testing === 'gitee' || !giteeToken} className="btn-primary">
                 {testing === 'gitee' ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                测试并保存
+                {t('settings.testAndSave')}
               </button>
             </div>
           </Field>
@@ -256,16 +273,16 @@ export default function SettingsPage() {
         <section className="panel p-4 space-y-3 text-sm text-gray-500">
           <div className="flex items-center gap-2">
             <Info size={16} />
-            <h2 className="text-base font-medium text-gray-300">关于</h2>
+            <h2 className="text-base font-medium text-gray-300">{t('settings.about')}</h2>
           </div>
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-gray-300">KunyaoGit v{currentVersion || '...'}</div>
-              <p className="text-xs mt-0.5">支持 GitHub 和 Gitee 的 Git 桌面客户端</p>
+              <div className="text-gray-300">{t('settings.version', { version: currentVersion || '...' })}</div>
+              <p className="text-xs mt-0.5">{t('settings.aboutDesc')}</p>
             </div>
             <button onClick={checkUpdate} disabled={checkingUpdate} className="btn-secondary">
               {checkingUpdate ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-              检查更新
+              {t('settings.checkUpdate')}
             </button>
           </div>
 
@@ -275,15 +292,15 @@ export default function SettingsPage() {
                 {updateInfo.hasUpdate ? (
                   <>
                     <Download size={14} className="text-amber-400" />
-                    <span className="text-amber-200 font-medium">新版本 v{updateInfo.latest.version} 可用</span>
+                    <span className="text-amber-200 font-medium">{t('settings.newVersionAvailable', { version: updateInfo.latest.version })}</span>
                   </>
                 ) : (
                   <>
                     <CheckCircle2 size={14} className="text-emerald-400" />
-                    <span className="text-emerald-200">已是最新版本</span>
+                    <span className="text-emerald-200">{t('settings.alreadyLatest')}</span>
                   </>
                 )}
-                <span className="text-xs text-gray-500">via {updateInfo.latest.platform === 'github' ? 'GitHub' : 'Gitee'}</span>
+                <span className="text-xs text-gray-500">{t('settings.via')} {updateInfo.latest.platform === 'github' ? 'GitHub' : 'Gitee'}</span>
               </div>
               {updateInfo.latest.body && (
                 <pre className="text-xs text-gray-300 whitespace-pre-wrap font-sans max-h-40 overflow-auto bg-black/20 p-2 rounded mt-1">
@@ -296,24 +313,24 @@ export default function SettingsPage() {
                     onClick={() => useUpdateStore.getState().show(updateInfo)}
                     className="btn-primary text-xs"
                   >
-                    <Download size={12} /> 立即下载并安装
+                    <Download size={12} /> {t('settings.downloadAndInstall')}
                   </button>
                 )}
                 <button
                   onClick={() => window.gitgui.update.open(updateInfo.latest!.htmlUrl)}
                   className="btn-secondary text-xs"
                 >
-                  <ExternalLink size={12} /> 浏览器打开
+                  <ExternalLink size={12} /> {t('settings.openInBrowser')}
                 </button>
                 {updateInfo.hasUpdate && (
                   <button
                     onClick={() => {
                       window.gitgui.update.dismiss(updateInfo.latest!.version);
-                      toast.info('已忽略该版本');
+                      toast.info(t('settings.versionIgnored'));
                     }}
                     className="btn-ghost text-xs"
                   >
-                    忽略此版本
+                    {t('settings.ignoreVersion')}
                   </button>
                 )}
               </div>
@@ -328,13 +345,13 @@ export default function SettingsPage() {
                     {s.ok ? '✓' : '✕'}
                   </span>
                   <span>{s.platform === 'github' ? 'GitHub' : 'Gitee'}：</span>
-                  <span>{s.ok ? (s.release ? `v${s.release.version}` : '无 release') : (s.error || '失败')}</span>
+                  <span>{s.ok ? (s.release ? `v${s.release.version}` : t('settings.noRelease')) : (s.error || t('settings.failed'))}</span>
                 </div>
               ))}
             </div>
           )}
 
-          <p className="text-xs pt-1">使用 Electron + React + TypeScript 构建</p>
+          <p className="text-xs pt-1">{t('settings.builtWith')}</p>
         </section>
       </div>
     </div>

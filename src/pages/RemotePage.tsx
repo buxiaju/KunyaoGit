@@ -6,8 +6,10 @@ import { Github, Globe, Star, GitFork, ExternalLink, GitBranch, Lock, Unlock, Al
 import { toast } from '../components/common/Toast';
 import { formatDistanceToNow } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
+import { useI18n } from '../i18n';
 
 export default function RemotePage() {
+  const { t } = useI18n();
   const { platform } = useParams<{ platform: 'github' | 'gitee' }>();
   const { settings } = useSettingsStore();
   const openRepo = useRepoStore((s) => s.openRepo);
@@ -49,21 +51,21 @@ export default function RemotePage() {
   const clone = async (cloneUrl: string) => {
     const r = await window.gitgui.repo.clone(cloneUrl, settings.defaultCloneDir || '');
     if (r.ok) {
-      toast.success(`已克隆：${r.data.path}`);
+      toast.success(t('remote.cloneSuccess', { path: r.data.path }));
       await openRepo(r.data.path);
       nav('/');
     } else {
-      toast.error('克隆失败：' + r.error);
+      toast.error(t('remote.cloneFailed', { error: r.error }));
     }
   };
 
   const createRepo = async () => {
     if (!newName.trim()) {
-      toast.warn('请输入仓库名');
+      toast.warn(t('remote.nameRequired'));
       return;
     }
     if (!/^[A-Za-z0-9._-]+$/.test(newName.trim())) {
-      toast.warn('仓库名只能包含字母、数字、._-');
+      toast.warn(t('remote.nameInvalid'));
       return;
     }
     setCreating(true);
@@ -78,7 +80,7 @@ export default function RemotePage() {
         ? await window.gitgui.github.createRepo(params)
         : await window.gitgui.gitee.createRepo(params);
       if (r.ok) {
-        toast.success(`已创建仓库：${newName}`);
+        toast.success(t('remote.createSuccess', { name: newName }));
         setShowCreate(false);
         setNewName('');
         setNewDesc('');
@@ -86,7 +88,7 @@ export default function RemotePage() {
         setNewAutoInit(true);
         await load();
       } else {
-        toast.error('创建失败：' + r.error);
+        toast.error(t('remote.createFailed', { error: r.error }));
       }
     } finally {
       setCreating(false);
@@ -95,16 +97,16 @@ export default function RemotePage() {
 
   const deleteRepo = async (owner: string, repo: string) => {
     const displayName = `${owner}/${repo}`;
-    if (!confirm(`⚠️ 确定要永久删除远程仓库 ${displayName} 吗？\n\n此操作不可恢复！`)) return;
-    if (!confirm(`再次确认：删除 ${displayName} 后无法恢复，确认继续？`)) return;
+    if (!confirm(t('remote.deleteConfirm1', { name: displayName }))) return;
+    if (!confirm(t('remote.deleteConfirm2', { name: displayName }))) return;
     const r = platform === 'github'
       ? await window.gitgui.github.deleteRepo(owner, repo)
       : await window.gitgui.gitee.deleteRepo(owner, repo);
     if (r.ok) {
-      toast.success(`已删除：${displayName}`);
+      toast.success(t('remote.deleteSuccess', { name: displayName }));
       await load();
     } else {
-      toast.error('删除失败：' + r.error);
+      toast.error(t('remote.deleteFailed', { error: r.error }));
     }
   };
 
@@ -113,10 +115,10 @@ export default function RemotePage() {
       <div className="h-full flex items-center justify-center">
         <div className="text-center max-w-md">
           <Icon size={40} className="mx-auto mb-3 opacity-50" />
-          <div className="text-lg font-medium mb-1">未配置 {name} 认证</div>
-          <div className="text-sm text-gray-500 mb-4">请到【设置】页面添加 {name} 访问令牌</div>
+          <div className="text-lg font-medium mb-1">{t('remote.notConfigured', { platform: name })}</div>
+          <div className="text-sm text-gray-500 mb-4">{t('remote.notConfiguredHint', { platform: name })}</div>
           <button onClick={() => nav('/settings')} className="btn-primary">
-            前往设置
+            {t('remote.goToSettings')}
           </button>
         </div>
       </div>
@@ -131,20 +133,20 @@ export default function RemotePage() {
         <span className="text-xs text-gray-500">@{auth.user}</span>
         <div className="flex-1" />
         <button onClick={() => setShowCreate(true)} className="btn-primary text-xs">
-          <Plus size={12} /> 新建仓库
+          <Plus size={12} /> {t('remote.newRepo')}
         </button>
         <button onClick={load} className="btn-ghost text-xs">
-          刷新
+          {t('remote.refresh')}
         </button>
       </div>
 
       {showCreate && (
         <div className="border-b border-gray-800 bg-gray-900/50 p-3 space-y-2">
-          <div className="text-sm font-medium">在 {name} 上创建新仓库</div>
+          <div className="text-sm font-medium">{t('remote.createTitle', { platform: name })}</div>
           <div className="grid grid-cols-2 gap-2">
             <input
               className="input"
-              placeholder="仓库名（英文、数字、._-）"
+              placeholder={t('remote.namePlaceholder')}
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && !creating && createRepo()}
@@ -152,7 +154,7 @@ export default function RemotePage() {
             />
             <input
               className="input"
-              placeholder="描述（可选）"
+              placeholder={t('remote.descPlaceholder')}
               value={newDesc}
               onChange={(e) => setNewDesc(e.target.value)}
             />
@@ -160,17 +162,17 @@ export default function RemotePage() {
           <div className="flex items-center gap-4 text-sm">
             <label className="flex items-center gap-1.5 cursor-pointer">
               <input type="checkbox" checked={newPrivate} onChange={(e) => setNewPrivate(e.target.checked)} />
-              私有仓库
+              {t('remote.privateRepo')}
             </label>
             <label className="flex items-center gap-1.5 cursor-pointer">
               <input type="checkbox" checked={newAutoInit} onChange={(e) => setNewAutoInit(e.target.checked)} />
-              初始化 README
+              {t('remote.initReadme')}
             </label>
             <div className="flex-1" />
-            <button onClick={() => setShowCreate(false)} className="btn-ghost text-xs">取消</button>
+            <button onClick={() => setShowCreate(false)} className="btn-ghost text-xs">{t('remote.cancel')}</button>
             <button onClick={createRepo} disabled={creating} className="btn-primary text-xs">
               {creating ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
-              创建
+              {t('remote.create')}
             </button>
           </div>
         </div>
@@ -178,20 +180,20 @@ export default function RemotePage() {
 
       <div className="px-3 py-1.5 border-b border-gray-800 flex items-center gap-1">
         <button onClick={() => setTab('repos')} className={tab === 'repos' ? 'tab-active tab' : 'tab'}>
-          仓库
+          {t('remote.tabRepos')}
         </button>
         <button onClick={() => setTab('prs')} className={tab === 'prs' ? 'tab-active tab' : 'tab'}>
-          PR
+          {t('remote.tabPrs')}
         </button>
         <button onClick={() => setTab('issues')} className={tab === 'issues' ? 'tab-active tab' : 'tab'}>
-          Issue
+          {t('remote.tabIssues')}
         </button>
       </div>
 
       <div className="flex-1 overflow-auto p-4">
         {loading ? (
           <div className="flex items-center justify-center text-gray-500 text-sm py-10">
-            <Loader2 size={16} className="animate-spin mr-2" /> 加载中...
+            <Loader2 size={16} className="animate-spin mr-2" /> {t('remote.loading')}
           </div>
         ) : tab === 'repos' ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-5xl">
@@ -216,9 +218,9 @@ export default function RemotePage() {
             ))}
           </div>
         ) : tab === 'prs' ? (
-          <div className="text-center text-gray-500 text-sm py-10">点击仓库卡片查看 PR</div>
+          <div className="text-center text-gray-500 text-sm py-10">{t('remote.viewPrsHint')}</div>
         ) : (
-          <div className="text-center text-gray-500 text-sm py-10">点击仓库卡片查看 Issue</div>
+          <div className="text-center text-gray-500 text-sm py-10">{t('remote.viewIssuesHint')}</div>
         )}
       </div>
     </div>
@@ -226,6 +228,7 @@ export default function RemotePage() {
 }
 
 function RepoCard({ repo, platform, onClone, onOpen, onDelete, currentUser }: { repo: any; platform: string; onClone: () => void; onOpen: () => void; onDelete?: () => void; currentUser?: string }) {
+  const { t } = useI18n();
   const fullName = repo.full_name || repo.name || '';
   const ownerRaw = repo.owner?.login || fullName.split('/')[0] || '';
   const owner = ownerRaw.toLowerCase();
@@ -266,11 +269,11 @@ function RepoCard({ repo, platform, onClone, onOpen, onDelete, currentUser }: { 
           </div>
         </div>
         <div className="flex flex-col gap-1.5 ml-2">
-          <button onClick={onOpen} className="btn-secondary text-xs">查看</button>
-          <button onClick={onClone} className="btn-secondary text-xs">克隆</button>
+          <button onClick={onOpen} className="btn-secondary text-xs">{t('remote.view')}</button>
+          <button onClick={onClone} className="btn-secondary text-xs">{t('remote.clone')}</button>
           {showDelete && (
-            <button onClick={onDelete} className="btn-ghost text-xs text-red-400 hover:bg-red-900/30" title={isMine ? '删除你的仓库' : `尝试删除（如果不是你的会报错）`}>
-              <Trash2 size={11} /> 删除
+            <button onClick={onDelete} className="btn-ghost text-xs text-red-400 hover:bg-red-900/30" title={isMine ? t('remote.deleteMineHint') : t('remote.deleteOtherHint')}>
+              <Trash2 size={11} /> {t('remote.delete')}
             </button>
           )}
         </div>

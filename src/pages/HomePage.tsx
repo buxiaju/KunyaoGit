@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useRepoStore } from '../stores/repo';
 import { useSettingsStore } from '../stores/settings';
+import { useI18n } from '../i18n';
 import { FolderGit2, GitBranch, Plus, X, ExternalLink, Copy, Loader2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import { toast } from '../components/common/Toast';
 
 export default function HomePage() {
+  const { t } = useI18n();
   const { recents, loadRecents, openRepo, openRepoDialog, removeRecent, current } = useRepoStore();
   const settings = useSettingsStore((s) => s.settings);
   const [cloneUrl, setCloneUrl] = useState('');
@@ -52,15 +54,15 @@ export default function HomePage() {
       <div className="max-w-5xl mx-auto p-6">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-semibold">欢迎使用 KunyaoGit</h1>
-            <p className="text-sm text-gray-400 mt-1">管理你的 GitHub 和 Gitee 仓库</p>
+            <h1 className="text-2xl font-semibold">{t('home.welcome')}</h1>
+            <p className="text-sm text-gray-400 mt-1">{t('home.subtitle')}</p>
           </div>
           <div className="flex gap-2">
             <button onClick={() => setShowClone(true)} className="btn-secondary">
-              <Copy size={14} /> 克隆仓库
+              <Copy size={14} /> {t('home.cloneRepo')}
             </button>
             <button onClick={openRepoDialog} className="btn-primary">
-              <Plus size={14} /> 打开本地仓库
+              <Plus size={14} /> {t('home.openLocal')}
             </button>
           </div>
         </div>
@@ -71,7 +73,7 @@ export default function HomePage() {
             <div className="flex gap-2">
               <input
                 className="input"
-                placeholder="https://github.com/owner/repo.git 或 git@gitee.com:owner/repo.git"
+                placeholder={t('home.cloneUrlPlaceholder')}
                 value={cloneUrl}
                 onChange={(e) => setCloneUrl(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleClone()}
@@ -79,24 +81,24 @@ export default function HomePage() {
               />
               <button onClick={handleClone} disabled={cloning} className="btn-primary">
                 {cloning ? <Loader2 size={14} className="animate-spin" /> : <Copy size={14} />}
-                克隆
+                {t('home.cloneBtn')}
               </button>
               <button onClick={() => setShowClone(false)} className="btn-ghost">
                 取消
               </button>
             </div>
             {!settings.defaultCloneDir && (
-              <div className="text-xs text-gray-500 mt-2">未设置默认克隆目录，请在【设置】中配置或临时选择目标</div>
+              <div className="text-xs text-gray-500 mt-2">{t('home.cloneNoDir')}</div>
             )}
           </div>
         )}
 
         <div>
-          <h2 className="text-lg font-medium mb-3">最近打开</h2>
+          <h2 className="text-lg font-medium mb-3">{t('home.recent')}</h2>
           {recents.length === 0 ? (
             <div className="panel p-8 text-center text-gray-500">
               <FolderGit2 size={40} className="mx-auto mb-3 opacity-50" />
-              <div>还没有打开过仓库</div>
+              <div>{t('home.recentEmpty')}</div>
               <div className="text-xs mt-1">点击上方【打开本地仓库】或【克隆仓库】开始</div>
             </div>
           ) : (

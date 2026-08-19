@@ -1,21 +1,23 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { Home, FolderGit2, Globe, Tag, Settings, Github, ExternalLink } from 'lucide-react';
+import { Home, FolderGit2, Globe, Tag, Settings, Github, ExternalLink, Languages } from 'lucide-react';
 import { useRepoStore } from '../../stores/repo';
 import { useSettingsStore } from '../../stores/settings';
-
-const NAV = [
-  { to: '/', icon: Home, label: '首页' },
-  { to: '/remote/github', icon: Github, label: 'GitHub' },
-  { to: '/remote/gitee', icon: Globe, label: 'Gitee' },
-  { to: '/releases', icon: Tag, label: 'Release' },
-  { to: '/settings', icon: Settings, label: '设置' },
-];
+import { useI18n } from '../../i18n';
 
 export default function Layout() {
   const current = useRepoStore((s) => s.current);
   const openRepoDialog = useRepoStore((s) => s.openRepoDialog);
   const settings = useSettingsStore((s) => s.settings);
   const nav = useNavigate();
+  const { t, lang, setLang } = useI18n();
+
+  const NAV = [
+    { to: '/', icon: Home, label: t('layout.navHome') },
+    { to: '/remote/github', icon: Github, label: t('layout.navGithub') },
+    { to: '/remote/gitee', icon: Globe, label: t('layout.navGitee') },
+    { to: '/releases', icon: Tag, label: t('layout.navReleases') },
+    { to: '/settings', icon: Settings, label: t('layout.navSettings') },
+  ];
 
   return (
     <div className="h-full flex bg-gray-900 text-gray-100">
@@ -23,18 +25,18 @@ export default function Layout() {
       <aside className="w-56 border-r border-gray-800 flex flex-col">
         <div className="px-4 py-3 border-b border-gray-800 flex items-center gap-2">
           <FolderGit2 size={20} className="text-primary-400" />
-          <span className="font-semibold">KunyaoGit</span>
+          <span className="font-semibold">{t('layout.appName')}</span>
         </div>
 
         <div className="p-2">
           <button onClick={openRepoDialog} className="btn-primary w-full justify-center">
-            打开仓库
+            {t('layout.openRepo')}
           </button>
         </div>
 
         {current && (
           <div className="px-3 py-2 border-b border-gray-800">
-            <div className="text-xs text-gray-500">当前仓库</div>
+            <div className="text-xs text-gray-500">{t('layout.currentRepo')}</div>
             <div className="text-sm font-medium truncate" title={current.path}>{current.name}</div>
             {current.currentBranch && (
               <div className="text-xs text-gray-400 mt-0.5">
@@ -78,12 +80,22 @@ export default function Layout() {
               <span>@{settings.auth.gitee.user}</span>
             </div>
           )}
-          <button
-            onClick={() => window.gitgui.app.openExternal('https://github.com')}
-            className="text-gray-500 hover:text-gray-300 flex items-center gap-1"
-          >
-            帮助 <ExternalLink size={10} />
-          </button>
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => window.gitgui.app.openExternal('https://github.com')}
+              className="text-gray-500 hover:text-gray-300 flex items-center gap-1"
+            >
+              {t('layout.help')} <ExternalLink size={10} />
+            </button>
+            <button
+              onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')}
+              className="text-gray-500 hover:text-gray-300 flex items-center gap-1"
+              title={t('settings.languageHint')}
+            >
+              <Languages size={12} />
+              {lang === 'zh' ? 'EN' : '中文'}
+            </button>
+          </div>
         </div>
       </aside>
 

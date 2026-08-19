@@ -11,7 +11,7 @@ interface SettingsState {
 }
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
-  settings: { theme: 'dark', defaultCloneDir: '', diffView: 'split', auth: {} },
+  settings: { theme: 'dark', language: 'zh', defaultCloneDir: '', diffView: 'split', auth: {} },
   loaded: false,
   load: async () => {
     const settings = await window.gitgui.settings.get();

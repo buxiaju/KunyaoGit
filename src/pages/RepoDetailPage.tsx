@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSettingsStore } from '../stores/settings';
 import { useRepoStore } from '../stores/repo';
+import { useI18n } from '../i18n';
 import { Github, Globe, ArrowLeft, GitPullRequest, MessageSquare, ExternalLink, Lock, Unlock, RefreshCw, Loader2, GitMerge, GitBranch, User, Calendar, Tag, Folder, File as FileIcon, FolderGit2, Save, Plus, Trash2, Edit2, ChevronRight, Upload, X } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
@@ -15,6 +16,7 @@ export default function RepoDetailPage() {
   const { platform, owner, repo } = useParams<{ platform: 'github' | 'gitee'; owner: string; repo: string }>();
   const { settings } = useSettingsStore();
   const openRepo = useRepoStore((s) => s.openRepo);
+  const { t } = useI18n();
   const nav = useNavigate();
   const [tab, setTab] = useState<Tab>('prs');
   const [prs, setPrs] = useState<PullRequestInfo[]>([]);
@@ -56,18 +58,18 @@ export default function RepoDetailPage() {
     const url = platform === 'github' ? `https://github.com/${owner}/${repo}.git` : `https://gitee.com/${owner}/${repo}.git`;
     const r = await window.gitgui.repo.clone(url, settings.defaultCloneDir || '');
     if (r.ok) {
-      toast.success(`已克隆：${r.data.path}`);
+      toast.success(t('repoDetail.cloneSuccess', { path: r.data.path }));
       await openRepo(r.data.path);
       nav('/');
     } else {
-      toast.error('克隆失败：' + r.error);
+      toast.error(t('repoDetail.cloneFailed', { error: r.error }));
     }
   };
 
   if (!auth) {
     return (
       <div className="h-full flex items-center justify-center text-gray-500 text-sm">
-        请先在【设置】中配置 {name} Token
+        {t('repoDetail.configHint', { platform: name })}
       </div>
     );
   }
@@ -77,7 +79,7 @@ export default function RepoDetailPage() {
       {/* Header */}
       <div className="px-4 py-3 border-b border-gray-800">
         <div className="flex items-center gap-2 mb-1">
-          <button onClick={() => nav(`/remote/${platform}`)} className="btn-ghost p-1" title="返回">
+          <button onClick={() => nav(`/remote/${platform}`)} className="btn-ghost p-1" title={t('repoDetail.back')}>
             <ArrowLeft size={16} />
           </button>
           <Icon size={16} />
@@ -87,7 +89,7 @@ export default function RepoDetailPage() {
           <span className="text-sm text-gray-600">/</span>
           <span className="font-semibold">{repo}</span>
           <div className="flex-1" />
-          <button onClick={load} className="btn-ghost text-xs" title="刷新">
+          <button onClick={load} className="btn-ghost text-xs" title={t('repoDetail.refresh')}>
             <RefreshCw size={13} />
           </button>
           <a
@@ -99,10 +101,10 @@ export default function RepoDetailPage() {
             href="#"
             className="btn-ghost text-xs"
           >
-            <ExternalLink size={13} /> 浏览器打开
+            <ExternalLink size={13} /> {t('repoDetail.openInBrowser')}
           </a>
           <button onClick={cloneAndOpen} className="btn-primary text-xs">
-            克隆到本地
+            {t('repoDetail.cloneTo')}
           </button>
         </div>
       </div>
@@ -125,7 +127,7 @@ export default function RepoDetailPage() {
           onClick={() => setTab('files')}
           className={tab === 'files' ? 'tab-active tab flex items-center gap-1' : 'tab flex items-center gap-1'}
         >
-          <FolderGit2 size={13} /> 文件
+          <FolderGit2 size={13} /> {t('repoDetail.files')}
         </button>
         <div className="flex-1" />
         {tab !== 'files' && (
@@ -138,7 +140,7 @@ export default function RepoDetailPage() {
                   filter === f ? 'bg-gray-700/60 text-white' : 'text-gray-400 hover:text-gray-200'
                 }`}
               >
-                {f === 'open' ? '开启' : f === 'closed' ? '关闭' : '全部'}
+                {f === 'open' ? t('repoDetail.open') : f === 'closed' ? t('repoDetail.closed') : t('repoDetail.all')}
               </button>
             ))}
           </div>
@@ -149,7 +151,7 @@ export default function RepoDetailPage() {
       <div className="flex-1 overflow-auto p-3">
         {loading ? (
           <div className="text-center py-10 text-gray-500 text-sm">
-            <Loader2 size={16} className="animate-spin inline mr-2" />加载中…
+            <Loader2 size={16} className="animate-spin inline mr-2" />{t('repoDetail.loading')}
           </div>
         ) : tab === 'prs' ? (
           <PRList prs={prs} platform={platform!} owner={owner!} repo={repo!} />
@@ -164,8 +166,9 @@ export default function RepoDetailPage() {
 }
 
 function PRList({ prs, platform, owner, repo }: { prs: PullRequestInfo[]; platform: string; owner: string; repo: string }) {
+  const { t } = useI18n();
   if (prs.length === 0) {
-    return <div className="text-center text-gray-500 text-sm py-10">没有匹配的 PR</div>;
+    return <div className="text-center text-gray-500 text-sm py-10">{t('repoDetail.noPrs')}</div>;
   }
   return (
     <div className="max-w-4xl mx-auto space-y-2">
@@ -201,7 +204,7 @@ function PRList({ prs, platform, owner, repo }: { prs: PullRequestInfo[]; platfo
                 <span className="flex items-center gap-1">
                   <Calendar size={10} /> {formatDistanceToNow(new Date(pr.updatedAt), { locale: zhCN, addSuffix: true })}
                 </span>
-                {pr.state === 'merged' && <span className="text-purple-400">已合并</span>}
+                {pr.state === 'merged' && <span className="text-purple-400">{t('repoDetail.merged')}</span>}
               </div>
             </div>
             <ExternalLink size={12} className="text-gray-500 mt-1 flex-shrink-0" />
@@ -213,8 +216,9 @@ function PRList({ prs, platform, owner, repo }: { prs: PullRequestInfo[]; platfo
 }
 
 function IssueList({ issues, platform }: { issues: IssueInfo[]; platform: string }) {
+  const { t } = useI18n();
   if (issues.length === 0) {
-    return <div className="text-center text-gray-500 text-sm py-10">没有匹配的 Issue</div>;
+    return <div className="text-center text-gray-500 text-sm py-10">{t('repoDetail.noIssues')}</div>;
   }
   return (
     <div className="max-w-4xl mx-auto space-y-2">
@@ -270,6 +274,7 @@ function detectLang(path: string): string {
 }
 
 function RemoteFileBrowser({ platform, owner, repo }: { platform: 'github' | 'gitee'; owner: string; repo: string }) {
+  const { t } = useI18n();
   const [cwd, setCwd] = useState('');
   const [files, setFiles] = useState<RemoteFile[]>([]);
   const [loading, setLoading] = useState(false);
@@ -339,7 +344,7 @@ function RemoteFileBrowser({ platform, owner, repo }: { platform: 'github' | 'gi
       setContent(null);
       setReadError(errMsg);
       setReading(false);
-      toast.error('读取失败：' + errMsg);
+      toast.error(t('repoDetail.readFailedToast', { error: errMsg }));
     } else {
       setContent(result);
       setEditedContent(result.content);
@@ -350,7 +355,7 @@ function RemoteFileBrowser({ platform, owner, repo }: { platform: 'github' | 'gi
   const save = async () => {
     if (!selected || !content) return;
     if (!commitMsg.trim()) {
-      toast.warn('请填写提交说明');
+      toast.warn(t('repoDetail.commitMsgRequired'));
       return;
     }
     setBusy(true);
@@ -366,13 +371,13 @@ function RemoteFileBrowser({ platform, owner, repo }: { platform: 'github' | 'gi
         ? await window.gitgui.github.contentsWrite(params)
         : await window.gitgui.gitee.contentsWrite(params);
       if (r.ok) {
-        toast.success('已保存到远程');
+        toast.success(t('repoDetail.savedToRemote'));
         setEditing(false);
         setContent({ ...content, content: editedContent, sha: r.data.sha });
         setCommitMsg('');
         await list(cwd);
       } else {
-        toast.error('保存失败：' + r.error);
+        toast.error(t('repoDetail.saveFailed', { error: r.error }));
       }
     } finally {
       setBusy(false);
@@ -393,14 +398,14 @@ function RemoteFileBrowser({ platform, owner, repo }: { platform: 'github' | 'gi
         ? await window.gitgui.github.contentsWrite(params)
         : await window.gitgui.gitee.contentsWrite(params);
       if (r.ok) {
-        toast.success('已创建');
+        toast.success(t('repoDetail.created'));
         setShowNew(false);
         setNewName('');
         await list(cwd);
         // 自动打开新文件
         setTimeout(() => open({ name: newName.trim(), path, type: 'file', size: 0, sha: r.data.sha, url: '' }), 200);
       } else {
-        toast.error('创建失败：' + r.error);
+        toast.error(t('repoDetail.createFailed', { error: r.error }));
       }
     } finally {
       setBusy(false);
@@ -409,9 +414,9 @@ function RemoteFileBrowser({ platform, owner, repo }: { platform: 'github' | 'gi
 
   const remove = async () => {
     if (!selected || !content) return;
-    if (!confirm(`确定删除 ${selected.path}？`)) return;
+    if (!confirm(t('repoDetail.deleteConfirm', { path: selected.path }))) return;
     if (!commitMsg.trim()) {
-      toast.warn('请填写提交说明');
+      toast.warn(t('repoDetail.commitMsgRequired'));
       return;
     }
     setBusy(true);
@@ -426,13 +431,13 @@ function RemoteFileBrowser({ platform, owner, repo }: { platform: 'github' | 'gi
         ? await window.gitgui.github.contentsDelete(params)
         : await window.gitgui.gitee.contentsDelete(params);
       if (r.ok) {
-        toast.success('已删除');
+        toast.success(t('repoDetail.deleted'));
         setSelected(null);
         setContent(null);
         setCommitMsg('');
         await list(cwd);
       } else {
-        toast.error('删除失败：' + r.error);
+        toast.error(t('repoDetail.deleteFailed', { error: r.error }));
       }
     } finally {
       setBusy(false);
@@ -454,7 +459,7 @@ function RemoteFileBrowser({ platform, owner, repo }: { platform: 'github' | 'gi
       <div className="panel flex flex-col overflow-hidden">
         <div className="px-3 py-2 border-b border-gray-800 flex items-center justify-between text-sm">
           <div className="flex items-center gap-1 text-xs text-gray-400 min-w-0 flex-1">
-            <button onClick={() => list('')} className="hover:text-gray-200">根</button>
+            <button onClick={() => list('')} className="hover:text-gray-200">{t('repoDetail.root')}</button>
             {parts.map((p, i) => (
               <span key={i} className="flex items-center gap-1">
                 <ChevronRight size={10} />
@@ -465,7 +470,7 @@ function RemoteFileBrowser({ platform, owner, repo }: { platform: 'github' | 'gi
           <button
             onClick={() => setShowNew(true)}
             className="btn-ghost p-1"
-            title="新建文件"
+            title={t('repoDetail.newFile')}
           >
             <Plus size={13} />
           </button>
@@ -475,13 +480,13 @@ function RemoteFileBrowser({ platform, owner, repo }: { platform: 'github' | 'gi
           <div className="px-3 py-2 border-b border-gray-800 flex items-center gap-1.5 bg-gray-900/40">
             <input
               className="input flex-1 text-xs"
-              placeholder="文件名（如 README.md）"
+              placeholder={t('repoDetail.newFilePlaceholder')}
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && createNew()}
               autoFocus
             />
-            <button onClick={createNew} disabled={busy} className="btn-primary text-xs">建</button>
+            <button onClick={createNew} disabled={busy} className="btn-primary text-xs">{t('repoDetail.create')}</button>
             <button onClick={() => { setShowNew(false); setNewName(''); }} className="btn-ghost p-1"><X size={12} /></button>
           </div>
         )}
@@ -489,10 +494,10 @@ function RemoteFileBrowser({ platform, owner, repo }: { platform: 'github' | 'gi
         <div className="flex-1 overflow-auto p-1 text-sm">
           {loading ? (
             <div className="p-4 text-center text-gray-500 text-xs">
-              <Loader2 size={14} className="animate-spin inline mr-1" />加载中…
+              <Loader2 size={14} className="animate-spin inline mr-1" />{t('repoDetail.loading')}
             </div>
           ) : files.length === 0 ? (
-            <div className="p-4 text-center text-gray-500 text-xs">空目录</div>
+            <div className="p-4 text-center text-gray-500 text-xs">{t('repoDetail.emptyDir')}</div>
           ) : (
             <>
               {cwd && (
@@ -526,24 +531,24 @@ function RemoteFileBrowser({ platform, owner, repo }: { platform: 'github' | 'gi
           <div className="h-full flex items-center justify-center text-gray-500 text-sm">
             <div className="text-center">
               <FolderGit2 size={32} className="mx-auto mb-2 opacity-50" />
-              <div>从左侧选择一个文件</div>
+              <div>{t('repoDetail.selectFileHint')}</div>
             </div>
           </div>
         ) : content?.isBinary ? (
-          <div className="h-full flex items-center justify-center text-gray-500 text-sm">二进制文件不支持在线编辑</div>
+          <div className="h-full flex items-center justify-center text-gray-500 text-sm">{t('repoDetail.binaryNoEdit')}</div>
         ) : readError ? (
           <div className="h-full flex items-center justify-center text-red-400 text-sm px-6 text-center">
             <div>
-              <div className="mb-1 font-medium">读取失败</div>
+              <div className="mb-1 font-medium">{t('repoDetail.readFailedTitle')}</div>
               <div className="text-xs text-red-300/80">{readError}</div>
             </div>
           </div>
         ) : reading ? (
           <div className="h-full flex items-center justify-center text-gray-500 text-sm">
-            <Loader2 size={14} className="animate-spin mr-2" /> 加载中…
+            <Loader2 size={14} className="animate-spin mr-2" /> {t('repoDetail.loading')}
           </div>
         ) : !content ? (
-          <div className="h-full flex items-center justify-center text-gray-500 text-sm">无内容</div>
+          <div className="h-full flex items-center justify-center text-gray-500 text-sm">{t('repoDetail.noContent')}</div>
         ) : (
           <>
             <div className="px-3 py-2 border-b border-gray-800 flex items-center justify-between text-sm">
@@ -555,14 +560,14 @@ function RemoteFileBrowser({ platform, owner, repo }: { platform: 'github' | 'gi
               <div className="flex items-center gap-1">
                 {!editing ? (
                   <button onClick={() => setEditing(true)} className="btn-ghost text-xs">
-                    <Edit2 size={12} /> 编辑
+                    <Edit2 size={12} /> {t('repoDetail.edit')}
                   </button>
                 ) : (
                   <button onClick={() => { setEditing(false); setEditedContent(content.content); }} className="btn-ghost text-xs">
-                    取消
+                    {t('repoDetail.cancel')}
                   </button>
                 )}
-                <button onClick={remove} className="btn-ghost p-1 text-red-400" title="删除">
+                <button onClick={remove} className="btn-ghost p-1 text-red-400" title={t('repoDetail.deleteHint')}>
                   <Trash2 size={13} />
                 </button>
               </div>
@@ -594,13 +599,13 @@ function RemoteFileBrowser({ platform, owner, repo }: { platform: 'github' | 'gi
               <div className="border-t border-gray-800 p-2 flex items-center gap-2 bg-gray-900/60">
                 <input
                   className="input flex-1 text-xs"
-                  placeholder="提交说明（必填）"
+                  placeholder={t('repoDetail.commitPlaceholderRequired')}
                   value={commitMsg}
                   onChange={(e) => setCommitMsg(e.target.value)}
                 />
                 <button onClick={save} disabled={busy} className="btn-primary text-xs">
                   {busy ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
-                  保存到远程
+                  {t('repoDetail.saveToRemote')}
                 </button>
               </div>
             )}

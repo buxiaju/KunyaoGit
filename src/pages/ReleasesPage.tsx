@@ -5,8 +5,10 @@ import { formatDistanceToNow } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import { toast } from '../components/common/Toast';
 import { useSettingsStore } from '../stores/settings';
+import { useI18n } from '../i18n';
 
 export default function ReleasesPage() {
+  const { t } = useI18n();
   const { current } = useRepoStore();
   const { settings } = useSettingsStore();
   const [platform, setPlatform] = useState<'github' | 'gitee'>('github');
@@ -48,9 +50,9 @@ export default function ReleasesPage() {
       const r = await window.gitgui.release.changelog({ repoPath: current.path });
       if (r.ok) {
         setBody(r.data);
-        toast.success('已生成 CHANGELOG');
+        toast.success(t('releases.changelogGenerated'));
       } else {
-        toast.error('生成失败：' + r.error);
+        toast.error(t('releases.changelogFailed', { error: r.error }));
       }
     } finally {
       setGenerating(false);
@@ -60,7 +62,7 @@ export default function ReleasesPage() {
   const create = async () => {
     if (!current) return;
     if (!tag.trim() || !name.trim()) {
-      toast.warn('请填写 Tag 和名称');
+      toast.warn(t('releases.tagAndNameRequired'));
       return;
     }
     const r = await window.gitgui.release.create({
@@ -73,7 +75,7 @@ export default function ReleasesPage() {
       platform,
     });
     if (r.ok) {
-      toast.success('已创建 Release');
+      toast.success(t('releases.createSuccess'));
       setShowCreate(false);
       setTag('');
       setName('');
@@ -82,26 +84,26 @@ export default function ReleasesPage() {
       setPrerelease(false);
       await load();
     } else {
-      toast.error('创建失败：' + r.error);
+      toast.error(t('releases.createFailed', { error: r.error }));
     }
   };
 
-  const remove = async (t: string) => {
+  const remove = async (tagName: string) => {
     if (!current) return;
-    if (!confirm(`确定删除 Release ${t}？`)) return;
-    const r = await window.gitgui.release.delete(current.path, t, platform);
+    if (!confirm(t('releases.deleteConfirm', { name: tagName }))) return;
+    const r = await window.gitgui.release.delete(current.path, tagName, platform);
     if (r.ok) {
-      toast.success('已删除');
+      toast.success(t('releases.deleteSuccess'));
       await load();
     } else {
-      toast.error('删除失败：' + r.error);
+      toast.error(t('releases.deleteFailed', { error: r.error }));
     }
   };
 
   if (!current) {
     return (
       <div className="h-full flex items-center justify-center text-gray-500 text-sm">
-        请先打开一个仓库
+        {t('releases.noRepo')}
       </div>
     );
   }
@@ -112,7 +114,7 @@ export default function ReleasesPage() {
     <div className="h-full flex flex-col">
       <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold">版本发布</h2>
+          <h2 className="text-lg font-semibold">{t('releases.title')}</h2>
           <p className="text-xs text-gray-500 mt-0.5">{current.name}</p>
         </div>
         <div className="flex items-center gap-2">
@@ -139,7 +141,7 @@ export default function ReleasesPage() {
             disabled={!currentAuth}
             className="btn-primary disabled:opacity-50"
           >
-            <Plus size={14} /> 新建 Release
+            <Plus size={14} /> {t('releases.newRelease')}
           </button>
         </div>
       </div>
@@ -147,45 +149,45 @@ export default function ReleasesPage() {
       {showCreate && (
         <div className="border-b border-gray-800 bg-gray-900/50 p-4 space-y-2">
           <div className="grid grid-cols-2 gap-2">
-            <input className="input" placeholder="Tag（如 v1.0.0）" value={tag} onChange={(e) => setTag(e.target.value)} />
-            <input className="input" placeholder="Release 名称" value={name} onChange={(e) => setName(e.target.value)} />
+            <input className="input" placeholder={t('releases.tagInputPlaceholder')} value={tag} onChange={(e) => setTag(e.target.value)} />
+            <input className="input" placeholder={t('releases.nameInputPlaceholder')} value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3 text-sm">
               <label className="flex items-center gap-1.5">
-                <input type="checkbox" checked={draft} onChange={(e) => setDraft(e.target.checked)} disabled={platform === 'gitee'} /> 草稿
+                <input type="checkbox" checked={draft} onChange={(e) => setDraft(e.target.checked)} disabled={platform === 'gitee'} /> {t('releases.isDraft')}
               </label>
               <label className="flex items-center gap-1.5">
-                <input type="checkbox" checked={prerelease} onChange={(e) => setPrerelease(e.target.checked)} /> 预发布
+                <input type="checkbox" checked={prerelease} onChange={(e) => setPrerelease(e.target.checked)} /> {t('releases.isPrerelease')}
               </label>
             </div>
             <button onClick={generateChangelog} disabled={generating} className="btn-ghost text-xs">
               {generating ? <Loader2 size={12} className="animate-spin" /> : <FileText size={12} />}
-              从 commits 自动生成 CHANGELOG
+              {t('releases.generateChangelog')}
             </button>
           </div>
           <textarea
             className="input min-h-[140px] font-mono text-xs"
-            placeholder="Release 描述（Markdown）"
+            placeholder={t('releases.bodyInputPlaceholder')}
             value={body}
             onChange={(e) => setBody(e.target.value)}
           />
           <div className="flex gap-2">
-            <button onClick={create} className="btn-primary">创建</button>
-            <button onClick={() => setShowCreate(false)} className="btn-ghost">取消</button>
+            <button onClick={create} className="btn-primary">{t('releases.create')}</button>
+            <button onClick={() => setShowCreate(false)} className="btn-ghost">{t('releases.cancel')}</button>
           </div>
         </div>
       )}
 
       <div className="flex-1 overflow-auto p-4">
         {!currentAuth ? (
-          <div className="text-center text-gray-500 text-sm py-10">请先在【设置】中配置 {platform === 'github' ? 'GitHub' : 'Gitee'} Token</div>
+          <div className="text-center text-gray-500 text-sm py-10">{t('releases.notConfigured', { platform: platform === 'github' ? 'GitHub' : 'Gitee' })}</div>
         ) : loading ? (
           <div className="text-center py-10 text-gray-500 text-sm">
-            <Loader2 size={16} className="animate-spin inline mr-2" />加载中
+            <Loader2 size={16} className="animate-spin inline mr-2" />{t('releases.loading')}
           </div>
         ) : releases.length === 0 ? (
-          <div className="text-center text-gray-500 text-sm py-10">还没有 Release</div>
+          <div className="text-center text-gray-500 text-sm py-10">{t('releases.empty')}</div>
         ) : (
           <div className="max-w-3xl mx-auto space-y-3">
             {releases.map((r) => (
@@ -196,13 +198,13 @@ export default function ReleasesPage() {
                       <Tag size={14} className="text-primary-400" />
                       <span className="font-medium">{r.name}</span>
                       <span className="text-xs text-gray-500 font-mono">{r.tag}</span>
-                      {r.draft && <span className="text-xs px-1.5 rounded bg-gray-700 text-gray-300">草稿</span>}
-                      {r.prerelease && <span className="text-xs px-1.5 rounded bg-amber-900/50 text-amber-300">预发布</span>}
+                      {r.draft && <span className="text-xs px-1.5 rounded bg-gray-700 text-gray-300">{t('releases.draft')}</span>}
+                      {r.prerelease && <span className="text-xs px-1.5 rounded bg-amber-900/50 text-amber-300">{t('releases.prerelease')}</span>}
                       <span className="text-xs px-1.5 rounded bg-gray-800 text-gray-400">{r.platform}</span>
                     </div>
                     <div className="text-xs text-gray-500 mt-1">
-                      发布于 {r.publishedAt && formatDistanceToNow(new Date(r.publishedAt), { locale: zhCN, addSuffix: true })}
-                      {r.assets.length > 0 && ` · ${r.assets.length} 个附件`}
+                      {t('releases.publishedAt', { date: r.publishedAt && formatDistanceToNow(new Date(r.publishedAt), { locale: zhCN, addSuffix: true }) })}
+                      {r.assets.length > 0 && t('releases.assetsCount', { count: r.assets.length })}
                     </div>
                     {r.body && (
                       <pre className="mt-2 text-xs text-gray-300 bg-gray-900/60 rounded p-2 whitespace-pre-wrap max-h-40 overflow-auto">
