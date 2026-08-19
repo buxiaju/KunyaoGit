@@ -191,7 +191,8 @@ function TreeNode({
   onSelect: (path: string) => void;
   onContextMenu: (e: React.MouseEvent, node: any) => void;
 }) {
-  const [open, setOpen] = useState(depth < 2);
+  // 默认所有目录折叠，用户点击箭头手动展开
+  const [open, setOpen] = useState(false);
   const isFolder = node.type === 'folder';
   const isSelected = selectedFile === node.path;
 

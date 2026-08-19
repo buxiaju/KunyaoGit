@@ -40,6 +40,9 @@ if (!fs.existsSync(INSTALLER)) { log('❌ missing ' + INSTALLER); process.exit(1
 
 const RELEASE_BODY = `# KunyaoGit v${VERSION}
 
+## v0.3.2 优化
+- 📂 **文件树默认全部折叠** — 进入仓库「文件」页时所有目录默认收起，界面更清爽，点击箭头展开；此前默认展开前两层。
+
 ## v0.3.1 修复
 - 🔧 **修复应用内更新下载失败**（"所有下载源都失败"）：
   - Gitee 下载源从 \`raw/\` 直链改为 **Gitee Release 附件下载**（\`releases/download/vX.Y.Z/...\`）——Gitee raw 对 >50MB 大文件直接返回 403，导致 86MB 安装包永远下载失败；Release 附件走官方 CDN（foruda.gitee.com），实测 2MB/s 完整下载且 SHA256 校验一致
