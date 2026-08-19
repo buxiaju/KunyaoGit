@@ -1,6 +1,6 @@
 # KunyaoGit 功能详解
 
-> 面向用户与开发者的完整功能清单。当前版本：**v0.2.2**（见 `package.json`）。
+> 面向用户与开发者的完整功能清单。当前版本：**v0.2.6**（见 `package.json`）。
 > 所有功能均通过 Electron IPC 实现，渲染进程仅通过 `window.gitgui.*` 调用，主进程负责真正的本地 Git / 远程 API / 文件系统操作。
 
 ---
@@ -13,9 +13,11 @@
 4. [Diff 视图（unified / split 双模式）](#4-diff-视图unified--split-双模式)
 5. [拖拽上传](#5-拖拽上传)
 6. [Release 管理 + CHANGELOG 自动生成](#6-release-管理--changelog-自动生成)
-7. [应用内自动更新（v0.2.2 新特性）](#7-应用内自动更新v022-新特性)
-8. [设置页功能](#8-设置页功能)
-9. [安全特性](#9-安全特性)
+7. [应用内自动更新](#7-应用内自动更新)
+8. [多语言支持（v0.2.3）](#8-多语言支持v023)
+9. [三主题切换（v0.2.5）](#9-三主题切换v025)
+10. [设置页功能](#10-设置页功能)
+11. [安全特性](#11-安全特性)
 
 ---
 
@@ -219,9 +221,12 @@ export interface ChangelogGroup {
 
 ---
 
-## 7. 应用内自动更新（v0.2.2 新特性）
+## 7. 应用内自动更新
 
-> v0.2.2 引入真正的「应用内下载 + 自动安装」能力，用户无需手动去浏览器下载安装包。
+> v0.2.2 引入真正的「应用内下载 + 自动安装」能力，v0.2.4 大幅提速（3~6 倍），v0.2.6 修复探活在某些 CDN 上的失败。
+> 用户无需手动去浏览器下载安装包；本节按版本演进顺序说明。
+
+### 7.1 整体流程
 
 ### 7.1 整体流程
 
@@ -246,7 +251,7 @@ compareVersion(current, latest) 选两个平台中版本最高的
 App 层逻辑：
   - 无更新 → 静默
   - 有更新 + 未 dismiss → UpdateDialog 弹窗
-    - 立即下载并安装 → 应用内下载 → 自动启动安装包 → 退出应用
+    - 立即下载并安装 → 应用内下载（v0.2.4 多连接提速 + v0.2.6 探活修复）→ 自动启动安装包 → 退出应用
     - 稍后 → 关闭弹窗
     - 浏览器打开 → shell.openExternal
     - 取消 / 错误重试
@@ -285,10 +290,11 @@ export interface DownloadProgress {
   phase: DownloadPhase;
   percent: number;        // 0-100，totalBytes 未知时为 -1
   bytesReceived: number;
-  totalBytes: number;     // 0 表示未知
-  source?: 'gitee' | 'github';
-  message?: string;
-  filePath?: string;       // done 阶段返回的本地安装包路径
+  totalBytes: number;      // 0 表示未知
+  source?: 'gitee' | 'github';  // 当前正在下载的源
+  message?: string;       // error/done 阶段的说明
+  filePath?: string;      // done 阶段返回的本地安装包路径
+  speedBps?: number;      // ★ v0.2.4：瞬时下载速率（字节/秒，downloading 阶段填）
 }
 ```
 
@@ -297,6 +303,7 @@ export interface DownloadProgress {
 - 未知大小时显示脉动动画
 - 显示已接收 / 总字节数（B / KB / MB）
 - 标注当前下载源（Gitee / GitHub）
+- ★ v0.2.4 起额外显示瞬时下载速率（B/s / KB/s / MB/s）
 
 ### 7.4 自动安装
 
@@ -328,73 +335,184 @@ export interface DownloadProgress {
 | 文件 | 职责 |
 | --- | --- |
 | `electron/services/update.ts` | 版本检查、版本比较、GitHub/Gitee release API |
-| `electron/ipc/update.ts` | IPC handler + 应用内下载安装 + 进度推送 |
+| `electron/ipc/update.ts` | IPC handler + 应用内下载安装 + 进度推送 + ★ v0.2.4 Range 多连接下载 + ★ v0.2.6 Range 探活 |
 | `src/hooks/useUpdateCheck.ts` | 启动 1.5s 后静默检查 |
 | `src/stores/update.ts` | zustand store，驱动下载流程 |
 | `src/components/common/UpdateDialog.tsx` | 弹窗 UI（询问 / 下载中 / 完成 / 错误） |
 
+### 7.9 ★ v0.2.4：下载速度优化（3~6 倍提速）
+
+v0.2.2 的单连接下载在 90MB 安装包上要 15~25s。v0.2.4 重构 `electron/ipc/update.ts` 的下载核心，解决 4 个瓶颈：
+
+1. **多源 HEAD 探活并行** — Gitee raw + GitHub CDN 同时探活，省掉 Gitee 死等 8s
+2. **HTTP Range 多连接分段下载**（4 路并发） — 单连接瓶颈消失
+3. **keep-alive Agent 复用 TLS / TCP 句柄** — 免去重复握手
+4. **进度事件 100ms 节流** — 避免 IPC 通道被刷爆（90MB ≈ 1400 次事件 → 10 次/秒）
+5. **单 chunk 失败重试**（指数退避，最多 3 次） — 网络抖动不再崩整个下载
+6. **瞬时速率计算** — 每 100ms 算一次，写入 `DownloadProgress.speedBps`
+
+测试场景：从 GitHub release CDN 拉取 90MB 实际数据，4 路并发把单连接 18s 降到 4-6s。
+
+### 7.10 ★ v0.2.6：探活兼容性修复
+
+v0.2.2~v0.2.5 的下载器用 HEAD 请求探活，但部分 CDN / 防火墙对 HEAD 更敏感（直接 403 或超时），导致某些网络环境下 GitHub 探活失败、用户只能看到「github: HEAD 失败」这种误导性错误。
+
+v0.2.6 改为 **`Range: bytes=0-0` GET 探活**（兼容性远好于 HEAD）：
+
+- 206 响应：`Content-Range: bytes 0-0/{total}` 直接给到 total size
+- 200 响应：忽略 Range 时，Content-Length 仍是 total size
+- 读完 header 立即 `res.destroy()`，避免 200 情况把整文件拉下来
+- 探活超时 8s → 15s（GET 比 HEAD 慢一点，给宽点）
+- 错误信息**汇总所有源**失败原因（之前只显示最后一个错的源）
+
+**典型错误信息示例**（v0.2.6）：
+
+```
+所有下载源都失败：github（请求失败（超时/网络））; gitee（Gitee raw 返 HTML（大文件受限））
+```
+
+可以一眼看出是「GitHub 走不通 + Gitee 大文件受限」还是「两个源都连不上」，方便诊断是网络问题还是源问题。
+
 ---
 
-## 8. 设置页功能
+## 8. 多语言支持（v0.2.3）
+
+v0.2.3 引入中英双语切换，基于 **React Context + `useI18n` hook**，所有 UI 文案均可切换。
+
+### 8.1 实现机制
+
+- Provider：`src/i18n/index.tsx` 提供 `I18nProvider` + `useI18n()` hook
+- 翻译字典：`src/i18n/zh.ts`（中文）+ `src/i18n/en.ts`（英文），按 namespace 分组（`common.*` / `settings.*` / `repo.*` / `update.*` / ...）
+- 切换入口：设置页「语言」区块的两个按钮，或侧边栏底部语言快捷切换
+- 占位符：支持 `{name}` / `{count}` 等参数化插值
+
+```ts
+// 组件内使用
+const { t, lang, setLang } = useI18n();
+t('settings.saved');                       // '已保存'
+t('repo.stagedCount', { count: 3 });        // '已暂存 3 个文件'
+```
+
+### 8.2 相关文件
+
+| 文件 | 职责 |
+| --- | --- |
+| `src/i18n/index.tsx` | I18nProvider / useI18n hook / t() 函数 |
+| `src/i18n/zh.ts` | 中文翻译字典 |
+| `src/i18n/en.ts` | 英文翻译字典 |
+| `src/App.tsx` | 在根挂 `<I18nProvider lang={lang} setLang={setLang}>` |
+
+---
+
+## 9. 三主题切换（v0.2.5）
+
+v0.2.5 引入 3 套 UI 主题：**暗色（默认）** / **深蓝** / **亮色**，通过 CSS 变量 + 选择器覆盖实现，零业务代码迁移。
+
+### 9.1 三套主题
+
+| 主题 | 主色 | 背景 | 文字 | 适合 |
+| --- | --- | --- | --- | --- |
+| **暗色** `dark`（默认） | 🟢 Emerald | gray-900 | gray-100 | 长时间编码护眼 |
+| **深蓝** `ocean` | 🔵 Blue | sky-900 | sky-50 | 想要点色彩又稳重的 |
+| **亮色** `light` | 🟢 Emerald | 纯白 | gray-900 | 白天 / 投影仪 |
+
+### 9.2 实现机制
+
+```css
+/* src/styles/index.css */
+:root[data-theme="dark"]  { --bg-app: rgb(17 24 39);  --primary-500: rgb(16 185 129); ... }
+:root[data-theme="ocean"] { --bg-app: rgb(8 47 73);   --primary-500: rgb(59 130 246); ... }
+:root[data-theme="light"] { --bg-app: rgb(255 255 255); --primary-500: rgb(16 185 129); ... }
+
+[data-theme] .bg-gray-900 { background-color: var(--bg-app); }
+[data-theme] .text-gray-100 { color: var(--text-primary); }
+/* ... 30+ 覆盖规则，覆盖最常用的 gray-XXX / 透明色 / primary / danger */
+```
+
+特异性 `[data-theme] .class` = (0,2,0) > Tailwind `.class` (0,1,0)，所以覆盖稳定胜出。
+
+### 9.3 主题切换流程
+
+1. 用户在设置页点主题色卡 → `setTheme(theme)`
+2. 立即调 `applyThemeToDOM(theme)`：写 `<html data-theme="...">` + 派发 `kg-theme-change` 事件
+3. 异步 `settings.save({ theme })` 持久化到 electron-store
+4. Monaco 编辑器收到事件后调 `monaco.editor.setTheme('vs-dark' | 'vs')` 跟切
+5. CSS 变量切换，所有 `[data-theme] .bg-gray-XXX` 等覆盖规则即时生效
+
+### 9.4 相关文件
+
+| 文件 | 职责 |
+| --- | --- |
+| `shared/types.ts` | `Theme = 'dark' \| 'ocean' \| 'light'` |
+| `src/hooks/useTheme.ts` | `useThemeSync` / `setTheme` / `monacoThemeFor` / `THEME_LIST` |
+| `src/styles/index.css` | 3 套 CSS 变量 + 选择器覆盖 + 组件 utility |
+| `src/components/Layout/Layout.tsx` | 根 div 挂 data-theme（由 `useThemeSync` 全局处理） |
+| `src/pages/SettingsPage.tsx` | 主题切换 UI（3 个色卡） |
+
+---
+
+## 10. 设置页功能
 
 界面入口 `src/pages/SettingsPage.tsx`，包含「关于 + 检查更新」卡片。
 
-### 8.1 主题与 Git 配置
+### 10.1 主题与 Git 配置
 
 | 项 | 说明 |
 | --- | --- |
-| 主题 | `dark` / `light`（`AppSettings.theme`） |
+| ★ 主题 | `dark` / `ocean` / `light`（`AppSettings.theme`），见 §9 |
+| 语言 | `zh` / `en`（`AppSettings.language`），见 §8 |
 | Git 可执行路径 | 自定义 `git` 路径（`AppSettings.gitPath`） |
 | 默认克隆目录 | `AppSettings.defaultCloneDir` |
 | 作者信息 | `authorName` / `authorEmail` |
 | Diff 视图模式 | `unified` / `split` |
 
-### 8.2 双平台 Token 管理
+### 10.2 双平台 Token 管理
 
 - GitHub / Gitee 标签分别填入 Personal Access Token
 - 「测试并保存」：调 `settings:test-auth` 验证有效性后写入 electron-store
 - **GitHub Token 权限建议**：`repo`、`read:user`（不需要 `admin:org`、`delete_repo`）
 - **Gitee Token 权限建议**：`projects`、`pull_requests`、`issues`
 
-### 8.3 Git 路径测试
+### 10.3 Git 路径测试
 
 - 通道：`settings:test-git`
 - 校验指定路径是否为有效 `git` 可执行
 
-### 8.4 关于 + 检查更新
+### 10.4 关于 + 检查更新
 
 - 显示当前版本（`app:get-version`）
 - 「立即检查更新」按钮：调 `update:check`（主动检查，无视节流）
 - v0.2.2 新增「立即下载并安装」入口，可随时触发更新流程
+- v0.2.4+ 下载进度条带实时速率，详见 §7
 
 ---
 
-## 9. 安全特性
+## 11. 安全特性
 
-### 9.1 contextIsolation
+### 11.1 contextIsolation
 
 - `contextIsolation: true` + `nodeIntegration: false`
 - 渲染进程（Chromium）**不能** 直接 `require('fs')` 或访问任何 Node / Electron API
 - 所有 Node 能力必须走 IPC，渲染层只看到 `window.gitgui.*`（由 `electron/preload.ts` 的 `contextBridge` 暴露）
 
-### 9.2 Content Security Policy（CSP）
+### 11.2 Content Security Policy（CSP）
 
 - 在主进程 `setupCsp()` 中通过响应头注入
 - dev / prod 模式配置不同，限制脚本来源、内联脚本等
 
-### 9.3 Token 安全存储
+### 11.3 Token 安全存储
 
 - Token 永远只在主进程使用，渲染层**不接触**原始 token 字符串
 - 渲染层只能 `gitgui.settings.setAuth()` 间接存入 electron-store
 - 存储位置：`%APPDATA%\gitgui\gitgui-settings.json`
 - 缺失 token 的远程请求在 IPC handler 提前拦截并返回中文友好错误，避免暴露 token 或 GitHub 英文 401
 
-### 9.4 IPC 通道防 typo
+### 11.4 IPC 通道防 typo
 
 - 所有通道名集中定义在 `shared/ipc-channels.ts` 的 `IPC` 常量对象
 - 渲染层与主进程共用同一份字符串常量，杜绝手写通道名拼错
 
-### 9.5 openExternal 白名单
+### 11.5 openExternal 白名单
 
 - `update:open` 等 `shell.openExternal` 调用会校验 URL 协议（`/^https?:\/\//`），避免任意协议跳转
 
@@ -406,12 +524,13 @@ export interface DownloadProgress {
 | --- | --- |
 | 运行时 | Electron 33 |
 | UI | React 18 + TypeScript 5 + Vite 6 |
-| 样式 | Tailwind CSS 3 |
+| 样式 | Tailwind CSS 3（+ CSS 变量主题系统） |
 | 状态 | Zustand |
+| 国际化 | React Context + useI18n hook（v0.2.3） |
 | Git | simple-git（封装本地 git CLI） |
 | GitHub API | @octokit/rest |
 | Gitee API | axios 直连 v5 |
-| 编辑器 | Monaco Editor（VS Code 同款） |
+| 编辑器 | Monaco Editor（VS Code 同款，跟随主题） |
 | Diff | 自实现 unified diff + 并排 / 统一渲染 |
 | 配置存储 | electron-store v8（必须 v8，见开发指南陷阱） |
 | 打包 | electron-builder（NSIS） |

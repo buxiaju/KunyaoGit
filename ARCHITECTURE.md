@@ -29,13 +29,13 @@
 
 | 维度 | 数值 |
 | --- | --- |
-| 当前版本 | `0.2.3`（见 `package.json`） |
+| 当前版本 | `0.2.6`（见 `package.json`） |
 | 维护者 | `buxiaju`（GitHub + Gitee 同名） |
 | 主仓库 | https://github.com/buxiaju/KunyaoGit |
 | 镜像 | https://gitee.com/buxiaju/KunyaoGit |
-| Release | GitHub 与 Gitee 都有 v0.1.0 / v0.2.0 / v0.2.1 / v0.2.2 / v0.2.3 |
+| Release | GitHub 与 Gitee 都有 v0.1.0 / v0.2.0 / v0.2.1 / v0.2.2 / v0.2.3 / v0.2.4 / v0.2.5 / v0.2.6 |
 | 平台目标 | Windows 10/11 x64（macOS / Linux 暂未验证） |
-| 包大小 | NSIS 安装包 ~92 MB，便携版 ~3.5 MB |
+| 包大小 | NSIS 安装包 ~86 MB，便携版 ~3.5 MB |
 | License | MIT |
 
 **核心能力**：
@@ -47,8 +47,9 @@
 - 仓库创建 / 删除
 - Tag + Release 管理（GitHub / Gitee），含 Conventional Commits 自动生成 CHANGELOG
 - **自动更新检查**（GitHub + Gitee 双源，启动后 1.5s 静默）
-- **★ 应用内自动更新**（v0.2.2：多源下载 Gitee 优先 / GitHub 兜底 + 实时进度条 + 下载完成自动启动安装包）
+- **★ 应用内自动更新**（v0.2.2 多源下载 Gitee 优先 / GitHub 兜底 + 实时进度条 + 下载完成自动启动安装包；v0.2.4 4 路 Range 并发提速 3~6 倍 + 实时速率；v0.2.6 探活改 GET 兼容部分 CDN）
 - **多语言切换**（v0.2.3：中文 / English，React Context + useI18n hook，设置页或侧边栏一键切换）
+- **三主题切换**（v0.2.5：暗色 / 深蓝 / 亮色，CSS 变量 + 选择器覆盖实现，零业务代码迁移）
 - **专属应用图标**（Jade 绿 + K + Git 分支节点）
 
 ---
@@ -152,7 +153,8 @@ KunyaoGit/
 │   │       ├── FileTree.tsx        # 文件树
 │   │       └── RemotePanel.tsx     # remote 列表 + add / remove
 │   ├── hooks/
-│   │   └── useUpdateCheck.ts       # ★ 启动 1.5s 后静默检查更新
+│   │   ├── useUpdateCheck.ts       # ★ 启动 1.5s 后静默检查更新
+│   │   └── useTheme.ts             # ★ v0.2.5：主题管理（data-theme + Monaco 跟随）
 │   ├── stores/
 │   │   ├── repo.ts                 # 当前仓库信息
 │   │   ├── settings.ts             # 设置（theme / gitPath / auth / language / ...）
@@ -349,8 +351,8 @@ KunyaoGit/
 | `update:check-silent` | `gitgui.update.checkSilent()` | 同上，但 6 小时内不重复请求（基于 electron-store 时间戳） |
 | `update:dismiss` | `gitgui.update.dismiss(version)` | 持久化到 `updateDismissedVersion`，下次同版本不再问 |
 | `update:open` | `gitgui.update.open(url)` | `shell.openExternal` |
-| `update:download` | `gitgui.update.download(version, onProgress)` | ★ v0.2.2：多源下载（Gitee raw 优先 / GitHub release 兜底），跟随重定向，流式写入 `%TEMP%` |
-| `update:download-progress` | （主→渲染事件） | ★ v0.2.2：`{ phase, percent, bytesReceived, totalBytes, source, message, filePath }` |
+| `update:download` | `gitgui.update.download(version, onProgress)` | ★ v0.2.2：多源下载（Gitee raw 优先 / GitHub release 兜底），跟随重定向，流式写入 `%TEMP%`；★ v0.2.4 4 路 Range 并发提速 |
+| `update:download-progress` | （主→渲染事件） | ★ v0.2.2：`{ phase, percent, bytesReceived, totalBytes, source, message, filePath }`；★ v0.2.4 加 `speedBps` 瞬时速率 |
 | `update:install` | `gitgui.update.install(filePath)` | ★ v0.2.2：`shell.openPath(installer)` 启动安装包 → 1.5s 后 `app.quit()` 退出 |
 | `update:cancel-download` | `gitgui.update.cancelDownload()` | ★ v0.2.2：取消正在进行的 `https.get` 请求 |
 
@@ -374,7 +376,7 @@ KunyaoGit/
 11. 组件 mount 时批量触发 git:status / git:branches / git:log
 ```
 
-### 6.2 自动更新检查 + 应用内下载安装（v0.2.2）
+### 6.2 自动更新检查 + 应用内下载安装（v0.2.2 引入 / v0.2.4 提速 / v0.2.6 探活修复）
 
 ```
 App 启动
@@ -404,20 +406,32 @@ App 层逻辑（v0.2.2 重写）：
   │  用户点"忽略此版本"     → update.dismiss(ver) → electron-store
   │  用户关闭对话框          → hide()
   │
+  ├─ 探活（v0.2.6 改造）
+  │  probeRange() 并行探测 Gitee / GitHub
+  │  ├─ GET + Range: bytes=0-0（v0.2.6 替代 HEAD，兼容更多 CDN）
+  │  ├─ 206 → Content-Range 给到 total；200 → Content-Length 给到 total
+  │  ├─ 读到 header 立即 destroy，避免整文件下载
+  │  └─ 15s 超时（v0.2.6 从 8s 提到 15s）
+  │  失败的源记录到 failedSources
+  │
   ├─ 下载阶段 (phase='downloading')
   │  update.download(version, onProgress)
-  │  ├─ 主进程 downloadSources(ver)：Gitee raw 优先 → GitHub release 兜底
-  │  ├─ getFollow() 跟随 3xx 重定向（最多 8 次）
+  │  ├─ 主进程 tryDownloadFromSource()：按 ok=true 优先顺序
+  │  ├─ ★ v0.2.4：downloadByRange() 拆 4 路并发 HTTP Range
+  │  │   - keep-alive Agent 复用 TLS/TCP
+  │  │   - 单 chunk 失败 3 次重试（指数退避）
+  │  │   - 进度 100ms 节流
   │  ├─ 流式写入 %TEMP%\KunyaoGit-Setup-{ver}-x64.exe
-  │  └─ 进度事件 → sender.send(UPDATE_DOWNLOAD_PROGRESS, { phase, percent, ... })
-  │  用户点"取消" → update.cancelDownload() → req.destroy()
+  │  └─ 进度事件 → sender.send(UPDATE_DOWNLOAD_PROGRESS, { phase, percent, bytesReceived, totalBytes, source, speedBps, ... })
+  │  用户点"取消" → update.cancelDownload() → 全部 in-flight req.destroy()
   │
   ├─ 完成阶段 (phase='done')
   │  下载成功 → setTimeout(800ms) → install()
   │  → update.install(filePath) → shell.openPath(installer) → app.quit()
   │
-  └─ 错误阶段 (phase='error')
-     显示错误信息 → 用户可"重试"或"浏览器打开"
+  └─ 错误阶段 (phase='error'，v0.2.6+ 显示所有源失败原因）
+     错误信息形如 "所有下载源都失败：github（请求失败）; gitee（HTML）"
+     用户可"重试"或"浏览器打开"
 ```
 
 ### 6.3 安装包构建（重点）
@@ -724,6 +738,26 @@ Get-Process kunyaogit,electron,node -ErrorAction SilentlyContinue | Stop-Process
 ```
 如果还卡，重启 / `scripts/debug/reset-stage.ps1`。
 
+### 11.3.1 ★ v0.2.4+ 输出目录避锁（最稳绕法）
+
+v0.2.4 起推荐：**临时把 `package.json` 的 `build.directories.output` 改到一个新目录**（如 `release-v024` / `release-v025` / `release-v026`），避开被锁的 `release/` 目录：
+
+```jsonc
+// package.json
+"build": {
+  "directories": { "output": "release-v026" }   // 临时
+}
+```
+
+```bash
+npm run build:win
+# 产物在 release-v026/KunyaoGit-Setup-X.Y.Z-x64.exe
+# .gitignore 加上 release-v026/（每个版本加一次），拷 .exe 到 .release-assets/
+# 发完改回 "release"，手动删 release-v026/ 整个目录
+```
+
+**适用场景**：v0.2.3 之后每次发版如果撞 win-unpacked 锁，按版本号新开临时目录是最稳的做法（避 IDE 文件监视器、避残留 KunyaoGit 进程、避 mavis-trash 工具在某些环境下不可用）。
+
 ### 11.4 NSIS 安装包超过 100 MB
 
 Gitee 限制单文件 100 MB。如果超过：
@@ -766,6 +800,30 @@ await rcedit(path, opts);
 
 `getOctokit()` 找不到 token 时返回 `null`，IPC handler 必须先判 `null` 再返 `{ ok: false, error: '未配置 GitHub Token' }`。
 **不要** 让 token 缺失的请求到 GitHub 拿 401，否则用户看到的是 GitHub 的英文错误信息，不友好。
+
+### 11.11 ★ v0.2.6 修复：应用内更新器探活别用 HEAD
+
+v0.2.2~v0.2.5 用 `HEAD` 请求探活 release 资源，部分 CDN / 防火墙对 HEAD 更敏感（直接 403 或超时），用户看到误导性的「github: HEAD 失败」。
+
+v0.2.6 改为 **`Range: bytes=0-0` GET** 探活（兼容性远好于 HEAD）：
+
+- 206 响应：`Content-Range: bytes 0-0/{total}` 直接给到 total size
+- 200 响应：忽略 Range 时，Content-Length 仍是 total size
+- 读完 header 立即 `res.destroy()`，避免 200 情况把整文件拉下来
+- 探活超时从 8s 提到 15s
+
+未来要改 `probeRange` 时务必**继续用 GET 探活**，不要图省事回退到 HEAD；同时保持错误信息汇总所有源失败原因（`failedSources[]`）让用户能区分是网络问题还是源问题。
+
+### 11.12 ★ v0.2.4+ 4 路 Range 并发的取舍
+
+`electron/ipc/update.ts` 的 `downloadByRange()` 默认 4 路并发，改这个数字要考虑：
+
+- 家用 100M 宽带 4 路正好；千兆宽带可试 6-8 路但收益递减
+- `keepAliveHttpsAgent.maxSockets` 要同步 = `CHUNK_COUNT + 2`
+- 单 chunk 失败 `CHUNK_RETRY = 3` 次重试（指数退避 `CHUNK_RETRY_BACKOFF * 2^attempt`）
+- 进度事件 100ms 节流（避免 IPC 通道被 90MB 文件的 ~1400 个 chunk 事件刷爆）
+
+**不要轻易把 chunk 数量改成 1** —— 那就退化成 v0.2.2 的单连接了，单连接 18s 体感非常糟糕。
 
 ---
 
@@ -821,6 +879,12 @@ await rcedit(path, opts);
 | CSP | Content Security Policy，主进程 `setupCsp()` 注入 |
 | `mavis-trash` | Mavis 提供的"移到回收站"工具，能绕过 Windows `Remove-Item` 阻断 |
 | `simple-git` | Node 库，封装 `git` CLI；不实现 git 协议 |
+| ★ Theme | ★ v0.2.5：UI 主题类型，`'dark' \| 'ocean' \| 'light'`，对应三套 CSS 变量 |
+| ★ `data-theme` | ★ v0.2.5：写到 `<html>` 的主题属性，CSS 选择器据此覆盖 Tailwind 颜色 |
+| ★ `kg-theme-change` | ★ v0.2.5：主题切换时派发的 `CustomEvent<Theme>`，Monaco 等组件订阅以跟随 |
+| ★ `useI18n` | ★ v0.2.3：React Context 提供的国际化 hook，返回 `{ t, lang, setLang }` |
+| ★ HTTP Range 多连接 | ★ v0.2.4：把文件拆 N 段并发 GET `Range: bytes=X-Y`，单连接瓶颈消失 |
+| ★ `probeRange` | ★ v0.2.6：用 `Range: bytes=0-0` GET 探活（替代 v0.2.5 的 HEAD，兼容更多 CDN）|
 
 ---
 
