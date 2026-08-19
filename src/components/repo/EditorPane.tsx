@@ -21,7 +21,7 @@ function detectLanguage(path: string): string {
 }
 
 export default function EditorPane() {
-  const { current, selectedFile, fileContent, fileDirty, fileLoading, loadFile, saveFile, closeFile } = useRepoStore();
+  const { current, selectedFile, fileContent, fileDirty, fileLoading, loadFile, saveFile, closeFile, refreshStatus } = useRepoStore();
   const { t } = useI18n();
   const theme = useSettingsStore((s) => s.settings.theme);
   const editorRef = useRef<any>(null);
@@ -83,8 +83,11 @@ export default function EditorPane() {
     setSaving(true);
     try {
       const r = await saveFile(selectedFile);
-      if (r.ok) toast.success(t('files.saved'));
-      else toast.error(t('files.saveFailed', { error: r.error || '' }));
+      if (r.ok) {
+        toast.success(t('files.saved'));
+        // 保存后刷新 git 状态，让「变更」tab 立即看到修改
+        await refreshStatus();
+      } else toast.error(t('files.saveFailed', { error: r.error || '' }));
     } finally {
       setSaving(false);
     }

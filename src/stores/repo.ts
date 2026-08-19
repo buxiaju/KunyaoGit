@@ -17,6 +17,12 @@ interface RepoState {
   fileDirty: boolean;
   fileLoading: boolean;
 
+  // 文件管理动作（新建 / 删除 / 重命名）
+  createFile: (relPath: string, content?: string) => Promise<{ ok: boolean; error?: string }>;
+  createFolder: (relPath: string) => Promise<{ ok: boolean; error?: string }>;
+  deleteNode: (relPath: string) => Promise<{ ok: boolean; error?: string }>;
+  renameNode: (oldRel: string, newRel: string) => Promise<{ ok: boolean; error?: string }>;
+
   // 加载动作
   loadRecents: () => Promise<void>;
   openRepo: (path: string) => Promise<{ ok: boolean; error?: string }>;
@@ -183,9 +189,85 @@ export const useRepoStore = create<RepoState>((set, get) => ({
     }
     set({ selectedFile: null, fileContent: null, fileDirty: false, currentDiff: null });
   },
+
+  createFile: async (relPath, content = '') => {
+    const c = get().current;
+    if (!c) return { ok: false, error: '没有打开的仓库' };
+    const safe = assertSafeRelPath(relPath);
+    if (!safe.ok) return safe;
+    const full = pathJoin(c.path, relPath);
+    const parent = full.substring(0, full.lastIndexOf('/'));
+    const mk = await window.gitgui.fs.mkdirp(parent);
+    if (!mk.ok) return { ok: false, error: mk.error };
+    const w = await window.gitgui.fs.writeFile(full, content);
+    if (!w.ok) return { ok: false, error: w.error };
+    await Promise.all([get().refreshFileTree(), get().refreshStatus()]);
+    // 新文件默认在编辑器中打开
+    set({ selectedFile: relPath, fileContent: content, fileDirty: false, currentDiff: null });
+    return { ok: true };
+  },
+
+  createFolder: async (relPath) => {
+    const c = get().current;
+    if (!c) return { ok: false, error: '没有打开的仓库' };
+    const safe = assertSafeRelPath(relPath);
+    if (!safe.ok) return safe;
+    const mk = await window.gitgui.fs.mkdirp(pathJoin(c.path, relPath));
+    if (!mk.ok) return { ok: false, error: mk.error };
+    await Promise.all([get().refreshFileTree(), get().refreshStatus()]);
+    return { ok: true };
+  },
+
+  deleteNode: async (relPath) => {
+    const c = get().current;
+    if (!c) return { ok: false, error: '没有打开的仓库' };
+    const safe = assertSafeRelPath(relPath);
+    if (!safe.ok) return safe;
+    const d = await window.gitgui.fs.delete(pathJoin(c.path, relPath));
+    if (!d.ok) return { ok: false, error: d.error };
+    // 若删除的正是编辑器中打开的文件，关闭编辑器
+    const st = get();
+    if (st.selectedFile === relPath) {
+      set({ selectedFile: null, fileContent: null, fileDirty: false, currentDiff: null });
+    }
+    await Promise.all([get().refreshFileTree(), get().refreshStatus()]);
+    return { ok: true };
+  },
+
+  renameNode: async (oldRel, newRel) => {
+    const c = get().current;
+    if (!c) return { ok: false, error: '没有打开的仓库' };
+    const safeOld = assertSafeRelPath(oldRel);
+    if (!safeOld.ok) return safeOld;
+    const safeNew = assertSafeRelPath(newRel);
+    if (!safeNew.ok) return safeNew;
+    const parent = newRel.substring(0, newRel.lastIndexOf('/'));
+    const mk = await window.gitgui.fs.mkdirp(pathJoin(c.path, parent));
+    if (!mk.ok) return { ok: false, error: mk.error };
+    const r = await window.gitgui.fs.rename(pathJoin(c.path, oldRel), pathJoin(c.path, newRel));
+    if (!r.ok) return { ok: false, error: r.error };
+    // 正在编辑的重命名文件跟随新路径
+    const st = get();
+    if (st.selectedFile === oldRel) {
+      set({ selectedFile: newRel, fileContent: st.fileContent, fileDirty: st.fileDirty, currentDiff: null });
+    }
+    await Promise.all([get().refreshFileTree(), get().refreshStatus()]);
+    return { ok: true };
+  },
 }));
 
 // 内部工具
 function pathJoin(...parts: string[]): string {
   return parts.join('/').replace(/\\/g, '/');
+}
+
+// 校验用户输入的文件相对路径：拒绝绝对路径、路径穿越、非法字符
+function assertSafeRelPath(relPath: string): { ok: true } | { ok: false; error: string } {
+  const p = relPath.trim().replace(/\\/g, '/');
+  if (!p || p === '/' ) return { ok: false, error: '路径不能为空' };
+  if (p.startsWith('/') || /^[a-zA-Z]:/.test(p)) return { ok: false, error: '请使用仓库内的相对路径' };
+  const parts = p.split('/');
+  if (parts.some((s) => s === '..' || s === '.')) return { ok: false, error: '路径不能包含 .. 或 .' };
+  if (parts.some((s) => !s || /[\0]/.test(s))) return { ok: false, error: '路径包含非法字符' };
+  return { ok: true };
 }

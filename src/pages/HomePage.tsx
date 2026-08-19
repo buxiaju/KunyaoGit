@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useRepoStore } from '../stores/repo';
 import { useSettingsStore } from '../stores/settings';
 import { useI18n } from '../i18n';
-import { FolderGit2, GitBranch, Plus, X, ExternalLink, Copy, Loader2 } from 'lucide-react';
+import { FolderGit2, GitBranch, Plus, X, ExternalLink, Copy, Loader2, ChevronRight } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import { toast } from '../components/common/Toast';
@@ -11,6 +12,7 @@ export default function HomePage() {
   const { t } = useI18n();
   const { recents, loadRecents, openRepo, openRepoDialog, removeRecent, current } = useRepoStore();
   const settings = useSettingsStore((s) => s.settings);
+  const nav = useNavigate();
   const [cloneUrl, setCloneUrl] = useState('');
   const [cloning, setCloning] = useState(false);
   const [showClone, setShowClone] = useState(false);
@@ -35,6 +37,7 @@ export default function HomePage() {
         setShowClone(false);
         await loadRecents();
         await openRepo(r.data.path);
+        nav('/repo');
       } else {
         toast.error(`克隆失败：${r.error}`);
       }
@@ -66,6 +69,30 @@ export default function HomePage() {
             </button>
           </div>
         </div>
+
+        {/* 当前仓库入口 */}
+        {current && (
+          <button
+            onClick={() => nav('/repo')}
+            className="panel w-full p-3 mb-6 flex items-center gap-3 hover:border-primary-500/40 transition-colors group text-left"
+            title={t('home.enterRepo')}
+          >
+            <FolderGit2 size={22} className="text-primary-400 flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="text-xs text-gray-500">{t('home.currentRepoOpen')}</div>
+              <div className="font-medium truncate">{current.name}</div>
+              <div className="text-xs text-gray-500 truncate" title={current.path}>{current.path}</div>
+            </div>
+            {current.currentBranch && (
+              <span className="text-xs text-gray-400 hidden sm:flex items-center gap-1 flex-shrink-0">
+                <GitBranch size={11} /> {current.currentBranch}
+              </span>
+            )}
+            <span className="btn-primary text-xs flex items-center gap-1 flex-shrink-0">
+              {t('home.enterRepo')} <ChevronRight size={12} />
+            </span>
+          </button>
+        )}
 
         {showClone && (
           <div className="panel p-4 mb-6">
@@ -109,7 +136,10 @@ export default function HomePage() {
                   className={`panel p-3 hover:border-primary-500/40 transition-colors group cursor-pointer ${
                     current?.path === r.path ? 'border-primary-500/60' : ''
                   }`}
-                  onClick={() => openRepo(r.path)}
+                  onClick={async () => {
+                    await openRepo(r.path);
+                    nav('/repo');
+                  }}
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
