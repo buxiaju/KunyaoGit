@@ -1,7 +1,7 @@
 # KunyaoGit 开发指南
 
 > 面向接手开发者的完整开发 / 打包 / 发布手册。配套阅读：[`ARCHITECTURE.md`](../ARCHITECTURE.md)、[`features.md`](./features.md)。
-> 当前版本：**v0.2.2**（见 `package.json`）。
+> 当前版本：**v0.2.3**（见 `package.json`）。
 
 ---
 
@@ -412,8 +412,8 @@ npm run build:win
 | 路径 | 说明 |
 | --- | --- |
 | `release/win-unpacked/` | 解包目录（中间产物，含 `locales/`、`*.pak`、`LICENSES.chromium.html` 等） |
-| `release/KunyaoGit-Setup-0.2.2-x64.exe` | 最终 NSIS 安装包（推荐分发） |
-| `release/KunyaoGit-Setup-0.2.2-x64.exe.blockmap` | 增量更新用 blockmap |
+| `release/KunyaoGit-Setup-0.2.3-x64.exe` | 最终 NSIS 安装包（推荐分发） |
+| `release/KunyaoGit-Setup-0.2.3-x64.exe.blockmap` | 增量更新用 blockmap |
 | `release/builder-debug.yml` | electron-builder 调试信息 |
 
 ### 7.4 便携版（可选）
@@ -480,15 +480,16 @@ copy /Y release\KunyaoGit-portable-v0.3.0.zip .release-assets\
 # 准备 token（优先环境变量；未设时脚本会从 git remote 'github' URL 提取 PAT）
 set GH_TOKEN=github_pat_XXX
 
-# 复用现有发布脚本模板：scripts/publish/publish-v022.cjs
+# 复用现有发布脚本模板：scripts/publish/publish-v023.cjs
 # 改 RELEASE_BODY 模板后另存为 scripts/publish/publish-v030.cjs
 node scripts/publish/publish-v030.cjs
 ```
 
-`publish-vXXX.cjs` 逻辑（以 `publish-v022.cjs` 为参考）：
+`publish-vXXX.cjs` 逻辑（以 `publish-v023.cjs` 为参考）：
 1. `GET /repos/{owner}/{repo}/releases/tags/vX.Y.Z`：已存在则复用，404 则创建
 2. `PATCH` 更新 release body
-3. 上传 `KunyaoGit-Setup-X.Y.Z-x64.exe` 与 `KunyaoGit-portable-vX.Y.Z.zip` 两个 asset（已存在则跳过）
+3. **流式上传** `KunyaoGit-Setup-X.Y.Z-x64.exe` 与 `KunyaoGit-portable-vX.Y.Z.zip`（`fs.createReadStream().pipe()`，避免大文件一次性读入内存；已存在则跳过）
+4. 全程日志写入 `publish-log.txt`（带 ISO 时间戳）
 
 已有 release 仅替换安装包：
 
@@ -497,13 +498,13 @@ node scripts/build/replace-installer.cjs    # 删旧 + 上传新
 node scripts/publish/upload-installer.cjs     # 更新 body + 跳过已存在 asset
 ```
 
-### 8.5 更新 Gitee Release 描述
+### 8.5 更新 Gitee Release 描述 + 上传安装包
 
 ```bash
-node scripts/publish/update-gitee-body.cjs    # 同步 Gitee Release body 为新版本内容
+node scripts/publish/update-gitee-body.cjs    # 同步 Gitee Release body + 流式上传安装包 attach file
 ```
 
-> `GT_TOKEN` 当前硬编码在脚本里（`package-portable.cjs` / `update-gitee-body.cjs`），**未来应改为 `process.env.GT_TOKEN`**（见陷阱 §9.7）。
+> v0.2.3 起 `update-gitee-body.cjs` 集成了安装包上传（multipart 流式），并优先读 `process.env.GT_TOKEN`，fallback 为脚本内硬编码值。全程日志写入 `publish-log.txt`。
 
 ### 8.6 提交 + push
 
@@ -599,16 +600,15 @@ Gitee 单文件 100 MB 上限。NSIS 安装包 > 100 MB 时 push 会被拒（`ex
 - 普通用户：只查 GitHub 一边也够用
 - 高级用户：配 Gitee token 后两边都查，取版本最高的
 
-### 9.7 `GT_TOKEN` 硬编码
+### 9.7 `GT_TOKEN` 硬编码 fallback
 
-`package-portable.cjs` / `update-gitee-body.cjs` 里硬编了 Gitee token。**这是安全隐患**，未来应改为：
+v0.2.3 起 `update-gitee-body.cjs` 已改为优先读 `process.env.GT_TOKEN`，仅在未设环境变量时 fallback 到脚本内硬编码值：
 
 ```js
-const GT_TOKEN = process.env.GT_TOKEN;
-if (!GT_TOKEN) { console.error('缺少 GT_TOKEN'); process.exit(1); }
+const GT_TOKEN = process.env.GT_TOKEN || 'a0d56558...';   // fallback
 ```
 
-并在发版时临时 `set GT_TOKEN=xxx`，不入库、不入日志。
+发版时建议临时 `set GT_TOKEN=xxx` 覆盖 fallback 值，避免令牌泄露到仓库。
 
 ### 9.8 `rcedit` v5 是 ESM-only（仅手工打包流程涉及）
 

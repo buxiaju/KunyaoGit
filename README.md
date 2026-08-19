@@ -49,7 +49,7 @@
 - 双平台 Token 一站式管理
 - 自定义 Git 可执行路径
 - 暗色主题
-- 多语言基础（中文优先）
+- **多语言切换**（中文 / English，设置页或侧边栏一键切换，v0.2.3）
 - **专属应用图标**（Jade 绿 + K + Git 分支节点）
 
 ## 截图
@@ -62,7 +62,7 @@
 从 [Releases](https://github.com/buxiaju/KunyaoGit/releases) 下载最新版 `KunyaoGit-Setup-0.2.3-x64.exe` 双击安装（NSIS 安装包，~86 MB，含完整 Electron 运行时 + 专属图标，创建桌面和开始菜单快捷方式）。
 
 - GitHub: https://github.com/buxiaju/KunyaoGit/releases/download/v0.2.3/KunyaoGit-Setup-0.2.3-x64.exe
-- Gitee:  https://gitee.com/buxiaju/KunyaoGit/releases/v0.2.3 （在 `.release-assets/` 目录获取安装包）
+- Gitee:  https://gitee.com/buxiaju/KunyaoGit/releases/download/v0.2.3/KunyaoGit-Setup-0.2.3-x64.exe
 
 便携版（不需安装）见同 Release 的 `KunyaoGit-portable-v0.2.3.zip`（~3.5 MB，解压后运行 `kunyaogit.exe`，需本机已安装 Node.js）。
 
@@ -129,6 +129,7 @@ KunyaoGit/
 │   ├── components/       # 通用 + 仓库相关组件
 │   ├── pages/            # 路由页面
 │   ├── stores/           # Zustand 状态（repo / settings / update）
+│   ├── i18n/             # 国际化（Context / useI18n / zh.ts / en.ts）
 │   ├── hooks/            # 自定义 hooks（更新检查等）
 │   └── styles/           # Tailwind 入口
 ├── shared/               # 渲染+主进程共享类型和 IPC 通道常量
@@ -157,7 +158,7 @@ KunyaoGit/
 - [ ] Git LFS 支持
 - [ ] 全局搜索
 - [ ] macOS / Linux 打包
-- [ ] 多语言（i18n）
+- [x] 多语言切换（中文 / English，v0.2.3）
 
 ## 贡献
 

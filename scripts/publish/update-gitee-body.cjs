@@ -1,6 +1,8 @@
-// Create / Update Gitee Release body to match GitHub
+// Create / Update Gitee Release: body + installer asset upload
 // Usage: node scripts/publish/update-gitee-body.cjs
 //   或 GT_TOKEN=xxx node scripts/publish/update-gitee-body.cjs
+// 日志: 同步写入项目根目录 publish-log.txt
+
 const https = require('node:https');
 const path = require('node:path');
 const fs = require('node:fs');
@@ -10,6 +12,19 @@ const TAG = `v${VERSION}`;
 const GT_TOKEN = process.env.GT_TOKEN || 'a0d56558c30d9a083fe33282b946cf95';
 const GT_OWNER = 'buxiaju';
 const REPO = 'KunyaoGit';
+const LOG_FILE = path.join(ROOT, 'publish-log.txt');
+
+// 安装包路径
+const INSTALLER = path.join(ROOT, '.release-assets', `KunyaoGit-Setup-${VERSION}-x64.exe`);
+const PORTABLE  = path.join(ROOT, '.release-assets', `KunyaoGit-portable-v${VERSION}.zip`);
+
+// ─── 日志 ───
+function log(msg) {
+  const ts = new Date().toISOString();
+  const line = `[${ts}] ${msg}`;
+  console.log(line);
+  fs.appendFileSync(LOG_FILE, line + '\n', 'utf-8');
+}
 
 const RELEASE_BODY = `# KunyaoGit v${VERSION}
 
@@ -22,7 +37,7 @@ const RELEASE_BODY = `# KunyaoGit v${VERSION}
 - ✨ **应用内自动更新** — 发现新版本时自动弹窗询问"立即下载并安装"，应用内多源下载（Gitee 优先、GitHub 兜底）带实时进度条，下载完成自动启动安装包并退出应用完成更新。
 
 ## 下载
-- **KunyaoGit-Setup-${VERSION}-x64.exe** — NSIS 安装包，仓库根目录 \`.release-assets/\` 下；推荐去 GitHub Release 下载（[https://github.com/buxiaju/KunyaoGit/releases/download/v${VERSION}/KunyaoGit-Setup-${VERSION}-x64.exe](https://github.com/buxiaju/KunyaoGit/releases/download/v${VERSION}/KunyaoGit-Setup-${VERSION}-x64.exe)）
+- **KunyaoGit-Setup-${VERSION}-x64.exe** — NSIS 安装包（推荐），可直接从本 Release 下载，也可在仓库根目录 \`.release-assets/\` 下获取
 - **KunyaoGit-portable-v${VERSION}.zip** — 便携版，仓库根目录 \`.release-assets/\` 下
 
 ## 升级
@@ -53,9 +68,13 @@ const RELEASE_BODY = `# KunyaoGit v${VERSION}
 - Gitee:  https://gitee.com/buxiaju/KunyaoGit
 `;
 
-function req(opts, body) {
+// ─── HTTP 请求（缓冲模式，用于 JSON API 调用）───
+function req(opts, body, contentType) {
   return new Promise((resolve, reject) => {
-    const r = https.request(opts, (res) => {
+    const headers = { ...opts.headers };
+    if (contentType) headers['Content-Type'] = contentType;
+    if (body) headers['Content-Length'] = Buffer.byteLength(body);
+    const r = https.request({ ...opts, headers }, (res) => {
       const cs = [];
       res.on('data', (c) => cs.push(c));
       res.on('end', () => {
@@ -66,13 +85,76 @@ function req(opts, body) {
       });
     });
     r.on('error', reject);
+    r.setTimeout(120000, () => { r.destroy(new Error('Request timeout (2min)')); });
     if (body) r.write(body);
     r.end();
   });
 }
 
-(async () => {
-  // 找 release
+// ─── multipart/form-data 构造（用于 Gitee attach_files 上传）───
+function buildMultipartFile(filePath, fieldName) {
+  const boundary = '----KunyaoGitBoundary' + Math.random().toString(16).slice(2);
+  const fileName = path.basename(filePath);
+  const fileBuf = fs.readFileSync(filePath);
+  const parts = [];
+  parts.push(Buffer.from(`--${boundary}\r\n`));
+  parts.push(Buffer.from(`Content-Disposition: form-data; name="${fieldName}"; filename="${fileName}"\r\n`));
+  parts.push(Buffer.from('Content-Type: application/octet-stream\r\n\r\n'));
+  parts.push(fileBuf);
+  parts.push(Buffer.from(`\r\n--${boundary}--\r\n`));
+  return { body: Buffer.concat(parts), contentType: `multipart/form-data; boundary=${boundary}` };
+}
+
+// ─── 流式上传（大文件用，避免内存峰值）───
+function streamUploadMultipart(opts, filePath, fieldName) {
+  return new Promise((resolve, reject) => {
+    const boundary = '----KunyaoGitBoundary' + Math.random().toString(16).slice(2);
+    const fileName = path.basename(filePath);
+    const fileSize = fs.statSync(filePath).size;
+
+    // 构造 multipart body 各部分
+    const head = Buffer.from(
+      `--${boundary}\r\n` +
+      `Content-Disposition: form-data; name="${fieldName}"; filename="${fileName}"\r\n` +
+      `Content-Type: application/octet-stream\r\n\r\n`
+    );
+    const tail = Buffer.from(`\r\n--${boundary}--\r\n`);
+    const totalSize = head.length + fileSize + tail.length;
+
+    const r = https.request({
+      hostname: opts.hostname, method: 'POST', path: opts.path,
+      headers: {
+        ...opts.headers,
+        'Content-Type': `multipart/form-data; boundary=${boundary}`,
+        'Content-Length': totalSize,
+      },
+    }, (res) => {
+      const cs = [];
+      res.on('data', (c) => cs.push(c));
+      res.on('end', () => {
+        const text = Buffer.concat(cs).toString('utf-8');
+        let json = null;
+        try { json = JSON.parse(text); } catch {}
+        resolve({ status: res.statusCode, text, json });
+      });
+    });
+    r.on('error', reject);
+    r.setTimeout(600000, () => { r.destroy(new Error('Upload timeout (10min)')); });
+
+    // 先写 head，再 pipe 文件流，最后写 tail
+    r.write(head);
+    const stream = fs.createReadStream(filePath);
+    stream.on('end', () => { r.write(tail); r.end(); });
+    stream.on('error', reject);
+    stream.pipe(r, { end: false });
+  });
+}
+
+async function main() {
+  log('========== Gitee Release 发布开始 ==========');
+  log(`版本: ${VERSION}  Tag: ${TAG}`);
+
+  // 1. 查找 release
   const list = await req({
     hostname: 'gitee.com', method: 'GET',
     path: `/api/v5/repos/${GT_OWNER}/${REPO}/releases?access_token=${GT_TOKEN}`,
@@ -82,7 +164,7 @@ function req(opts, body) {
 
   if (!r) {
     // 创建 release
-    console.log('创建 Gitee release', TAG);
+    log('创建 Gitee release ' + TAG);
     const body = JSON.stringify({
       tag_name: TAG,
       name: `KunyaoGit v${VERSION}`,
@@ -92,20 +174,16 @@ function req(opts, body) {
     const c = await req({
       hostname: 'gitee.com', method: 'POST',
       path: `/api/v5/repos/${GT_OWNER}/${REPO}/releases?access_token=${GT_TOKEN}`,
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(body),
-        'User-Agent': 'KunyaoGit-publish',
-      },
-    }, body);
+      headers: { 'User-Agent': 'KunyaoGit-publish' },
+    }, body, 'application/json');
     if (c.status !== 201) throw new Error('Create failed: ' + c.status + ' ' + c.text);
     r = c.json;
-    console.log('✅ Release 创建', r.html_url);
+    log('✅ Release 创建 ' + (r.html_url || '(id:' + r.id + ')'));
   } else {
-    console.log('找到 release id', r.id, r.html_url);
+    log('找到 release id ' + r.id);
   }
 
-  // PATCH body
+  // 2. PATCH body
   const body = JSON.stringify({
     tag_name: r.tag_name,
     name: r.name,
@@ -114,12 +192,42 @@ function req(opts, body) {
   const u = await req({
     hostname: 'gitee.com', method: 'PATCH',
     path: `/api/v5/repos/${GT_OWNER}/${REPO}/releases/${r.id}?access_token=${GT_TOKEN}`,
-    headers: {
-      'Content-Type': 'application/json',
-      'Content-Length': Buffer.byteLength(body),
-      'User-Agent': 'KunyaoGit-publish',
-    },
-  }, body);
+    headers: { 'User-Agent': 'KunyaoGit-publish' },
+  }, body, 'application/json');
   if (u.status !== 200) throw new Error('PATCH failed: ' + u.status + ' ' + u.text);
-  console.log('✅ body updated');
-})().catch(e => { console.error('[err]', e.message); process.exit(1); });
+  log('✅ body 已更新');
+
+  // 3. 上传 assets（安装包 + 便携版）
+  const attachList = await req({
+    hostname: 'gitee.com', method: 'GET',
+    path: `/api/v5/repos/${GT_OWNER}/${REPO}/releases/${r.id}/attach_files?access_token=${GT_TOKEN}`,
+    headers: { 'User-Agent': 'KunyaoGit-publish' },
+  });
+  const existingNames = new Set((attachList.json || []).map(a => a.name));
+  log('已有 attach files: ' + ([...existingNames].join(', ') || '(空)'));
+
+  for (const f of [INSTALLER, PORTABLE].filter(p => fs.existsSync(p))) {
+    const fileName = path.basename(f);
+    if (existingNames.has(fileName)) {
+      log('跳过（已存在）: ' + fileName);
+      continue;
+    }
+    const fileSize = fs.statSync(f).size;
+    log(`流式上传 ${fileName} (${(fileSize/1024/1024).toFixed(2)} MB) 到 Gitee`);
+    const up = await streamUploadMultipart({
+      hostname: 'gitee.com',
+      path: `/api/v5/repos/${GT_OWNER}/${REPO}/releases/${r.id}/attach_files?access_token=${GT_TOKEN}`,
+      headers: { 'User-Agent': 'KunyaoGit-publish' },
+    }, f, 'file');
+    if (up.status !== 201 && up.status !== 200) {
+      log('⚠️ 上传失败: ' + up.status + ' ' + up.text);
+      continue;
+    }
+    log('✅ 上传成功: ' + fileName);
+  }
+
+  log('🎉 Gitee 发布完成 (release id: ' + r.id + ')');
+  log('========== Gitee Release 发布结束 ==========\n');
+}
+
+main().catch(e => { log('[err] ' + e.message); process.exit(1); });
