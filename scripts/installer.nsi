@@ -15,6 +15,13 @@ SetDatablockOptimize on
   !define APP_VERSION "0.1.0"
 !endif
 
+; Output dir name can be overridden via /DUNPACKED_DIR= (default win-unpacked-v2).
+; Use this when the old dir is locked by orphan kunyaogit processes and
+; build-unpacked.cjs writes to a fresh dir name.
+!ifndef UNPACKED_DIR
+  !define UNPACKED_DIR "win-unpacked-v2"
+!endif
+
 !define APP_NAME "KunyaoGit"
 !define APP_DISPLAY_NAME "KunyaoGit"
 !define APP_PUBLISHER "kunyao"
@@ -73,7 +80,7 @@ Section "-Install" SecInstall
     RMDir /r "$INSTDIR\resources\app"
 
   ; Copy all unpacked files except the existing uninstaller
-  File /r "..\release\win-unpacked-v2\*.*"
+  File /r "..\release\${UNPACKED_DIR}\*.*"
 
   ; Write uninstaller
   WriteUninstaller "$INSTDIR\Uninstall.exe"

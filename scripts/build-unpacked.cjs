@@ -22,7 +22,10 @@ const SOURCE_ELECTRON_DIST = path.join(ROOT, 'node_modules', 'electron', 'dist')
 const DIST = path.join(ROOT, 'dist');
 const DIST_ELECTRON = path.join(ROOT, 'dist-electron');
 
-const TARGET = path.join(ROOT, 'release', 'win-unpacked-v2');
+// 输出目录名可由环境变量覆盖：旧目录被孤儿 kunyaogit 进程锁住时，
+// 设 $env:UNPACKED_DIR='win-unpacked-v2b' 再跑即可绕开。
+const TARGET_NAME = process.env.UNPACKED_DIR || 'win-unpacked-v2';
+const TARGET = path.join(ROOT, 'release', TARGET_NAME);
 const APP_RESOURCES = path.join(TARGET, 'resources');
 const STAGE = path.join(ROOT, 'release', 'app-stage');
 const ASAR_BIN = path.join(ROOT, 'node_modules', '@electron', 'asar', 'bin', 'asar.js');
@@ -41,7 +44,20 @@ function copyDir(src, dst) {
 
 function rmrf(p) {
   if (!fs.existsSync(p)) return;
-  fs.rmSync(p, { recursive: true, force: true });
+  try {
+    fs.rmSync(p, { recursive: true, force: true });
+  } catch (e) {
+    // 文件被锁（通常是上次"试启动"留下的孤儿 kunyaogit 子进程锁住 app.asar）
+    // 尝试把目录改名让路，使构建可以继续；改名也失败就抛出
+    const stale = p + '_stale_' + Date.now();
+    try {
+      fs.renameSync(p, stale);
+      log('   原目录被锁，已改名为', stale, '（构建完后可手动删除）');
+    } catch (e2) {
+      throw new Error('无法清理 ' + p + '：' + e.message + '；改名也失败：' + e2.message +
+        '。请手动杀掉残留 kunyaogit 进程后重试：Get-Process kunyaogit -ErrorAction SilentlyContinue | Stop-Process -Force');
+    }
+  }
 }
 
 async function main() {
@@ -124,17 +140,8 @@ async function main() {
   log('位置:', TARGET);
   log('主程序:', path.join(TARGET, PRODUCT + '.exe'), '(' + (fs.statSync(path.join(TARGET, PRODUCT + '.exe')).size / 1024 / 1024).toFixed(2) + ' MB)');
   log('app.asar:', asarOut, '(' + asarSize + ' MB)');
-
-  // 试启动
-  log('--- 试启动（3 秒后自动关） ---');
-  try {
-    const exe = path.join(TARGET, PRODUCT + '.exe');
-    const p = require('node:child_process').spawn(exe, [], { detached: true, stdio: 'ignore' });
-    setTimeout(() => { try { process.kill(p.pid); } catch {} }, 3000);
-    log('启动了 (pid ' + p.pid + ')，3 秒后自动 kill');
-  } catch (e) {
-    log('试启动失败（可忽略）:', e.message);
-  }
+  log('提示：构建完产物未自动启动；如需手测请运行 ' + path.join(TARGET, PRODUCT + '.exe') +
+    '，并在退出后用 taskkill /F /IM ' + PRODUCT + '.exe /T 清理子进程，避免锁住 app.asar');
 }
 
 main();

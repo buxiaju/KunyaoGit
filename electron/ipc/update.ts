@@ -1,6 +1,6 @@
 // 更新检查 IPC
 
-import { ipcMain, shell, app } from 'electron';
+import { ipcMain, shell } from 'electron';
 import { IPC } from '../../shared/ipc-channels';
 import { checkForUpdate, type UpdateCheckResult } from '../services/update';
 import { store } from '../services/settings';
@@ -48,6 +48,6 @@ export function registerUpdateHandlers() {
     }
   });
 
-  // 当前版本
-  ipcMain.handle('app:get-version', () => app.getVersion());
+  // 注：'app:get-version' 已在 main.ts 与 app:get-platform / app:open-external 一组注册，
+  // 这里不再重复注册，否则会抛 "Attempted to register a second handler" 并阻断 createWindow。
 }
