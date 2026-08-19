@@ -1,5 +1,5 @@
-// Update Gitee Release v0.2.0 body to match GitHub
-// Usage: GT_TOKEN=xxx node scripts/update-gitee-body.cjs
+// Create / Update Gitee Release v0.2.2 body to match GitHub
+// Usage: node scripts/update-gitee-body.cjs
 const https = require('node:https');
 const path = require('node:path');
 const fs = require('node:fs');
@@ -12,16 +12,22 @@ const REPO = 'KunyaoGit';
 
 const RELEASE_BODY = `# KunyaoGit v${VERSION}
 
-## v0.2.1 修复
-- 🐛 **修复 v0.2.0 无法启动** — \`app:get-version\` IPC handler 在 update.ts 和 main.ts 中重复注册，启动时抛 \`Attempted to register a second handler\` 阻断了 \`createWindow()\`，导致进程在跑但窗口不显示。移除 update.ts 中的重复注册。
-- 🐛 **修复图标棋盘格背景** — 源图 \`icon-master.png\` 背景被烧成"白格+灰格"棋盘格（图像编辑器表示透明的符号被错误固化进位图），现改为真透明，在任何颜色任务栏/桌面上只显示 Jade 绿 logo，不再有一圈格子。
+## v0.2.2 新特性
+- ✨ **应用内自动更新** — 发现新版本时自动弹窗询问"立即下载并安装"，应用内多源下载（Gitee 优先、GitHub 兜底）带实时进度条，下载完成自动启动安装包并退出应用完成更新，无需手动去浏览器下载。
+- 🎨 设置页"关于"区新增"立即下载并安装"按钮，可随时触发更新流程。
+- 🛠 支持取消下载、错误重试、浏览器兜底下载。
+
+## v0.2.1 修复（沿用）
+- 🐛 **修复 v0.2.0 无法启动** — \`app:get-version\` IPC handler 重复注册导致启动时抛错阻断 \`createWindow()\`。
+- 🐛 **修复图标棋盘格背景** — 源图透明符号被错误固化进位图，现改为真透明。
 
 ## 下载
 - **KunyaoGit-Setup-${VERSION}-x64.exe** — NSIS 安装包，仓库根目录 \`.release-assets/\` 下；推荐去 GitHub Release 下载（[https://github.com/buxiaju/KunyaoGit/releases/download/v${VERSION}/KunyaoGit-Setup-${VERSION}-x64.exe](https://github.com/buxiaju/KunyaoGit/releases/download/v${VERSION}/KunyaoGit-Setup-${VERSION}-x64.exe)）
-- **KunyaoGit-portable-v${VERSION}.zip** — 便携版（3.5 MB），仓库根目录 \`.release-assets/\` 下
+- **KunyaoGit-portable-v${VERSION}.zip** — 便携版，仓库根目录 \`.release-assets/\` 下
 
 ## 升级
-如果装的是 v0.2.0（双击没反应、看不到窗口），卸载后安装 v0.2.1 即可。v0.2.1 启动后会自动检查新版本。
+- **v0.2.0 / v0.2.1 用户**：启动应用后会自动检查更新并弹窗，点"立即下载并安装"即可一键更新到 v${VERSION}。也可手动下载安装包覆盖安装。
+- 应用内更新会优先从 Gitee 下载（国内快），失败时自动切换 GitHub 兜底。
 
 ## 安装
 下载 Setup .exe → 双击运行 → 选择安装目录 → 安装完成。
@@ -39,7 +45,7 @@ const RELEASE_BODY = `# KunyaoGit v${VERSION}
 - Release 管理
 - 内容搜索
 - 自动 CHANGELOG 生成
-- 自动更新检查（启动后 1.5s 静默检测，发现新版本弹窗提示）
+- **应用内自动更新**（启动后静默检测，发现新版本弹窗 → 应用内下载 → 自动安装）
 
 ## 仓库
 - GitHub: https://github.com/buxiaju/KunyaoGit
@@ -65,17 +71,40 @@ function req(opts, body) {
 }
 
 (async () => {
-  // 找 release id
+  // 找 release
   const list = await req({
     hostname: 'gitee.com', method: 'GET',
     path: `/api/v5/repos/${GT_OWNER}/${REPO}/releases?access_token=${GT_TOKEN}`,
     headers: { 'User-Agent': 'KunyaoGit-publish' },
   });
-  const r = (list.json || []).find(x => x.tag_name === TAG);
-  if (!r) throw new Error('release not found');
-  console.log('找到 release id', r.id, r.html_url);
+  let r = (list.json || []).find(x => x.tag_name === TAG);
 
-  // PATCH body (Gitee 需要带 tag_name 和 name)
+  if (!r) {
+    // 创建 release
+    console.log('创建 Gitee release', TAG);
+    const body = JSON.stringify({
+      tag_name: TAG,
+      name: `KunyaoGit v${VERSION}`,
+      body: RELEASE_BODY,
+      target_commitish: 'master',
+    });
+    const c = await req({
+      hostname: 'gitee.com', method: 'POST',
+      path: `/api/v5/repos/${GT_OWNER}/${REPO}/releases?access_token=${GT_TOKEN}`,
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body),
+        'User-Agent': 'KunyaoGit-publish',
+      },
+    }, body);
+    if (c.status !== 201) throw new Error('Create failed: ' + c.status + ' ' + c.text);
+    r = c.json;
+    console.log('✅ Release 创建', r.html_url);
+  } else {
+    console.log('找到 release id', r.id, r.html_url);
+  }
+
+  // PATCH body
   const body = JSON.stringify({
     tag_name: r.tag_name,
     name: r.name,
