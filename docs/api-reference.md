@@ -2,6 +2,8 @@
 
 > 本文档面向 KunyaoGit Electron 应用的开发者，全面描述渲染进程可用的 `window.gitgui` API、共享类型定义、主进程配置以及 IPC 通道清单。
 >
+> 适用版本：**v0.2.6**（v0.2.3+ 主题与语言、v0.2.4+ 下载速度优化、v0.2.5+ 三主题切换、v0.2.6+ 探活修复）
+>
 > 源码依据：
 > - `shared/ipc-channels.ts`
 > - `shared/types.ts`
@@ -187,13 +189,16 @@ KunyaoGit 是基于 Electron 构建的图形化 Git 客户端，支持 GitHub �
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
-| `theme` | `'dark' \| 'light'` | 主题 |
+| `theme` | `'dark' \| 'ocean' \| 'light'` | ★ v0.2.5：UI 主题（暗色 / 深蓝 / 亮色），默认 `'dark'` |
+| `language` | `'zh' \| 'en'` | ★ v0.2.3：界面语言，默认 `'zh'` |
 | `gitPath?` | `string` | 自定义 git 可执行文件路径 |
 | `defaultCloneDir` | `string` | 默认克隆目录 |
 | `authorName?` | `string` | 提交者姓名覆盖 |
 | `authorEmail?` | `string` | 提交者邮箱覆盖 |
 | `diffView` | `'unified' \| 'split'` | diff 视图样式 |
 | `auth` | `AuthConfig` | 平台鉴权配置 |
+
+> 配套类型 `Theme = 'dark' \| 'ocean' \| 'light'`（独立 export）。
 
 ### 2.12 `ReleaseInfo`
 
@@ -346,6 +351,7 @@ export type DownloadPhase = 'preparing' | 'downloading' | 'done' | 'error' | 'ca
 | `source?` | `'gitee' \| 'github'` | 当前正在下载的源 |
 | `message?` | `string` | `error` / `done` 阶段的说明 |
 | `filePath?` | `string` | `done` 阶段返回的本地安装包路径 |
+| `speedBps?` | `number` | ★ v0.2.4：瞬时下载速率（字节/秒），`downloading` 阶段填 |
 
 ---
 
@@ -551,6 +557,9 @@ export type DownloadPhase = 'preparing' | 'downloading' | 'done' | 'error' | 'ca
 - 调用完成后（无论成功或失败）通过 `finally` 自动移除监听器，避免泄漏。
 
 下载进度事件阶段流转：`preparing` → `downloading` → `done`，异常时为 `error`，用户取消时为 `cancelled`。
+
+> ★ v0.2.4+：下载过程走 4 路并发 HTTP Range（实测提速 3~6 倍），`speedBps` 字段实时填入速率
+> ★ v0.2.6+：探活改用 `Range: bytes=0-0` GET（兼容部分 CDN/防火墙对 HEAD 的限制），错误信息汇总所有源失败原因
 
 ---
 
@@ -794,6 +803,50 @@ export type IpcChannel = (typeof IPC)[keyof typeof IPC];
 ```
 
 `IpcChannel` 联合类型涵盖 `IPC` 对象中所有字符串字面量，便于主进程在注册处理器时获得类型约束。
+
+---
+
+## 6. 内部事件（v0.2.5+）
+
+主进程不通过 IPC 通道广播的运行时事件，由 `window.dispatchEvent` 在渲染层派发 CustomEvent。
+
+| 事件名 | 载荷 | 触发时机 | 监听方 |
+| --- | --- | --- | --- |
+| `kg-theme-change` | `Theme` (`'dark' \| 'ocean' \| 'light'`) | ★ v0.2.5：用户切换主题 / 启动时同步主题 | `EditorPane` / `RepoDetailPage` 的 Monaco 主题同步逻辑 |
+
+### 6.1 `kg-theme-change` 用法
+
+```ts
+// 监听主题变化（典型用途：同步 Monaco 编辑器主题）
+window.addEventListener('kg-theme-change', (e: CustomEvent<Theme>) => {
+  const theme = e.detail;
+  // window.monaco?.editor?.setTheme(theme === 'light' ? 'vs' : 'vs-dark');
+});
+
+// 当前主题（同步读：document.documentElement.getAttribute('data-theme')）
+const current = document.documentElement.getAttribute('data-theme');
+```
+
+### 6.2 相关 hook
+
+```ts
+// src/hooks/useTheme.ts
+import { useThemeSync, setTheme, THEME_LIST, monacoThemeFor } from '@/hooks/useTheme';
+
+// 在 App 根挂一次（已挂，见 src/App.tsx）
+useThemeSync();
+
+// 编程式切换（持久化）
+await setTheme('ocean');
+
+// 主题列表（用于渲染 UI）
+THEME_LIST.forEach(th => console.log(th.value, th.labelZh, th.labelEn, th.swatch));
+
+// Monaco 主题映射
+monacoThemeFor('light');   // 'vs'
+monacoThemeFor('ocean');   // 'vs-dark'
+monacoThemeFor('dark');    // 'vs-dark'
+```
 
 ---
 

@@ -1,7 +1,7 @@
 # KunyaoGit 开发指南
 
 > 面向接手开发者的完整开发 / 打包 / 发布手册。配套阅读：[`ARCHITECTURE.md`](../ARCHITECTURE.md)、[`features.md`](./features.md)。
-> 当前版本：**v0.2.3**（见 `package.json`）。
+> 当前版本：**v0.2.6**（v0.2.3+ 多语言、v0.2.4+ 下载提速、v0.2.5+ 三主题、v0.2.6+ 探活修复）。
 
 ---
 
@@ -127,13 +127,18 @@ KunyaoGit/
 │   │       ├── FileTree.tsx
 │   │       └── RemotePanel.tsx
 │   ├── hooks/
-│   │   └── useUpdateCheck.ts   # 启动 1.5s 后静默检查
+│   │   ├── useUpdateCheck.ts   # 启动 1.5s 后静默检查
+│   │   └── useTheme.ts         # ★ v0.2.5：主题管理（同步 data-theme + 派发 kg-theme-change 事件）
 │   ├── stores/               #   Zustand 状态
 │   │   ├── repo.ts
 │   │   ├── settings.ts
 │   │   └── update.ts
+│   ├── i18n/                  # ★ v0.2.3：国际化
+│   │   ├── index.tsx           #   I18nProvider / useI18n hook
+│   │   ├── zh.ts               #   中文翻译字典
+│   │   └── en.ts               #   英文翻译字典
 │   └── styles/
-│       └── index.css         #   Tailwind 入口 + 自定义组件类
+│       └── index.css         #   Tailwind 入口 + ★ v0.2.5 CSS 变量主题 + 自定义组件类
 │
 ├── scripts/                  # 打包 / 发布 / 调试脚本（.cjs / .ps1 / .nsi）
 ├── assets/                   # 应用图标源（icon-master.png + icon.ico）
@@ -407,6 +412,27 @@ npm run build:win
 
 > 如需本地覆盖输出目录等配置，可创建 `.build-config.json`（已 gitignore），用 `npx electron-builder --win --config .build-config.json` 运行。
 
+### 7.2.1 避开 win-unpacked 文件锁
+
+若 `release/win-unpacked/resources/default_app.asar` 被 IDE 文件监视器或 KunyaoGit 残留进程锁住，构建会卡 `ECONNRESET` / `EBUSY`。**临时把 output 目录改到新路径**是最稳的绕法：
+
+```jsonc
+// package.json
+"build": {
+  "directories": {
+    "output": "release-v026"   // 临时改这里（记得发完改回 "release"）
+  }
+}
+```
+
+```bash
+npm run build:win
+# 产物在 release-v026/KunyaoGit-Setup-X.Y.Z-x64.exe
+# 拷过去 + 把 .gitignore 加上 release-v026/（每个版本号都加一次）+ commit
+```
+
+发完版后改回 `"output": "release"`，并把 `release-vXXX/` 整目录删掉（已 gitignored，删不动的话用 `scripts/debug/force-clean-skip.cjs`）。
+
 ### 7.3 产物
 
 | 路径 | 说明 |
@@ -645,6 +671,26 @@ npm i -D png-to-ico sharp rcedit @electron/asar
 ```
 
 （后两个会作为 electron-builder 传递依赖自动装，前两个需手动。）
+
+### 9.13 ★ v0.2.6+：更新器探活别用 HEAD
+
+`electron/ipc/update.ts` 的 `probeRange()` 必须用 `Range: bytes=0-0` GET，**不要**改回 HEAD。
+
+- 原因：部分 CDN/防火墙对 HEAD 更敏感（直接 403 / 超时），导致 `github: HEAD 失败` 误导性错误
+- 当前实现：先用 GET 拿 1 字节，206 响应里 `Content-Range` 直接给到 total；200 响应里 `Content-Length` 是 total
+- 拿到 header 后立即 `res.destroy()`，避免 200 情况把整文件拉下来
+- 改探活时务必同时更新 `error` 汇总（`failedSources`）和 15s 超时
+
+### 9.14 ★ v0.2.4+：下载器的多连接并发
+
+`downloadByRange()` 默认 4 路并发。改这个数字时考虑：
+
+- 用户网络/磁盘吞吐（家用 100M 宽带 4 路正好）
+- `keepAliveHttpsAgent.maxSockets = CHUNK_COUNT + 2` 要同步
+- `CHUNK_RETRY = 3` 重试次数对每 chunk 独立
+- `RANGE_TIMEOUT_MS = 30000` 是单 chunk 超时
+
+误改可能导致「4 路慢、1 路反而快」或「chunk 失败风暴」，上线前一定用 `scripts/debug/test-download-speed.cjs` 验证。
 
 ---
 
