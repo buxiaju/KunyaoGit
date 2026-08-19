@@ -6,7 +6,7 @@
 
 > 一个跨平台 Git 桌面客户端（Windows / macOS / Linux），深度集成 **GitHub** 和 **Gitee**（码云）。
 
-![Electron](https://img.shields.io/badge/Electron-33-9feaf9) ![React](https://img.shields.io/badge/React-18-61dafb) ![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178c6) ![License](https://img.shields.io/badge/license-MIT-green) ![Version](https://img.shields.io/badge/version-v0.2.2-22c55e)
+![Electron](https://img.shields.io/badge/Electron-33-9feaf9) ![React](https://img.shields.io/badge/React-18-61dafb) ![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178c6) ![License](https://img.shields.io/badge/license-MIT-green) ![Version](https://img.shields.io/badge/version-v0.2.3-22c55e)
 
 ## 特性
 
@@ -59,12 +59,12 @@
 ## 安装
 
 ### Windows（推荐）
-从 [Releases](https://github.com/buxiaju/KunyaoGit/releases) 下载最新版 `KunyaoGit-Setup-0.2.2-x64.exe` 双击安装（NSIS 安装包，~86 MB，含完整 Electron 运行时 + 专属图标，创建桌面和开始菜单快捷方式）。
+从 [Releases](https://github.com/buxiaju/KunyaoGit/releases) 下载最新版 `KunyaoGit-Setup-0.2.3-x64.exe` 双击安装（NSIS 安装包，~86 MB，含完整 Electron 运行时 + 专属图标，创建桌面和开始菜单快捷方式）。
 
-- GitHub: https://github.com/buxiaju/KunyaoGit/releases/download/v0.2.2/KunyaoGit-Setup-0.2.2-x64.exe
-- Gitee:  https://gitee.com/buxiaju/KunyaoGit/releases/v0.2.2 （在 `.release-assets/` 目录获取安装包）
+- GitHub: https://github.com/buxiaju/KunyaoGit/releases/download/v0.2.3/KunyaoGit-Setup-0.2.3-x64.exe
+- Gitee:  https://gitee.com/buxiaju/KunyaoGit/releases/v0.2.3 （在 `.release-assets/` 目录获取安装包）
 
-便携版（不需安装）见同 Release 的 `KunyaoGit-portable-v0.2.2.zip`（~3.5 MB，解压后运行 `kunyaogit.exe`，需本机已安装 Node.js）。
+便携版（不需安装）见同 Release 的 `KunyaoGit-portable-v0.2.3.zip`（~3.5 MB，解压后运行 `kunyaogit.exe`，需本机已安装 Node.js）。
 
 ### 自动更新
 安装后启动时会自动检查新版本，发现新版本后弹窗提示，可在弹窗内直接「立即下载并安装」（多源下载带进度条，下载完成自动启动安装包）。也可选择「打开下载页 / 忽略此版本」。如关闭了自动检查，可在 设置 → 关于 中手动「检查更新」。
@@ -85,7 +85,7 @@ npm run dev     # 开发模式（带热更新）
 
 ### 自己打包
 ```bash
-npm run build:win   # 产出 release/KunyaoGit-Setup-0.2.2-x64.exe
+npm run build:win   # 产出 release/KunyaoGit-Setup-0.2.3-x64.exe
 ```
 
 ## 配置 GitHub / Gitee Token

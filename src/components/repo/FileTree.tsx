@@ -1,14 +1,16 @@
 import { useState } from 'react';
 import { useRepoStore } from '../../stores/repo';
+import { useI18n } from '../../i18n';
 import { FolderGit2, Folder, File as FileIcon, ChevronRight, ChevronDown } from 'lucide-react';
 
 export default function FileTree() {
   const { fileTree, selectedFile, selectFileForEdit } = useRepoStore();
+  const { t } = useI18n();
 
   return (
     <div className="h-full border-r border-gray-800 overflow-auto">
       <div className="px-3 py-2 text-xs text-gray-500 border-b border-gray-800 bg-gray-900/50 sticky top-0">
-        文件浏览
+        {t('files.browserTitle')}
       </div>
       <div className="p-1 text-sm">
         {fileTree.map((n) => (

@@ -1,13 +1,15 @@
 import { useRepoStore } from '../../stores/repo';
+import { useI18n } from '../../i18n';
 import { formatDistanceToNow } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import { GitCommit, Tag } from 'lucide-react';
 
 export default function CommitHistory() {
   const log = useRepoStore((s) => s.log);
+  const { t } = useI18n();
 
   if (log.length === 0) {
-    return <div className="h-full flex items-center justify-center text-gray-500 text-sm">暂无提交</div>;
+    return <div className="h-full flex items-center justify-center text-gray-500 text-sm">{t('history.empty')}</div>;
   }
 
   return (

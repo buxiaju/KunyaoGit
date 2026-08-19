@@ -1,11 +1,13 @@
 import { useRepoStore } from '../../stores/repo';
 import { useSettingsStore } from '../../stores/settings';
+import { useI18n } from '../../i18n';
 import { Loader2, FileCode, ArrowLeftRight } from 'lucide-react';
 import { useState } from 'react';
 
 export default function DiffViewer() {
   const { current, currentDiff, selectedFile } = useRepoStore();
   const { settings } = useSettingsStore();
+  const { t } = useI18n();
 
   if (!current) return null;
 
@@ -14,7 +16,7 @@ export default function DiffViewer() {
       <div className="h-full flex items-center justify-center text-gray-500 text-sm">
         <div className="text-center">
           <FileCode size={32} className="mx-auto mb-2 opacity-50" />
-          <div>选择一个文件查看变更</div>
+          <div>{t('diff.selectFileHint')}</div>
         </div>
       </div>
     );
@@ -23,7 +25,7 @@ export default function DiffViewer() {
   if (!currentDiff) {
     return (
       <div className="h-full flex items-center justify-center text-gray-500 text-sm">
-        <Loader2 size={20} className="animate-spin mr-2" /> 加载 diff...
+        <Loader2 size={20} className="animate-spin mr-2" /> {t('diff.loading')}
       </div>
     );
   }
@@ -31,7 +33,7 @@ export default function DiffViewer() {
   if (currentDiff.isBinary) {
     return (
       <div className="h-full flex items-center justify-center text-gray-500 text-sm">
-        二进制文件，无法显示 diff
+        {t('diff.binaryFile')}
       </div>
     );
   }

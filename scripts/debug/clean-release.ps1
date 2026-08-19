@@ -28,5 +28,27 @@ if (Test-Path $rel2) {
 }
 
 Write-Host ""
+Write-Host "Cleaning leftover release3/ ..."
+$rel3 = Join-Path $root "release3"
+if (Test-Path $rel3) {
+    Remove-Item $rel3 -Recurse -Force -ErrorAction SilentlyContinue
+    if (Test-Path $rel3) { Write-Host "  SKIP (still locked) - make sure IDE is fully closed" }
+    else { Write-Host "  DELETED: release3/" }
+} else {
+    Write-Host "  release3/ does not exist (already clean)"
+}
+
+Write-Host ""
+Write-Host "Cleaning win-unpacked/ in release\ (may contain locked asar) ..."
+$winUnpacked = Join-Path $root "release\win-unpacked"
+if (Test-Path $winUnpacked) {
+    Remove-Item $winUnpacked -Recurse -Force -ErrorAction SilentlyContinue
+    if (Test-Path $winUnpacked) { Write-Host "  SKIP (still locked) - make sure IDE is fully closed" }
+    else { Write-Host "  DELETED: release\win-unpacked" }
+} else {
+    Write-Host "  release\win-unpacked does not exist (already clean)"
+}
+
+Write-Host ""
 Write-Host "Done. Current contents of release\:"
 Get-ChildItem (Join-Path $root "release") -Name

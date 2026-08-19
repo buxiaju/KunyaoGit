@@ -7,6 +7,7 @@ const execFileAsync = promisify(execFile);
 
 const DEFAULT_SETTINGS: AppSettings = {
   theme: 'dark',
+  language: 'zh',
   defaultCloneDir: '',
   diffView: 'split',
   auth: {},

@@ -80,6 +80,7 @@ export interface AuthConfig {
 
 export interface AppSettings {
   theme: 'dark' | 'light';
+  language: 'zh' | 'en';
   gitPath?: string;
   defaultCloneDir: string;
   authorName?: string;

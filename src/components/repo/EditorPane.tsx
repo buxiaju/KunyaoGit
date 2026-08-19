@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Editor, { OnMount } from '@monaco-editor/react';
 import { useRepoStore } from '../../stores/repo';
+import { useI18n } from '../../i18n';
 import { Save, Loader2, FileCode, RefreshCw } from 'lucide-react';
 import { toast } from '../common/Toast';
 
@@ -19,6 +20,7 @@ function detectLanguage(path: string): string {
 
 export default function EditorPane() {
   const { current, selectedFile, fileContent, fileDirty, fileLoading, loadFile, saveFile, closeFile } = useRepoStore();
+  const { t } = useI18n();
   const editorRef = useRef<any>(null);
   const [saving, setSaving] = useState(false);
 
@@ -35,7 +37,7 @@ export default function EditorPane() {
       <div className="h-full flex items-center justify-center text-gray-500 text-sm">
         <div className="text-center">
           <FileCode size={32} className="mx-auto mb-2 opacity-50" />
-          <div>从左侧文件树选择一个文件</div>
+          <div>{t('files.selectFileHint')}</div>
         </div>
       </div>
     );
@@ -44,7 +46,7 @@ export default function EditorPane() {
   if (fileLoading) {
     return (
       <div className="h-full flex items-center justify-center text-gray-500 text-sm">
-        <Loader2 size={16} className="animate-spin mr-2" /> 加载中…
+        <Loader2 size={16} className="animate-spin mr-2" /> {t('files.loading')}
       </div>
     );
   }
@@ -63,8 +65,8 @@ export default function EditorPane() {
     setSaving(true);
     try {
       const r = await saveFile(selectedFile);
-      if (r.ok) toast.success('已保存');
-      else toast.error('保存失败：' + r.error);
+      if (r.ok) toast.success(t('files.saved'));
+      else toast.error(t('files.saveFailed', { error: r.error || '' }));
     } finally {
       setSaving(false);
     }
@@ -76,18 +78,18 @@ export default function EditorPane() {
         <div className="flex items-center gap-2 min-w-0">
           <FileCode size={14} className="text-primary-400 flex-shrink-0" />
           <span className="truncate font-mono text-xs">{selectedFile}</span>
-          {fileDirty && <span className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0" title="未保存" />}
+          {fileDirty && <span className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0" title={t('files.unsaved')} />}
         </div>
         <div className="flex items-center gap-1">
-          <button onClick={() => selectedFile && loadFile(selectedFile)} className="btn-ghost p-1" title="重新加载">
+          <button onClick={() => selectedFile && loadFile(selectedFile)} className="btn-ghost p-1" title={t('files.reload')}>
             <RefreshCw size={13} />
           </button>
-          <button onClick={closeFile} className="btn-ghost p-1 text-xs" title="关闭">
+          <button onClick={closeFile} className="btn-ghost p-1 text-xs" title={t('files.close')}>
             ×
           </button>
           <button onClick={doSave} disabled={!fileDirty || saving} className="btn-primary text-xs">
             {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
-            保存
+            {t('files.save')}
           </button>
         </div>
       </div>

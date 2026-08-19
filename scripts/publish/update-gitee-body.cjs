@@ -1,32 +1,32 @@
-// Create / Update Gitee Release v0.2.2 body to match GitHub
+// Create / Update Gitee Release body to match GitHub
 // Usage: node scripts/publish/update-gitee-body.cjs
+//   或 GT_TOKEN=xxx node scripts/publish/update-gitee-body.cjs
 const https = require('node:https');
 const path = require('node:path');
 const fs = require('node:fs');
 const ROOT = path.resolve(__dirname, '..', '..');
 const VERSION = require(path.join(ROOT, 'package.json')).version;
 const TAG = `v${VERSION}`;
-const GT_TOKEN = process.env.GT_TOKEN || '721ddfdc2165332edc7a79b18537c2b3';
+const GT_TOKEN = process.env.GT_TOKEN || 'a0d56558c30d9a083fe33282b946cf95';
 const GT_OWNER = 'buxiaju';
 const REPO = 'KunyaoGit';
 
 const RELEASE_BODY = `# KunyaoGit v${VERSION}
 
-## v0.2.2 新特性
-- ✨ **应用内自动更新** — 发现新版本时自动弹窗询问"立即下载并安装"，应用内多源下载（Gitee 优先、GitHub 兜底）带实时进度条，下载完成自动启动安装包并退出应用完成更新，无需手动去浏览器下载。
-- 🎨 设置页"关于"区新增"立即下载并安装"按钮，可随时触发更新流程。
-- 🛠 支持取消下载、错误重试、浏览器兜底下载。
+## v0.2.3 新特性
+- 🌐 **多语言支持（中/英切换）** — 在设置页或侧边栏底部一键切换界面语言（中文/English），所有 UI 文本均支持国际化，设置自动持久化。
+- 📝 **项目文档完善** — 新增架构文档、API 参考、功能说明、安装指南、用户指南、开发指南、贡献指南等完整文档体系。
+- 🏗 **工程结构优化** — scripts/ 按职责分组（build/publish/debug），release2/ 合并回 release/ 单一输出目录。
 
-## v0.2.1 修复（沿用）
-- 🐛 **修复 v0.2.0 无法启动** — \`app:get-version\` IPC handler 重复注册导致启动时抛错阻断 \`createWindow()\`。
-- 🐛 **修复图标棋盘格背景** — 源图透明符号被错误固化进位图，现改为真透明。
+## v0.2.2 特性（沿用）
+- ✨ **应用内自动更新** — 发现新版本时自动弹窗询问"立即下载并安装"，应用内多源下载（Gitee 优先、GitHub 兜底）带实时进度条，下载完成自动启动安装包并退出应用完成更新。
 
 ## 下载
 - **KunyaoGit-Setup-${VERSION}-x64.exe** — NSIS 安装包，仓库根目录 \`.release-assets/\` 下；推荐去 GitHub Release 下载（[https://github.com/buxiaju/KunyaoGit/releases/download/v${VERSION}/KunyaoGit-Setup-${VERSION}-x64.exe](https://github.com/buxiaju/KunyaoGit/releases/download/v${VERSION}/KunyaoGit-Setup-${VERSION}-x64.exe)）
 - **KunyaoGit-portable-v${VERSION}.zip** — 便携版，仓库根目录 \`.release-assets/\` 下
 
 ## 升级
-- **v0.2.0 / v0.2.1 用户**：启动应用后会自动检查更新并弹窗，点"立即下载并安装"即可一键更新到 v${VERSION}。也可手动下载安装包覆盖安装。
+- **v0.2.0 / v0.2.1 / v0.2.2 用户**：启动应用后会自动检查更新并弹窗，点"立即下载并安装"即可一键更新到 v${VERSION}。也可手动下载安装包覆盖安装。
 - 应用内更新会优先从 Gitee 下载（国内快），失败时自动切换 GitHub 兜底。
 
 ## 安装
@@ -46,6 +46,7 @@ const RELEASE_BODY = `# KunyaoGit v${VERSION}
 - 内容搜索
 - 自动 CHANGELOG 生成
 - **应用内自动更新**（启动后静默检测，发现新版本弹窗 → 应用内下载 → 自动安装）
+- **多语言切换**（中文 / English）
 
 ## 仓库
 - GitHub: https://github.com/buxiaju/KunyaoGit
