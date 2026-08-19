@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { IPC } from '../shared/ipc-channels';
+import type { DownloadProgress } from '../shared/types';
 
 // 渲染进程可见的 API，全部通过 IPC 走主进程
 const api = {
@@ -143,12 +144,23 @@ const api = {
     openExternal: (url: string) => ipcRenderer.invoke('app:open-external', url),
   },
 
-  // 更新检查
+  // 更新检查 / 应用内下载安装
   update: {
     check: () => ipcRenderer.invoke(IPC.UPDATE_CHECK),
     checkSilent: () => ipcRenderer.invoke(IPC.UPDATE_CHECK_SILENT),
     dismiss: (version: string) => ipcRenderer.invoke(IPC.UPDATE_DISMISS, version),
     open: (url: string) => ipcRenderer.invoke(IPC.UPDATE_OPEN, url),
+    // 下载安装包。onProgress 收到主进程推的进度事件；返回 { filePath } 或 { cancelled }
+    download: (version: string, onProgress?: (p: DownloadProgress) => void) => {
+      const handler = (_e: unknown, p: DownloadProgress) => onProgress?.(p);
+      if (onProgress) ipcRenderer.on(IPC.UPDATE_DOWNLOAD_PROGRESS, handler);
+      return ipcRenderer.invoke(IPC.UPDATE_DOWNLOAD, { version }).finally(() => {
+        if (onProgress) ipcRenderer.removeListener(IPC.UPDATE_DOWNLOAD_PROGRESS, handler);
+      });
+    },
+    cancelDownload: () => ipcRenderer.invoke(IPC.UPDATE_CANCEL_DOWNLOAD),
+    // 启动已下载的安装包，主进程会随后退出本应用
+    install: (filePath: string) => ipcRenderer.invoke(IPC.UPDATE_INSTALL, { filePath }),
   },
 };
 

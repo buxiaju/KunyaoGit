@@ -88,11 +88,15 @@ export const IPC = {
   APP_OPEN_PATH: 'app:open-path',
   APP_SHELL_OPEN: 'app:shell-open',
 
-  // 更新检查
+  // 更新检查 / 应用内下载安装
   UPDATE_CHECK: 'update:check',
   UPDATE_CHECK_SILENT: 'update:check-silent',
   UPDATE_DISMISS: 'update:dismiss',
   UPDATE_OPEN: 'update:open',
+  UPDATE_DOWNLOAD: 'update:download',          // 渲染→主：开始下载安装包
+  UPDATE_DOWNLOAD_PROGRESS: 'update:download-progress',  // 主→渲染：进度事件
+  UPDATE_INSTALL: 'update:install',            // 渲染→主：启动已下载的安装包并退出
+  UPDATE_CANCEL_DOWNLOAD: 'update:cancel-download',      // 渲染→主：取消下载
 } as const;
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC];

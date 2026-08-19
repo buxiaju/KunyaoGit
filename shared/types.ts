@@ -178,3 +178,15 @@ export interface AppUpdateInfo {
   }[];
   dismissed?: boolean;
 }
+
+// 应用内下载安装包的进度事件载荷
+export type DownloadPhase = 'preparing' | 'downloading' | 'done' | 'error' | 'cancelled';
+export interface DownloadProgress {
+  phase: DownloadPhase;
+  percent: number;        // 0-100，totalBytes 未知时为 -1
+  bytesReceived: number;
+  totalBytes: number;      // 0 表示未知
+  source?: 'gitee' | 'github';  // 当前正在下载的源
+  message?: string;       // error/done 阶段的说明
+  filePath?: string;      // done 阶段返回的本地安装包路径
+}

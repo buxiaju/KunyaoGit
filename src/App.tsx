@@ -9,6 +9,7 @@ import SettingsPage from './pages/SettingsPage';
 import { useSettingsStore } from './stores/settings';
 import { useEffect } from 'react';
 import { Toaster } from './components/common/Toast';
+import { UpdateDialog } from './components/common/UpdateDialog';
 import { useUpdateCheck } from './hooks/useUpdateCheck';
 
 export default function App() {
@@ -33,6 +34,7 @@ export default function App() {
         </Route>
       </Routes>
       <Toaster />
+      <UpdateDialog />
     </>
   );
 }
