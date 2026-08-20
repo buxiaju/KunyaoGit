@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSettingsStore } from '../stores/settings';
 import { useRepoStore } from '../stores/repo';
-import { Github, Globe, Star, GitFork, ExternalLink, GitBranch, Lock, Unlock, AlertCircle, MessageSquare, GitPullRequest, Loader2, Plus, Trash2, X } from 'lucide-react';
+import { Github, Globe, Star, GitFork, ExternalLink, GitBranch, Lock, Unlock, AlertCircle, MessageSquare, GitPullRequest, Loader2, Plus, Trash2, X, Search } from 'lucide-react';
 import { toast } from '../components/common/Toast';
 import { formatDistanceToNow } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
@@ -16,6 +16,9 @@ export default function RemotePage() {
   const nav = useNavigate();
   const [repos, setRepos] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any[] | null>(null);
+  const [searching, setSearching] = useState(false);
   const [tab, setTab] = useState<'repos' | 'prs' | 'issues'>('repos');
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -31,6 +34,32 @@ export default function RemotePage() {
   useEffect(() => {
     if (auth) load();
   }, [auth, tab]);
+
+  // 搜索仓库：输入防抖 300ms 后调用云端 Search API；清空恢复"我的仓库"列表
+  const searchQueryRef = useRef('');
+  searchQueryRef.current = searchQuery;
+  useEffect(() => {
+    if (!auth || tab !== 'repos') return;
+    const q = searchQuery.trim();
+    if (!q) {
+      setSearchResults(null);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    const timer = setTimeout(async () => {
+      const r = platform === 'github'
+        ? await window.gitgui.github.searchRepos(q)
+        : await window.gitgui.gitee.searchRepos(q);
+      // 竞态保护：期间 query 已变化则丢弃本次结果
+      if (searchQueryRef.current.trim() !== q) return;
+      setSearching(false);
+      if (r.ok) setSearchResults(r.data as any[]);
+      else toast.error(t('remote.searchFailed', { error: r.error }));
+    }, 300);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery, auth, platform, tab]);
 
   const load = async () => {
     if (!auth) return;
@@ -131,7 +160,27 @@ export default function RemotePage() {
         <Icon size={18} />
         <span className="font-semibold">{name}</span>
         <span className="text-xs text-gray-500">@{auth.user}</span>
-        <div className="flex-1" />
+        {/* 搜索仓库（云端 Search API） */}
+        <div className="flex-1 flex justify-center px-2">
+          <div className="relative w-full max-w-md">
+            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
+            <input
+              className="input pl-8 pr-7 text-xs"
+              placeholder={t('remote.searchPlaceholder')}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
+                title={t('common.cancel')}
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
+        </div>
         <button onClick={() => setShowCreate(true)} className="btn-primary text-xs">
           <Plus size={12} /> {t('remote.newRepo')}
         </button>
@@ -191,31 +240,48 @@ export default function RemotePage() {
       </div>
 
       <div className="flex-1 overflow-auto p-4">
-        {loading ? (
+        {loading || searching ? (
           <div className="flex items-center justify-center text-gray-500 text-sm py-10">
             <Loader2 size={16} className="animate-spin mr-2" /> {t('remote.loading')}
           </div>
         ) : tab === 'repos' ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-5xl">
-            {repos.map((r) => (
-              <RepoCard
-                key={r.id}
-                repo={r}
-                platform={platform!}
-                currentUser={auth?.user}
-                onClone={() => clone(r.clone_url)}
-                onOpen={() => {
-                  const fullName = r.full_name || r.name || '';
-                  const [owner, repoName] = fullName.split('/');
-                  if (owner && repoName) nav(`/remote/${platform}/${owner}/${repoName}`);
-                }}
-                onDelete={() => {
-                  const fullName = r.full_name || r.name || '';
-                  const [owner, repoName] = fullName.split('/');
-                  if (owner && repoName) deleteRepo(owner, repoName);
-                }}
-              />
-            ))}
+          <div className="max-w-5xl">
+            {searchQuery.trim() && (
+              <div className="text-xs text-gray-500 mb-3 flex items-center gap-1.5">
+                <Search size={11} />
+                {t('remote.searchResultFor', { query: searchQuery.trim() })}
+                <span className="text-gray-600">
+                  {t('remote.resultCount', { count: searchResults?.length ?? 0 })}
+                </span>
+              </div>
+            )}
+            {(searchResults ?? repos).length === 0 ? (
+              <div className="text-center text-gray-500 text-sm py-10">
+                {searchQuery.trim() ? t('remote.searchEmpty') : t('remote.empty')}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {(searchResults ?? repos).map((r) => (
+                  <RepoCard
+                    key={r.id}
+                    repo={r}
+                    platform={platform!}
+                    currentUser={auth?.user}
+                    onClone={() => clone(r.clone_url)}
+                    onOpen={() => {
+                      const fullName = r.full_name || r.name || '';
+                      const [owner, repoName] = fullName.split('/');
+                      if (owner && repoName) nav(`/remote/${platform}/${owner}/${repoName}`);
+                    }}
+                    onDelete={() => {
+                      const fullName = r.full_name || r.name || '';
+                      const [owner, repoName] = fullName.split('/');
+                      if (owner && repoName) deleteRepo(owner, repoName);
+                    }}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         ) : tab === 'prs' ? (
           <div className="text-center text-gray-500 text-sm py-10">{t('remote.viewPrsHint')}</div>

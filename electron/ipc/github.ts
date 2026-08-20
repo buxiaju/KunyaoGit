@@ -26,6 +26,24 @@ export function registerGithubHandlers() {
     }
   });
 
+  // 搜索 GitHub 全平台仓库（Search API）
+  ipcMain.handle(IPC.GH_SEARCH_REPOS, async (_e, { query, sort, order }: { query: string; sort?: string; order?: 'asc' | 'desc' }): Promise<Result<any[]>> => {
+    const oct = getOctokit();
+    if (!oct) return { ok: false, error: '未配置 GitHub Token' };
+    if (!query || !query.trim()) return { ok: true, data: [] };
+    try {
+      const r = await oct.search.repos({
+        q: query.trim(),
+        sort: (sort as any) || 'best_match',
+        order: order || 'desc',
+        per_page: 50,
+      });
+      return { ok: true, data: r.data.items as any[] };
+    } catch (e: any) {
+      return { ok: false, error: e.response?.data?.message || e.message };
+    }
+  });
+
   ipcMain.handle(IPC.GH_CREATE_REPO, async (_e, params: { name: string; description?: string; private?: boolean; autoInit?: boolean; gitignoreTemplate?: string; licenseTemplate?: string }): Promise<Result<any>> => {
     const oct = getOctokit();
     if (!oct) return { ok: false, error: '未配置 GitHub Token' };

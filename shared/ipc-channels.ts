@@ -56,6 +56,7 @@ export const IPC = {
 
   // GitHub
   GH_LIST_REPOS: 'gh:list-repos',
+  GH_SEARCH_REPOS: 'gh:search-repos',
   GH_CREATE_REPO: 'gh:create-repo',
   GH_DELETE_REPO: 'gh:delete-repo',
   GH_LIST_PRS: 'gh:list-prs',
@@ -67,6 +68,7 @@ export const IPC = {
 
   // Gitee
   GT_LIST_REPOS: 'gt:list-repos',
+  GT_SEARCH_REPOS: 'gt:search-repos',
   GT_CREATE_REPO: 'gt:create-repo',
   GT_DELETE_REPO: 'gt:delete-repo',
   GT_LIST_PRS: 'gt:list-prs',
