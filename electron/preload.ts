@@ -86,6 +86,8 @@ const api = {
   github: {
     listRepos: (params?: { visibility?: 'all' | 'public' | 'private'; sort?: 'updated' | 'pushed' | 'created' }) =>
       ipcRenderer.invoke(IPC.GH_LIST_REPOS, params),
+    searchRepos: (query: string, sort?: string) =>
+      ipcRenderer.invoke(IPC.GH_SEARCH_REPOS, { query, sort }),
     createRepo: (params: { name: string; description?: string; private?: boolean; autoInit?: boolean; gitignoreTemplate?: string; licenseTemplate?: string }) =>
       ipcRenderer.invoke(IPC.GH_CREATE_REPO, params),
     deleteRepo: (owner: string, repo: string) =>
@@ -108,6 +110,8 @@ const api = {
   gitee: {
     listRepos: (params?: { visibility?: 'all' | 'public' | 'private'; sort?: 'updated' | 'pushed' | 'created' }) =>
       ipcRenderer.invoke(IPC.GT_LIST_REPOS, params),
+    searchRepos: (query: string, sort?: string) =>
+      ipcRenderer.invoke(IPC.GT_SEARCH_REPOS, { query, sort }),
     createRepo: (params: { name: string; description?: string; private?: boolean; autoInit?: boolean; gitignoreTemplate?: string; licenseTemplate?: string; homepage?: string }) =>
       ipcRenderer.invoke(IPC.GT_CREATE_REPO, params),
     deleteRepo: (owner: string, repo: string) =>

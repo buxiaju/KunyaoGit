@@ -33,6 +33,32 @@ export function registerGiteeHandlers() {
     }
   });
 
+  // 搜索 Gitee 仓库。
+  // Gitee 官方 /search/repositories API 目前对仓库搜索恒返回空数组（已失效），
+  // 因此先尝试官方 API，若结果为空则降级为"我的仓库列表本地过滤"（保证功能可用）。
+  ipcMain.handle(IPC.GT_SEARCH_REPOS, async (_e, { query }: { query: string; sort?: string }): Promise<Result<any[]>> => {
+    const client = getClient();
+    if (!client) return { ok: false, error: '未配置 Gitee Token' };
+    const q = (query || '').trim();
+    if (!q) return { ok: true, data: [] };
+    try {
+      const r = await client.get('/search/repositories', { params: { q, per_page: 50 } });
+      const items: any[] = r.data?.items || r.data || [];
+      if (items.length > 0) return { ok: true, data: items };
+      // 官方 API 失效 → 降级：拉我的仓库本地过滤
+      const my = await client.get('/user/repos', { params: { visibility: 'all', per_page: 100 } });
+      const lower = q.toLowerCase();
+      const filtered = (my.data || []).filter((repo: any) => {
+        const full = String(repo.full_name || repo.name || '').toLowerCase();
+        const desc = String(repo.description || '').toLowerCase();
+        return full.includes(lower) || desc.includes(lower);
+      });
+      return { ok: true, data: filtered };
+    } catch (e: any) {
+      return { ok: false, error: e.response?.data?.message || e.message };
+    }
+  });
+
   ipcMain.handle(IPC.GT_CREATE_REPO, async (_e, params: { name: string; description?: string; private?: boolean; autoInit?: boolean; gitignoreTemplate?: string; licenseTemplate?: string; homepage?: string }): Promise<Result<any>> => {
     const client = getClient();
     if (!client) return { ok: false, error: '未配置 Gitee Token' };
