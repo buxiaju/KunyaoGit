@@ -50,8 +50,17 @@ const MIN_CHUNK_SIZE = 1024 * 1024;     // 1MB 以下不分段，避免拆得太
 const PROGRESS_INTERVAL_MS = 100;       // 进度事件节流间隔
 const CHUNK_RETRY = 3;                  // 单 chunk 失败重试次数
 const CHUNK_RETRY_BACKOFF = 400;        // 失败重试退避基数（ms，指数递增）
-const PROBE_TIMEOUT_MS = 15000;         // Range 探活超时（GET 比 HEAD 慢，给宽点）
+const PROBE_TIMEOUT_MS = 8000;          // Range 探活单次超时（8s 快速失败，靠重试兜底）
 const RANGE_TIMEOUT_MS = 30000;         // Range 下载每 chunk 30s 无数据视为超时
+// ★ v0.3.3：网络波动容错——探活 / 下载失败都重试。
+//   实测国内网络对 gitee.com（DNS 被劫持到百度云节点 180.76.x.x）连接高度间歇：同一分钟内
+//   可能连续超时 1 分钟又连续成功；github.com 被墙时偶尔也有短窗口。
+//   方案：单源探活内重试 2 次 + 整轮（两源并行探活+下载）最多 3 轮，轮间等 3s。
+const PROBE_ATTEMPTS = 2;               // 单源探活尝试次数
+const PROBE_RETRY_BACKOFF = 500;        // 探活重试间隔基数（ms，指数递增）
+const SOURCE_DOWNLOAD_ATTEMPTS = 2;     // 每源下载尝试次数
+const PROBE_ROUNDS = 6;                 // 整体探活+下载轮次（坏窗口实测可持续 10+ 分钟，6 轮 ≈ 2 分钟自动重试）
+const ROUND_RETRY_DELAY = 3000;         // 轮间等待（ms）
 
 // 模块级下载状态（用于取消 + 进度节流）
 interface ActiveDownload {
@@ -123,9 +132,13 @@ function requestFollow(
       req.on('socket', (socket) => {
         if (socket.connecting) {
           connectTimer = setTimeout(() => req.destroy(new Error('连接超时')), timeoutMs);
-          socket.once('connect', () => {
+          // TLSSocket 不触发 'connect'（只有底层 TCP 的 net.Socket 有），
+          // HTTPS 场景实际以 'secureConnect' 为准——两个都监听，防止计时器永不清理
+          const clearTimer = () => {
             if (connectTimer) clearTimeout(connectTimer);
-          });
+          };
+          socket.once('connect', clearTimer);
+          socket.once('secureConnect', clearTimer);
         }
       });
       req.setTimeout?.(timeoutMs, () => req.destroy(new Error('连接超时')));
@@ -133,6 +146,10 @@ function requestFollow(
         if (connectTimer) clearTimeout(connectTimer);
         reject(e);
       });
+      // ★ 关键：https.request（区别于 https.get）不会自动结束请求体，
+      // 必须显式 end() 才会真正把 HTTP 请求发送出去。漏掉它会导致请求只建连接、
+      // 从不发数据，最终在 setTimeout 空闲超时处失败——这是历史「下载必失败」的根因。
+      req.end();
     };
     visit(initialUrl, maxRedirects);
   });
@@ -212,67 +229,90 @@ export function registerUpdateHandlers() {
       total: number;
       supportsRange: boolean;
     }
-    const probed: ProbeResult[] = await Promise.all(
-      sources.map(async (src): Promise<ProbeResult> => {
-        try {
-          const r = await probeRange(src.url);
-          if (!r) return { platform: src.platform, url: src.url, ok: false, error: '请求失败（超时/网络）', total: 0, supportsRange: false };
-          if (r.status !== 200 && r.status !== 206) {
-            return { platform: src.platform, url: src.url, ok: false, error: `HTTP ${r.status}`, total: 0, supportsRange: false };
-          }
-          if (src.platform === 'gitee' && /text\/html/i.test(r.contentType)) {
-            return { platform: src.platform, url: src.url, ok: false, error: 'Gitee raw 返 HTML（大文件受限）', total: 0, supportsRange: false };
-          }
-          if (r.contentLength <= 0) {
-            return { platform: src.platform, url: src.url, ok: false, error: '缺 Content-Length', total: 0, supportsRange: false };
-          }
-          return { platform: src.platform, url: src.url, ok: true, total: r.contentLength, supportsRange: r.acceptRanges };
-        } catch (e) {
-          return { platform: src.platform, url: src.url, ok: false, error: (e as Error).message, total: 0, supportsRange: false };
-        }
-      }),
-    );
 
-    if (active?.cancelled) {
-      sendProgress(sender, { phase: 'cancelled', percent: 0, bytesReceived: 0, totalBytes: 0, message: '已取消下载' });
-      active = null;
-      return { filePath: '', cancelled: true };
-    }
-
-    // 排序：ok=true 的源排前面，按原顺序
-    const orderedSources = probed.slice().sort((a, b) => Number(b.ok) - Number(a.ok));
-
-    for (const probe of orderedSources) {
+    // ★ v0.3.3：整体轮次重试——网络坏窗口可能持续 1~2 分钟，单轮失败就放弃体验很差。
+    // 每轮：并行探活所有源（含单源内重试）→ 依次尝试下载（含源内重试）；
+    // 全部失败则等 ROUND_RETRY_DELAY 后来下一轮。
+    for (let round = 0; round < PROBE_ROUNDS; round++) {
       if (active?.cancelled) break;
-      // 探活失败的源：把失败原因记到 failedSources，最后汇总给用户
-      if (!probe.ok) {
-        failedSources.push({ platform: probe.platform, reason: probe.error || '未知' });
-        continue;
+      if (round > 0) {
+        sendProgress(sender, { phase: 'downloading', percent: 0, bytesReceived: 0, totalBytes: 0, message: `网络波动，第 ${round + 1}/${PROBE_ROUNDS} 轮重试…` });
+        await new Promise((r) => setTimeout(r, ROUND_RETRY_DELAY));
       }
-      try {
-        const picked = await tryDownloadFromSource(probe.platform, probe.url, destPath, probe.total, probe.supportsRange, sender);
-        if (active?.cancelled) {
-          safeUnlink(destPath);
-          sendProgress(sender, { phase: 'cancelled', percent: 0, bytesReceived: 0, totalBytes: 0, message: '已取消下载' });
-          active = null;
-          return { filePath: '', cancelled: true };
+      failedSources.length = 0;
+
+      const probed: ProbeResult[] = await Promise.all(
+        sources.map(async (src): Promise<ProbeResult> => {
+          try {
+            const r = await probeRangeWithRetry(src.url);
+            if (!r) return { platform: src.platform, url: src.url, ok: false, error: '请求失败（超时/网络）', total: 0, supportsRange: false };
+            if (r.status !== 200 && r.status !== 206) {
+              return { platform: src.platform, url: src.url, ok: false, error: `HTTP ${r.status}`, total: 0, supportsRange: false };
+            }
+            if (src.platform === 'gitee' && /text\/html/i.test(r.contentType)) {
+              return { platform: src.platform, url: src.url, ok: false, error: 'Gitee 返 HTML（大文件受限）', total: 0, supportsRange: false };
+            }
+            if (r.contentLength <= 0) {
+              return { platform: src.platform, url: src.url, ok: false, error: '缺 Content-Length', total: 0, supportsRange: false };
+            }
+            return { platform: src.platform, url: src.url, ok: true, total: r.contentLength, supportsRange: r.acceptRanges };
+          } catch (e) {
+            return { platform: src.platform, url: src.url, ok: false, error: (e as Error).message, total: 0, supportsRange: false };
+          }
+        }),
+      );
+
+      if (active?.cancelled) break;
+
+      // 排序：ok=true 的源排前面，按原顺序
+      const orderedSources = probed.slice().sort((a, b) => Number(b.ok) - Number(a.ok));
+
+      for (const probe of orderedSources) {
+        if (active?.cancelled) break;
+        // 探活失败的源：把失败原因记到 failedSources，最后汇总给用户
+        if (!probe.ok) {
+          failedSources.push({ platform: probe.platform, reason: probe.error || '未知' });
+          continue;
         }
-        active = null;
-        sendProgress(sender, {
-          phase: 'done',
-          percent: 100,
-          bytesReceived: picked.bytes,
-          totalBytes: picked.bytes,
-          source: probe.platform,
-          speedBps: 0,
-          filePath: destPath,
-          message: `下载完成（来自 ${probe.platform}）`,
-        });
-        return { filePath: destPath, source: probe.platform };
-      } catch (err) {
-        // 下载阶段失败：同样记到 failedSources
-        failedSources.push({ platform: probe.platform, reason: (err as Error).message });
-        // 继续尝试下一个源
+        try {
+          // ★ v0.3.3：源级重试——网络波动时首次下载可能中途断，重试同源而不是直接放弃
+          let picked: SourceDownloadResult | null = null;
+          let lastErr: Error | null = null;
+          for (let attempt = 0; attempt < SOURCE_DOWNLOAD_ATTEMPTS; attempt++) {
+            if (active?.cancelled) break;
+            try {
+              picked = await tryDownloadFromSource(probe.platform, probe.url, destPath, probe.total, probe.supportsRange, sender);
+              break;
+            } catch (err) {
+              lastErr = err as Error;
+              if (active?.cancelled) break;
+              if (attempt < SOURCE_DOWNLOAD_ATTEMPTS - 1) {
+                safeUnlink(destPath);
+                await new Promise((r) => setTimeout(r, PROBE_RETRY_BACKOFF * Math.pow(2, attempt)));
+              }
+            }
+          }
+          if (active?.cancelled) break;
+          if (!picked) {
+            throw lastErr || new Error('下载失败');
+          }
+          active = null;
+          sendProgress(sender, {
+            phase: 'done',
+            percent: 100,
+            bytesReceived: picked.bytes,
+            totalBytes: picked.bytes,
+            source: probe.platform,
+            speedBps: 0,
+            filePath: destPath,
+            message: `下载完成（来自 ${probe.platform}）`,
+          });
+          return { filePath: destPath, source: probe.platform };
+        } catch (err) {
+          // 下载阶段失败：同样记到 failedSources，本轮继续尝试下一个源
+          failedSources.push({ platform: probe.platform, reason: (err as Error).message });
+          safeUnlink(destPath);
+        }
       }
     }
 
@@ -435,6 +475,22 @@ async function probeRange(url: string): Promise<{ status: number; contentType: s
   } catch (e) {
     return null;
   }
+}
+
+// ★ v0.3.3：探活带重试。国内网络（尤其被 DNS 劫持到百度云节点的 gitee.com）连接偶发超时，
+// 一次失败不代表源不可用；重试 PROBE_ATTEMPTS 次（指数退避）显著提高成功率。
+async function probeRangeWithRetry(url: string): Promise<{ status: number; contentType: string; contentLength: number; acceptRanges: boolean } | null> {
+  let last: { status: number; contentType: string; contentLength: number; acceptRanges: boolean } | null = null;
+  for (let attempt = 0; attempt < PROBE_ATTEMPTS; attempt++) {
+    if (active?.cancelled) return null;
+    last = await probeRange(url);
+    if (last) return last;
+    if (attempt < PROBE_ATTEMPTS - 1) {
+      const backoff = PROBE_RETRY_BACKOFF * Math.pow(2, attempt);
+      await new Promise((r) => setTimeout(r, backoff));
+    }
+  }
+  return null;
 }
 
 // Range 多连接分段下载。回调 onDelta 在每个 chunk 写入新数据时调用（单位：byte）
