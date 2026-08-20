@@ -42,14 +42,34 @@ export class GitService {
       const s: StatusResult = await this.git.status();
       const files: FileStatus[] = [];
 
-      for (const f of s.staged) files.push({ path: f, status: 'added', staged: true });
-      for (const f of s.created) files.push({ path: f, status: 'added', staged: true });
-      for (const f of s.modified) files.push({ path: f, status: 'modified', staged: true });
-      for (const f of s.deleted) files.push({ path: f, status: 'deleted', staged: true });
-      for (const r of s.renamed) {
-        files.push({ path: r.to, oldPath: r.from, status: 'renamed', staged: true });
+      // ⚠️ 不要依赖 s.modified / s.staged 等便捷数组：simple-git 的 modified 同时包含
+      // 「未暂存修改」和「已暂存修改」，会把未暂存文件误标为 staged（v0.3.7 修复）。
+      // 用 s.files 的 index（暂存区标记）与 working_dir（工作区标记）精确区分：
+      //   index  = 'A'|'M'|'D'|'R'|'C'  → 已暂存；' '（空格）→ 未暂存；'?' → 未跟踪
+      //   workdir= 'M'|'D'|'?'          → 工作区状态
+      for (const f of s.files) {
+        const index: string = (f.index || ' ').trim();
+        const workdir: string = (f.working_dir || ' ').trim();
+        const staged = index !== '' && index !== '?';
+
+        if (index === '?' || (index === '' && workdir === '?')) {
+          files.push({ path: f.path, status: 'untracked', staged: false });
+          continue;
+        }
+        if (index === 'A' || index === 'C') {
+          files.push({ path: f.path, status: 'added', staged: true });
+        } else if (index === 'M') {
+          files.push({ path: f.path, status: 'modified', staged: true });
+        } else if (index === 'D') {
+          files.push({ path: f.path, status: 'deleted', staged: true });
+        } else if (index === 'R') {
+          const from = (f as any).from;
+          files.push({ path: f.path, oldPath: from || undefined, status: 'renamed', staged: true });
+        }
+        // 未暂存部分（按 working_dir 独立判断，覆盖 MM / AM 等「暂存+未暂存」混合态）
+        if (workdir === 'M') files.push({ path: f.path, status: 'modified', staged: false });
+        else if (workdir === 'D') files.push({ path: f.path, status: 'deleted', staged: false });
       }
-      for (const f of s.not_added) files.push({ path: f, status: 'untracked', staged: false });
       for (const f of s.conflicted) files.push({ path: f, status: 'conflicted', staged: false });
 
       return { ok: true, data: files };

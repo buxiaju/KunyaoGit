@@ -40,6 +40,12 @@ if (!fs.existsSync(INSTALLER)) { log('❌ missing ' + INSTALLER); process.exit(1
 
 const RELEASE_BODY = `# KunyaoGit v${VERSION}
 
+## v0.3.7 修复（工作区状态解析错误——「提交失败」的真正根因）
+- 🔧 **修复未暂存修改被误显示为「已暂存」**：
+  - 根因：simple-git 的 \`status()\` 中 \`modified\` 数组**同时包含未暂存与已暂存修改**，旧代码把它全部标为 \`staged: true\`，导致 UI 把「未暂存修改」显示成「已暂存」——用户以为已暂存去点提交，实际暂存区为空，git 报「nothing to commit」（此前 v0.3.5/v0.3.6 的提交失败即由此引发）
+  - 修复：\`git:status\` 改用 \`git status --porcelain\` 的 \`index\`（暂存区）/ \`working_dir\`（工作区）列**精确区分**暂存状态；支持 \`MM\`/\`AM\` 等「暂存+未暂存」混合态（同一文件显示两条记录）
+  - 效果：「变更」页现在真实反映暂存区；修改文件但不暂存时显示在「变更（未暂存）」区，暂存后才进入「已暂存」区，提交不再误报
+
 ## v0.3.6 修复（提交诊断强化）
 - 🔧 **提交改用 \`git commit\` 原生执行 + 自解析** — 不再依赖 simple-git 的 commit 结果解析（个别环境下可能解析不到 hash 导致误报「未产生新提交」）：
   - 提交成功后自行解析 hash，支持 \`--amend\` / \`--signoff\`

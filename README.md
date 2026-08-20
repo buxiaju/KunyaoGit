@@ -6,7 +6,7 @@
 
 > 一个跨平台 Git 桌面客户端（Windows / macOS / Linux），深度集成 **GitHub** 和 **Gitee**（码云）。
 
-![Electron](https://img.shields.io/badge/Electron-33-9feaf9) ![React](https://img.shields.io/badge/React-18-61dafb) ![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178c6) ![License](https://img.shields.io/badge/license-MIT-green) ![Version](https://img.shields.io/badge/version-v0.3.5-22c55e)
+![Electron](https://img.shields.io/badge/Electron-33-9feaf9) ![React](https://img.shields.io/badge/React-18-61dafb) ![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178c6) ![License](https://img.shields.io/badge/license-MIT-green) ![Version](https://img.shields.io/badge/version-v0.3.7-22c55e)
 
 ## 特性
 
@@ -94,7 +94,7 @@ npm run dev     # 开发模式（带热更新）
 
 ### 自己打包
 ```bash
-npm run build:win   # 产出 release/KunyaoGit-Setup-0.3.4-x64.exe
+npm run build:win   # 产出 release/KunyaoGit-Setup-0.3.6-x64.exe
 ```
 
 ## 配置 GitHub / Gitee Token
