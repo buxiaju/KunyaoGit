@@ -4,7 +4,7 @@
   <img src="assets/icon-master.png" width="96" alt="KunyaoGit icon" />
 </p>
 
-> 一个 Git 桌面客户端，深度集成 **GitHub** 和 **Gitee**（码云）。
+>  Git 桌面客户端，深度集成 **GitHub** 和 **Gitee**（码云）。
 
 ![Electron](https://img.shields.io/badge/Electron-33-9feaf9) ![React](https://img.shields.io/badge/React-18-61dafb) ![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178c6) ![License](https://img.shields.io/badge/license-MIT-green) ![Version](https://img.shields.io/badge/version-v0.3.7-22c55e)
 
