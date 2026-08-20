@@ -86,6 +86,8 @@ export default function ChangesPanel() {
       await refreshStatus();
     } else {
       toast.error(t('repo.commitFailed', { error: r.error }));
+      // 提交失败后强制刷新 git 状态，让 UI 与真实暂存区对齐（避免"显示有暂存但实际为空"的误导）
+      await refreshStatus();
     }
   };
 

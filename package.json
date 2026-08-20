@@ -1,6 +1,6 @@
 {
   "name": "kunyaogit",
-  "version": "0.3.5",
+  "version": "0.3.6",
   "private": true,
   "description": "KunyaoGit - A cross-platform Git GUI client for GitHub and Gitee",
   "main": "dist-electron/main.js",
@@ -49,7 +49,7 @@
     "appId": "com.kunyao.kunyaogit",
     "productName": "KunyaoGit",
     "directories": {
-      "output": "release-v032"
+      "output": "release-v033"
     },
     "files": [
       "dist/**/*",

@@ -142,18 +142,28 @@ export class GitService {
 
   async commit(message: string, opts: { amend?: boolean; signOff?: boolean } = {}): Promise<Result<{ hash: string }>> {
     try {
-      // ⚠️ simple-git commit 签名：commit(message, files?, options?)
-      // 不要传 ['-m', message]（数组会被当成多条提交信息，生成 `git commit -m -m ...` 静默失败）。
-      const customArgs: string[] = [];
-      if (opts.signOff) customArgs.push('--signoff');
-      if (opts.amend) customArgs.push('--amend');
-      // commit(message, options?)：options 为 TaskOptions（string[] 直接透传为 git 参数）
-      const result = await this.git.commit([message], customArgs);
-      if (!result.commit) {
-        // 防御：git 未产生新提交（如无可提交内容 / 提交信息为空）
-        return { ok: false, error: '提交失败：git 未产生新提交（请确认已暂存文件且提交信息非空）' };
+      // 用 raw 执行并自行解析：比 simple-git 的 commit() 更可控，
+      // 失败时能把 git 原始输出 + 实际暂存区状态带回错误信息便于诊断。
+      const args: string[] = ['commit', '-m', message];
+      if (opts.signOff) args.push('--signoff');
+      if (opts.amend) args.push('--amend');
+      const out = await this.git.raw(args);
+      // 解析 [branch (root-commit)? hash] 或 [branch hash]（git 输出第一行）
+      const m = out.match(/\[([^\s]+)(?: \([^)]+\))? ([0-9a-f]{7,40})\]/i);
+      if (!m) {
+        // 未产生新提交：区分「暂存区为空」与「输出格式异常」，带原始输出诊断
+        let stagedPaths: string[] = [];
+        const st = await this.status();
+        if (st.ok) stagedPaths = st.data.filter((s) => s.staged).map((s) => s.path);
+        const reason = stagedPaths.length === 0
+          ? '暂存区为空（没有可提交的文件）'
+          : `已暂存 ${stagedPaths.length} 个文件但 git 未产生提交`;
+        return {
+          ok: false,
+          error: `提交失败：${reason}。git 输出：${out.trim().slice(0, 300)}`,
+        };
       }
-      return { ok: true, data: { hash: result.commit } };
+      return { ok: true, data: { hash: m[2] } };
     } catch (e) {
       return { ok: false, error: (e as Error).message };
     }
