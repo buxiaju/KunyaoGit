@@ -79,3 +79,8 @@ release-v033/
 
 release-v034/
 
+
+# 大安装包不再入库（Release 附件走 Gitee/GitHub API 分发）
+.release-assets/*.exe
+.release-assets/*.zip
+
