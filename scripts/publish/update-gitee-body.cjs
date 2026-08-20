@@ -28,6 +28,13 @@ function log(msg) {
 
 const RELEASE_BODY = `# KunyaoGit v${VERSION}
 
+## v0.3.5 修复
+- 🔧 **修复「提交并推送」假成功**（核心）：
+  - 根因：\`GitService.commit\` 向 simple-git 传了 \`['-m', message]\`（数组被当作多条提交信息），实际执行 \`git commit -m -m ...\` 静默失败——提交未生效但返回空 hash，UI 显示「已提交」，随后 push 因无新提交返回 up-to-date 被误报为「推送成功」，网页上自然没有提交，暂存区也一直保留
+  - 修复：改为 \`commit([message], options)\` 正确调用形式；commit 未产生新提交时明确报错（不再静默）
+  - **分支切换/创建一并修复**：\`checkout\`/\`createBranch\` 此前多传了 \`checkout\` 前缀（\`git checkout checkout -b name\`），分支功能同样失效，本次修正
+- 📚 **项目文档全面完善** — README / ARCHITECTURE / 功能详解 / 用户指南 / API 参考 / 开发指南 / 安装指南全部同步至 v0.3.4+ 功能（本地文件管理、多远程推送、云端搜索、更新下载修复等）
+
 ## v0.3.4 新特性
 - 🔍 **云端仓库搜索** — 在 GitHub / Gitee 仓库页顶部栏新增搜索框：
   - 输入即搜（防抖 300ms），**GitHub** 走官方 Search API 全平台搜索任意仓库

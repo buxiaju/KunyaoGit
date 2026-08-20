@@ -142,11 +142,17 @@ export class GitService {
 
   async commit(message: string, opts: { amend?: boolean; signOff?: boolean } = {}): Promise<Result<{ hash: string }>> {
     try {
-      const args: string[] = [];
-      if (opts.signOff) args.push('--signoff');
-      if (opts.amend) args.push('--amend');
-      args.push('-m', message);
-      const result = await this.git.commit(args);
+      // ⚠️ simple-git commit 签名：commit(message, files?, options?)
+      // 不要传 ['-m', message]（数组会被当成多条提交信息，生成 `git commit -m -m ...` 静默失败）。
+      const customArgs: string[] = [];
+      if (opts.signOff) customArgs.push('--signoff');
+      if (opts.amend) customArgs.push('--amend');
+      // commit(message, options?)：options 为 TaskOptions（string[] 直接透传为 git 参数）
+      const result = await this.git.commit([message], customArgs);
+      if (!result.commit) {
+        // 防御：git 未产生新提交（如无可提交内容 / 提交信息为空）
+        return { ok: false, error: '提交失败：git 未产生新提交（请确认已暂存文件且提交信息非空）' };
+      }
       return { ok: true, data: { hash: result.commit } };
     } catch (e) {
       return { ok: false, error: (e as Error).message };
@@ -197,7 +203,8 @@ export class GitService {
 
   async checkout(target: string, opts: { create?: boolean } = {}): Promise<Result<void>> {
     try {
-      const args: string[] = ['checkout'];
+      // ⚠️ simple-git checkout(options) 直接透传，不要再带 'checkout' 前缀
+      const args: string[] = [];
       if (opts.create) args.push('-b');
       args.push(target);
       await this.git.checkout(args);
@@ -209,7 +216,7 @@ export class GitService {
 
   async createBranch(name: string, from?: string): Promise<Result<void>> {
     try {
-      const args: string[] = ['checkout', '-b', name];
+      const args: string[] = ['-b', name];
       if (from) args.push(from);
       await this.git.checkout(args);
       return { ok: true, data: undefined };

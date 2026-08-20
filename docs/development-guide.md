@@ -1,7 +1,7 @@
 # KunyaoGit 开发指南
 
 > 面向接手开发者的完整开发 / 打包 / 发布手册。配套阅读：[`ARCHITECTURE.md`](../ARCHITECTURE.md)、[`features.md`](./features.md)。
-> 当前版本：**v0.2.6**（v0.2.3+ 多语言、v0.2.4+ 下载提速、v0.2.5+ 三主题、v0.2.6+ 探活修复）。
+> 当前版本：**v0.3.4**（v0.2.3+ 多语言、v0.2.4+ 下载提速、v0.2.5+ 三主题、v0.2.6+ 探活修复、v0.3.3+ 更新下载请求修复、v0.3.4+ 云端仓库搜索 / Gitee 搜索降级）。
 
 ---
 
@@ -335,6 +335,12 @@ export type Result<T> = { ok: true; data: T } | { ok: false; error: string };
 
 > `electron/main.ts` 不需要单独改 —— handler 已经在 `registerGitHandlers()` 里注册。新增域才需要在 `main.ts` 调用新的 `registerXxxHandlers()`。
 
+> **v0.3.4 实例参考**：以上六步可对照「云端仓库搜索」`gh:search-repos` / `gt:search-repos` 落地：
+> - 通道常量：`shared/ipc-channels.ts`（`GH_SEARCH_REPOS` / `GT_SEARCH_REPOS`）
+> - 主进程 handler：`electron/ipc/github.ts`（GitHub）与 `electron/ipc/gitee.ts`（Gitee，含搜索降级，见 §9.16）
+> - preload 暴露：`gitgui.github.searchRepos` / `gitgui.gitee.searchRepos`
+> - 渲染层调用：`src/pages/RemotePage.tsx`（按平台分发）
+
 ---
 
 ## 6. 添加新页面的步骤
@@ -466,14 +472,15 @@ npm run build
 
 ## 8. 发布流程
 
-> 完整发版九步：改版本号 → 构建 → 复制到 `.release-assets/` → `publish-vXXX.cjs` → `update-gitee-body.cjs` → `git push`。
+> 完整发版九步：改版本号 → 构建 → 复制到 `.release-assets/` → `publish-v023.cjs` → `update-gitee-body.cjs` → `git push`。
+> 发布脚本统一复用模板，**不再另存为 `publish-vXXX.cjs`**：`scripts/publish/publish-v023.cjs`（创建/更新 GitHub Release + 上传安装包）与 `scripts/publish/update-gitee-body.cjs`（创建/更新 Gitee Release + 上传附件），每次发版只需更新两个脚本顶部的 `RELEASE_BODY`。
 
 ### 8.1 改版本号
 
 编辑 `package.json`：
 
 ```jsonc
-{ "version": "0.3.0" }   // ← 改这里
+{ "version": "0.3.4" }   // ← 改这里
 ```
 
 ### 8.2 构建
@@ -487,15 +494,17 @@ npm run build:win
 node scripts/build/package-portable.cjs
 ```
 
+> 每次发版把构建输出目录临时指到新的 `release-vNNN`（如 v0.3.4 → `release-v031`，改法见 §7.2.1），并把 `release-vNNN/` 加进 `.gitignore`，发完清理删除。
+
 产出：
-- `release/KunyaoGit-Setup-0.3.0-x64.exe`
-- `release/KunyaoGit-portable-v0.3.0.zip`
+- `release-v031/KunyaoGit-Setup-0.3.4-x64.exe`
+- `release-v031/KunyaoGit-portable-v0.3.4.zip`
 
 ### 8.3 复制到 `.release-assets/`（Gitee 走 git 分发）
 
 ```powershell
-copy /Y release\KunyaoGit-Setup-0.3.0-x64.exe .release-assets\
-copy /Y release\KunyaoGit-portable-v0.3.0.zip .release-assets\
+copy /Y release-v031\KunyaoGit-Setup-0.3.4-x64.exe .release-assets\
+copy /Y release-v031\KunyaoGit-portable-v0.3.4.zip .release-assets\
 ```
 
 > `.release-assets/` 入库（`.gitignore` 已放行 `!.release-assets/*.exe` / `*.zip`），应用内自动更新的 Gitee 源就是 `https://gitee.com/buxiaju/KunyaoGit/raw/master/.release-assets/KunyaoGit-Setup-X.Y.Z-x64.exe`。
@@ -506,12 +515,12 @@ copy /Y release\KunyaoGit-portable-v0.3.0.zip .release-assets\
 # 准备 token（优先环境变量；未设时脚本会从 git remote 'github' URL 提取 PAT）
 set GH_TOKEN=github_pat_XXX
 
-# 复用现有发布脚本模板：scripts/publish/publish-v023.cjs
-# 改 RELEASE_BODY 模板后另存为 scripts/publish/publish-v030.cjs
-node scripts/publish/publish-v030.cjs
+# 直接复用模板脚本，不要另存为 publish-vXXX.cjs：
+# 只需更新脚本顶部的 RELEASE_BODY（本次发版说明）后运行
+node scripts/publish/publish-v023.cjs
 ```
 
-`publish-vXXX.cjs` 逻辑（以 `publish-v023.cjs` 为参考）：
+`publish-v023.cjs` 逻辑（模板，直接复用）：
 1. `GET /repos/{owner}/{repo}/releases/tags/vX.Y.Z`：已存在则复用，404 则创建
 2. `PATCH` 更新 release body
 3. **流式上传** `KunyaoGit-Setup-X.Y.Z-x64.exe` 与 `KunyaoGit-portable-vX.Y.Z.zip`（`fs.createReadStream().pipe()`，避免大文件一次性读入内存；已存在则跳过）
@@ -536,7 +545,7 @@ node scripts/publish/update-gitee-body.cjs    # 同步 Gitee Release body + 流�
 
 ```bash
 git add .release-assets/ package.json
-git commit -m "release: v0.3.0"
+git commit -m "release: v0.3.4"
 git push gitee master
 git push github master
 ```
@@ -545,7 +554,7 @@ git push github master
 
 ```powershell
 # 静默安装
-start /wait release\KunyaoGit-Setup-0.3.0-x64.exe /S /D=C:\A\test\kg
+start /wait release-v031\KunyaoGit-Setup-0.3.4-x64.exe /S /D=C:\A\test\kg
 
 # 启动 5s 后 kill
 & "C:\A\test\kg\KunyaoGit.exe"
@@ -691,6 +700,18 @@ npm i -D png-to-ico sharp rcedit @electron/asar
 - `RANGE_TIMEOUT_MS = 30000` 是单 chunk 超时
 
 误改可能导致「4 路慢、1 路反而快」或「chunk 失败风暴」，上线前一定用 `scripts/debug/test-download-speed.cjs` 验证。
+
+### 9.15 ★ v0.3.3+：`https.request` 必须 `req.end()`
+
+`electron/ipc/update.ts` 的 `requestFollow()` 曾遗漏 `req.end()`，导致应用内更新的下载请求从未真正发出，必报「所有下载源都失败」（v0.3.3 修复）。用 `https.request` 发请求后必须显式调用 `req.end()` 才会真正发送——只有 `https.get` 才自动 end。
+
+### 9.16 ★ v0.3.4+：Gitee 官方仓库搜索 API 已失效
+
+`https://gitee.com/api/v5/search/repositories` 恒返回空数组（但 `/search/users` 正常）。`electron/ipc/gitee.ts` 的 `GT_SEARCH_REPOS` 做了降级：拿到空结果时改拉 `/user/repos`，在本地按名称 / 描述过滤（v0.3.4）。
+
+### 9.17 TLSSocket 不触发 `connect` 事件
+
+HTTPS 连接阶段的计时不要只监听 `connect`——`tls.TLSSocket` 不触发 `connect`。需同时监听 `connect` 与 `secureConnect`，以 `secureConnect` 作为连接完成的标志（见 `electron/ipc/update.ts` 连接计时的注释）。
 
 ---
 
