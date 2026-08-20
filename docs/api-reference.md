@@ -2,7 +2,7 @@
 
 > 本文档面向 KunyaoGit Electron 应用的开发者，全面描述渲染进程可用的 `window.gitgui` API、共享类型定义、主进程配置以及 IPC 通道清单。
 >
-> 适用版本：**v0.2.6**（v0.2.3+ 主题与语言、v0.2.4+ 下载速度优化、v0.2.5+ 三主题切换、v0.2.6+ 探活修复）
+> 适用版本：**v0.3.4**（v0.2.3+ 主题与语言、v0.2.4+ 下载速度优化、v0.2.5+ 三主题切换、v0.2.6+ 探活修复、v0.3.0+ 文件管理/多远程推送、v0.3.1+/v0.3.3+ 更新下载修复、v0.3.4+ 云端搜索）
 >
 > 源码依据：
 > - `shared/ipc-channels.ts`
@@ -476,6 +476,7 @@ export type DownloadPhase = 'preparing' | 'downloading' | 'done' | 'error' | 'ca
 | `listRepos` | `gh:list-repos` | `(params?: { visibility?: 'all' \| 'public' \| 'private'; sort?: 'updated' \| 'pushed' \| 'created' }) => Promise<Result<RemoteInfo[]>>` | 列出当前鉴权用户的 GitHub 仓库 |
 | `createRepo` | `gh:create-repo` | `(params: { name: string; description?: string; private?: boolean; autoInit?: boolean; gitignoreTemplate?: string; licenseTemplate?: string }) => Promise<Result<RemoteInfo>>` | 在 GitHub 上创建新仓库 |
 | `deleteRepo` | `gh:delete-repo` | `(owner: string, repo: string) => Promise<Result<void>>` | 删除指定仓库 |
+| `searchRepos` | `gh:search-repos` | `(query: string, sort?: string) => Promise<Result<any[]>>` | ★ v0.3.4：搜索 GitHub 仓库（GitHub Search API，`octokit.search.repos`）；`q` 为搜索关键词，`per_page` 固定 50，返回仓库 `items` 数组 |
 | `listPRs` | `gh:list-prs` | `(owner: string, repo: string, state?: 'open' \| 'closed' \| 'all') => Promise<Result<PullRequestInfo[]>>` | 列出仓库的 Pull Request |
 | `listIssues` | `gh:list-issues` | `(owner: string, repo: string, state?: 'open' \| 'closed' \| 'all') => Promise<Result<IssueInfo[]>>` | 列出仓库的 Issue |
 | `contentsList` | `gh:contents-list` | `(owner: string, repo: string, path?: string, ref?: string) => Promise<Result<RemoteFile[]>>` | 列出仓库目录下的条目 |
@@ -490,6 +491,11 @@ export type DownloadPhase = 'preparing' | 'downloading' | 'done' | 'error' | 'ca
 `contentsWrite` / `contentsDelete` 参数说明：
 - `sha`：文件 blob SHA；`contentsWrite` 在更新时必填，新建时可省略；`contentsDelete` 始终必填。
 - `branch`：可选，目标分支，缺省使用默认分支。
+
+`searchRepos` 参数与返回说明：
+- `query`：必填，搜索关键词（对应 Search API 的 `q` 参数）。
+- `sort`：可选，排序方式（如 `stars`、`forks`、`updated`）。
+- 内部调用 `octokit.search.repos({ q, per_page: 50 })`，返回 `items` 数组；条目字段含 `full_name`、`description`、`stargazers_count`、`forks_count`、`clone_url`、`html_url` 等。
 
 ---
 
@@ -508,6 +514,7 @@ export type DownloadPhase = 'preparing' | 'downloading' | 'done' | 'error' | 'ca
 | `contentsRead` | `gt:contents-read` | `(owner: string, repo: string, path: string, ref?: string) => Promise<Result<RemoteFileContent>>` | 无 |
 | `contentsWrite` | `gt:contents-write` | `(params: { owner: string; repo: string; path: string; content: string; message: string; sha?: string; branch?: string }) => Promise<Result<void>>` | 无 |
 | `contentsDelete` | `gt:contents-delete` | `(params: { owner: string; repo: string; path: string; message: string; sha: string; branch?: string }) => Promise<Result<void>>` | 无 |
+| `searchRepos` | `gt:search-repos` | `(query: string, sort?: string) => Promise<Result<any[]>>` | ★ v0.3.4：**搜索降级**。优先调用 Gitee `/search/repositories` 搜索 API；该 API 目前对仓库搜索恒返回空数组（已失效），空结果时自动降级为「我的仓库」（`/user/repos`）本地过滤（按名称/描述匹配 `query`） |
 
 ---
 
@@ -560,6 +567,7 @@ export type DownloadPhase = 'preparing' | 'downloading' | 'done' | 'error' | 'ca
 
 > ★ v0.2.4+：下载过程走 4 路并发 HTTP Range（实测提速 3~6 倍），`speedBps` 字段实时填入速率
 > ★ v0.2.6+：探活改用 `Range: bytes=0-0` GET（兼容部分 CDN/防火墙对 HEAD 的限制），错误信息汇总所有源失败原因
+> ★ v0.3.1+/v0.3.3+：更新下载修复——Gitee 源下载地址取 Release 附件 URL；发起请求必须调用 `req.end()` 才会真正发出；探活重试 2 次、整体轮询最多 6 轮、同源重试 2 次
 
 ---
 
@@ -739,12 +747,15 @@ nativeTheme.themeSource = 'dark';
 | `GH_LIST_REPOS` | `gh:list-repos` |
 | `GH_CREATE_REPO` | `gh:create-repo` |
 | `GH_DELETE_REPO` | `gh:delete-repo` |
+| `GH_SEARCH_REPOS` | `gh:search-repos` |
 | `GH_LIST_PRS` | `gh:list-prs` |
 | `GH_LIST_ISSUES` | `gh:list-issues` |
 | `GH_CONTENTS_LIST` | `gh:contents-list` |
 | `GH_CONTENTS_READ` | `gh:contents-read` |
 | `GH_CONTENTS_WRITE` | `gh:contents-write` |
 | `GH_CONTENTS_DELETE` | `gh:contents-delete` |
+
+> `GH_SEARCH_REPOS`：渲染层调用 `gitgui.github.searchRepos(q)`，主进程走 GitHub Search API（`octokit.search.repos`）。
 
 ### 5.6 Gitee（`gitee`）
 
@@ -753,12 +764,15 @@ nativeTheme.themeSource = 'dark';
 | `GT_LIST_REPOS` | `gt:list-repos` |
 | `GT_CREATE_REPO` | `gt:create-repo` |
 | `GT_DELETE_REPO` | `gt:delete-repo` |
+| `GT_SEARCH_REPOS` | `gt:search-repos` |
 | `GT_LIST_PRS` | `gt:list-prs` |
 | `GT_LIST_ISSUES` | `gt:list-issues` |
 | `GT_CONTENTS_LIST` | `gt:contents-list` |
 | `GT_CONTENTS_READ` | `gt:contents-read` |
 | `GT_CONTENTS_WRITE` | `gt:contents-write` |
 | `GT_CONTENTS_DELETE` | `gt:contents-delete` |
+
+> `GT_SEARCH_REPOS`：渲染层调用 `gitgui.gitee.searchRepos(q)`，主进程优先调用 Gitee `/search/repositories` 搜索，空结果时降级为「我的仓库」（`/user/repos`）本地过滤。
 
 ### 5.7 设置与对话框（`settings` / `dialog`）
 

@@ -29,11 +29,11 @@
 
 | 维度 | 数值 |
 | --- | --- |
-| 当前版本 | `0.2.6`（见 `package.json`） |
+| 当前版本 | `0.3.4`（见 `package.json`） |
 | 维护者 | `buxiaju`（GitHub + Gitee 同名） |
 | 主仓库 | https://github.com/buxiaju/KunyaoGit |
 | 镜像 | https://gitee.com/buxiaju/KunyaoGit |
-| Release | GitHub 与 Gitee 都有 v0.1.0 / v0.2.0 / v0.2.1 / v0.2.2 / v0.2.3 / v0.2.4 / v0.2.5 / v0.2.6 |
+| Release | GitHub 与 Gitee 都有 v0.1.0 / v0.2.0 / v0.2.1 / v0.2.2 / v0.2.3 / v0.2.4 / v0.2.5 / v0.2.6 / v0.3.0 / v0.3.1 / v0.3.2 / v0.3.3 / v0.3.4 |
 | 平台目标 | Windows 10/11 x64（macOS / Linux 暂未验证） |
 | 包大小 | NSIS 安装包 ~86 MB，便携版 ~3.5 MB |
 | License | MIT |
@@ -49,7 +49,10 @@
 - 仓库创建 / 删除
 - Tag + Release 管理（GitHub / Gitee），含 Conventional Commits 自动生成 CHANGELOG
 - **自动更新检查**（GitHub + Gitee 双源，启动后 1.5s 静默）
-- **★ 应用内自动更新**（v0.2.2 多源下载 Gitee 优先 / GitHub 兜底 + 实时进度条 + 下载完成自动启动安装包；v0.2.4 4 路 Range 并发提速 3~6 倍 + 实时速率；v0.2.6 探活改 GET 兼容部分 CDN；**v0.3.1 Gitee 源改走 Release 附件下载 + 连接阶段超时**）
+- **★ 应用内自动更新**（v0.2.2 多源下载 Gitee 优先 / GitHub 兜底 + 实时进度条 + 下载完成自动启动安装包；v0.2.4 4 路 Range 并发提速 3~6 倍 + 实时速率；v0.2.6 探活改 GET 兼容部分 CDN；**v0.3.1 Gitee 源改走 Release 附件下载 + 连接阶段超时；v0.3.3 修复 req.end() 缺失（请求从未发送的致命 bug）+ 探活/下载多级重试容错**）
+- **首页仓库入口**（v0.3.0：打开/克隆仓库后自动进入仓库页；首页「当前已打开仓库」入口卡片；侧边栏仓库卡片可点击）
+- **文件树默认折叠**（v0.3.2：进入文件页所有目录默认收起，点击箭头展开）
+- **云端仓库搜索**（v0.3.4：GitHub/Gitee 仓库页顶部栏搜索框；GitHub 官方 Search API 全平台搜索，Gitee API 失效降级为本地过滤）
 - **多语言切换**（v0.2.3：中文 / English，React Context + useI18n hook，设置页或侧边栏一键切换）
 - **三主题切换**（v0.2.5：暗色 / 深蓝 / 亮色，CSS 变量 + 选择器覆盖实现，零业务代码迁移）
 - **专属应用图标**（Jade 绿 + K + Git 分支节点）
@@ -136,7 +139,7 @@ KunyaoGit/
 │   ├── pages/
 │   │   ├── HomePage.tsx            # 首页：最近仓库 + 打开 / 克隆
 │   │   ├── RepoPage.tsx            # 仓库详情（路由壳，组合 Changes / Branch / History / Editor）
-│   │   ├── RemotePage.tsx          # 列出 GitHub / Gitee 上的仓库
+│   │   ├── RemotePage.tsx          # 列出 GitHub / Gitee 上的仓库 + v0.3.4 顶部搜索框（云端搜索 API）
 │   │   ├── RepoDetailPage.tsx      # 远程仓库的 Contents 浏览器 + Monaco 编辑
 │   │   ├── ReleasesPage.tsx        # 当前本地仓库的 Release 管理
 │   │   └── SettingsPage.tsx        # 设置（含 ★「关于 + 检查更新」卡片）
@@ -152,7 +155,7 @@ KunyaoGit/
 │   │       ├── CommitHistory.tsx   # git log 时间线（含 Tag / 分支引用）
 │   │       ├── DiffViewer.tsx      # 自实现 unified diff（并排 / 统一两种模式）
 │   │       ├── EditorPane.tsx      # Monaco 包装
-│   │       ├── FileTree.tsx        # 文件树
+│   │       ├── FileTree.tsx        # 文件树（v0.3.0 工具栏新建/右键菜单增删改；v0.3.2 默认折叠）
 │   │       └── RemotePanel.tsx     # remote 列表 + add / remove
 │   ├── hooks/
 │   │   ├── useUpdateCheck.ts       # ★ 启动 1.5s 后静默检查更新
@@ -335,7 +338,7 @@ KunyaoGit/
 
 ### GitHub（`github.*`）
 
-`list-repos` / `create-repo` / `delete-repo` / `list-prs` / `list-issues` / `contents-list` / `contents-read` / `contents-write` / `contents-delete`
+`list-repos` / **`search-repos`（v0.3.4 云端仓库搜索）** / `create-repo` / `delete-repo` / `list-prs` / `list-issues` / `contents-list` / `contents-read` / `contents-write` / `contents-delete`
 
 ### Gitee（`gitee.*`）
 
@@ -408,12 +411,13 @@ App 层逻辑（v0.2.2 重写）：
   │  用户点"忽略此版本"     → update.dismiss(ver) → electron-store
   │  用户关闭对话框          → hide()
   │
-  ├─ 探活（v0.2.6 改造）
-  │  probeRange() 并行探测 Gitee / GitHub
+  ├─ 探活（v0.2.6 改造 / v0.3.3 容错）
+  │  probeRangeWithRetry() 并行探测 Gitee / GitHub
   │  ├─ GET + Range: bytes=0-0（v0.2.6 替代 HEAD，兼容更多 CDN）
   │  ├─ 206 → Content-Range 给到 total；200 → Content-Length 给到 total
   │  ├─ 读到 header 立即 destroy，避免整文件下载
-  │  └─ 15s 超时（v0.2.6 从 8s 提到 15s）
+  │  ├─ v0.3.3 起：单次超时 8s，每源探活重试 2 次；全部失败整轮重试最多 6 轮（轮间 3s）
+  │  └─ 请求必须 req.end()（v0.3.3 修复，此前请求从未发送）
   │  失败的源记录到 failedSources
   │
   ├─ 下载阶段 (phase='downloading')
@@ -847,6 +851,24 @@ https://gitee.com/{owner}/{repo}/releases/download/v{ver}/{filename}
 **另一个 v0.3.1 修复：连接建立阶段超时**。`req.setTimeout()` 只对「已连接 socket 的空闲」计时，TCP 握手卡死（github.com 被墙、SYN 无响应）时会无限挂起。`requestFollow()` 现在监听 `socket` 事件，在 `socket.connecting` 时起整体计时器，`connect` 后清除（探活 15s / 下载 30s）。
 
 **注意**：应用内更新器代码是"旧代码下载新版本"，所以本修复只对安装 v0.3.1+ 的用户生效；v0.2.6/v0.3.0 用户需手动下载安装 v0.3.1 一次。
+
+### 11.14 ★★ v0.3.3 致命 bug：`https.request` 漏调 `req.end()`，下载请求从未发送
+
+v0.2.2~v0.3.2 的应用内更新下载**必失败**的真正根因（v0.3.3 修复）：
+
+- `requestFollow()` 用 `lib.request(...)`（对应 `https.request`）构造请求，但**从未调用 `req.end()`**
+- Node 中 `https.request` **不会自动发送请求**（只有 `https.get` 会），于是请求对象只建立了 TCP/TLS 连接、从不发出 HTTP 请求行，服务器一直等待 → 8s/15s 后触发 socket 空闲超时 → 报「所有下载源都失败」
+- 这解释了为什么**更新检查正常**（services/update.ts 用 `https.get`，自动 end，能发现新版本）而**下载必失败**（同一批用户，检查成功下载失败）
+- v0.3.1 改 Gitee URL 无效的原因也在此——请求压根没发出去
+- 排查手段：在 Electron 内嵌 Node（`ELECTRON_RUN_AS_NODE=1`）下做 A/B 对照，加 `req.end()` 后 12/12 成功、不加 12/12 失败
+
+**教训**：任何用 `http.request` / `https.request` 的地方，记得 `req.end()`（无 body 的 GET 也要）。用 `http.get` / `https.get` 可免。
+
+v0.3.3 同时加了下载容错：探活每源 2 次（8s 超时）+ 全部失败整轮重试最多 6 轮（轮间 3s，约 2 分钟，界面提示「网络波动，第 N/6 轮重试…」）+ 下载中断同源重试 2 次。原因：国内网络对 gitee.com（DNS 被劫持到 baiduads.com 的 180.76.x.x 百度云节点）连接高度间歇，分钟级好/坏窗口交替，单次探测撞上坏窗口即失败。
+
+### 11.15 ★ v0.3.4：Gitee 官方仓库搜索 API 已失效
+
+`https://gitee.com/api/v5/search/repositories?q=xxx` **恒返回空数组 `[]`**（实测 v0.3.4 时代；`/search/users` 正常）。`electron/ipc/gitee.ts` 的 `GT_SEARCH_REPOS` 做了降级：官方 API 结果为空时，拉取 `/user/repos`（我的仓库，per_page 100）按名称/描述本地过滤，保证搜索框功能可用。未来 Gitee 若恢复该 API，`items.length > 0` 分支会自动走官方搜索，无需改动。
 
 ---
 

@@ -1,6 +1,6 @@
 # KunyaoGit 功能详解
 
-> 面向用户与开发者的完整功能清单。当前版本：**v0.2.6**（见 `package.json`）。
+> 面向用户与开发者的完整功能清单。当前版本：**v0.3.4**（见 `package.json`）。
 > 所有功能均通过 Electron IPC 实现，渲染进程仅通过 `window.gitgui.*` 调用，主进程负责真正的本地 Git / 远程 API / 文件系统操作。
 
 ---
@@ -18,6 +18,9 @@
 9. [三主题切换（v0.2.5）](#9-三主题切换v025)
 10. [设置页功能](#10-设置页功能)
 11. [安全特性](#11-安全特性)
+12. [本地文件管理（v0.3.0）](#12-本地文件管理v030)
+13. [多远程推送（v0.3.0）](#13-多远程推送v030)
+14. [云端仓库搜索（v0.3.4）](#14-云端仓库搜索v034)
 
 ---
 
@@ -110,6 +113,8 @@
 | 删除仓库 | `gh:delete-repo` | `gt:delete-repo` | 危险操作 |
 
 界面入口 `src/pages/RemotePage.tsx`，列出双平台仓库。
+
+> ★ v0.3.4：RemotePage 顶部栏新增搜索框，可云端搜索仓库（GitHub 官方 Search API；Gitee 降级为「我的仓库」本地过滤），详见 §14。
 
 ### 2.2 PR 与 Issue
 
@@ -223,7 +228,7 @@ export interface ChangelogGroup {
 
 ## 7. 应用内自动更新
 
-> v0.2.2 引入真正的「应用内下载 + 自动安装」能力，v0.2.4 大幅提速（3~6 倍），v0.2.6 修复探活在某些 CDN 上的失败。
+> v0.2.2 引入真正的「应用内下载 + 自动安装」能力，v0.2.4 大幅提速（3~6 倍），v0.2.6 修复探活在某些 CDN 上的失败，v0.3.1 切换 Gitee 下载源并新增连接超时，v0.3.3 修复 requestFollow 致命 bug 并加入下载容错。
 > 用户无需手动去浏览器下载安装包；本节按版本演进顺序说明。
 
 ### 7.1 整体流程
@@ -251,7 +256,7 @@ compareVersion(current, latest) 选两个平台中版本最高的
 App 层逻辑：
   - 无更新 → 静默
   - 有更新 + 未 dismiss → UpdateDialog 弹窗
-    - 立即下载并安装 → 应用内下载（v0.2.4 多连接提速 + v0.2.6 探活修复）→ 自动启动安装包 → 退出应用
+    - 立即下载并安装 → 应用内下载（v0.2.4 多连接提速 + v0.2.6 探活修复 + v0.3.1 源切换与连接超时 + v0.3.3 容错重试）→ 自动启动安装包 → 退出应用
     - 稍后 → 关闭弹窗
     - 浏览器打开 → shell.openExternal
     - 取消 / 错误重试
@@ -272,6 +277,8 @@ function downloadSources(ver) {
   ];
 }
 ```
+
+> ★ v0.3.1 起：Gitee 源已改为 **Release 附件下载 URL**（raw 对 >50MB 文件返回 403），上方代码块为 v0.3.0 及更早版本的下载源定义，详见 §7.11。
 
 - **Gitee 优先**：国内下载速度快，安装包入库在 `.release-assets/`，通过 git raw 分发
 - **GitHub 兜底**：Gitee 失败 / 返回 HTML（大文件受限）/ 超时，自动切换 GitHub Release CDN
@@ -335,7 +342,7 @@ export interface DownloadProgress {
 | 文件 | 职责 |
 | --- | --- |
 | `electron/services/update.ts` | 版本检查、版本比较、GitHub/Gitee release API |
-| `electron/ipc/update.ts` | IPC handler + 应用内下载安装 + 进度推送 + ★ v0.2.4 Range 多连接下载 + ★ v0.2.6 Range 探活 |
+| `electron/ipc/update.ts` | IPC handler + 应用内下载安装 + 进度推送 + ★ v0.2.4 Range 多连接下载 + ★ v0.2.6 Range 探活 + ★ v0.3.1 下载源切换与连接超时 + ★ v0.3.3 requestFollow 修复与下载容错 |
 | `src/hooks/useUpdateCheck.ts` | 启动 1.5s 后静默检查 |
 | `src/stores/update.ts` | zustand store，驱动下载流程 |
 | `src/components/common/UpdateDialog.tsx` | 弹窗 UI（询问 / 下载中 / 完成 / 错误） |
@@ -372,6 +379,19 @@ v0.2.6 改为 **`Range: bytes=0-0` GET 探活**（兼容性远好于 HEAD）：
 ```
 
 可以一眼看出是「GitHub 走不通 + Gitee 大文件受限」还是「两个源都连不上」，方便诊断是网络问题还是源问题。
+
+### 7.11 ★ v0.3.1：Gitee 下载源切换 + 连接超时
+
+- Gitee 下载源从 raw 直链改为 **Release 附件下载 URL**（raw 对 >50MB 文件返回 403，安装包无法再通过 raw 分发）
+- 新增连接建立阶段超时，网络异常时不再长时间挂起
+
+### 7.12 ★ v0.3.3：修复 requestFollow 致命 bug + 下载容错
+
+- **修复历史致命 bug**：`requestFollow` 使用 `https.request` 但缺少 `req.end()`，请求从未真正发送，下载必报「所有下载源都失败」
+- **下载容错**：
+  - 每源探活重试 2 次（8s 超时）
+  - 全部失败整轮重试最多 6 轮（约 2 分钟），界面显示「网络波动，第 N/6 轮重试…」
+  - 下载中断同源重试 2 次
 
 ---
 
@@ -515,6 +535,71 @@ v0.2.5 引入 3 套 UI 主题：**暗色（默认）** / **深蓝** / **亮色**
 ### 11.5 openExternal 白名单
 
 - `update:open` 等 `shell.openExternal` 调用会校验 URL 协议（`/^https?:\/\//`），避免任意协议跳转
+
+---
+
+## 12. 本地文件管理（v0.3.0）
+
+v0.3.0 在仓库「文件」页引入本地文件树，可在应用内直接管理仓库文件，无需切换到系统文件管理器。
+
+### 12.1 文件树操作
+
+| 操作 | 入口 | 说明 |
+| --- | --- | --- |
+| 新建文件 | 工具栏按钮 / 右键菜单 | 自动在 Monaco 中打开（见 §3） |
+| 新建文件夹 | 工具栏按钮 / 右键菜单 | - |
+| 重命名 | 右键菜单 | - |
+| 删除 | 右键菜单 | - |
+| 在编辑器中打开 | 右键菜单 | 复用 Monaco 编辑器 |
+
+- 新建 / 重命名 / 删除后自动刷新 git 状态，变更页（Changes）立即可见
+- v0.3.2 起文件树默认全部折叠，仓库文件较多时不再一打开就铺满整屏
+
+### 12.2 相关 IPC
+
+| IPC 通道 | 说明 |
+| --- | --- |
+| `fs:file-tree` | 读取仓库文件树 |
+| `fs:read-file` | 读取文件内容 |
+| `fs:write-file` | 写入 / 新建文件 |
+| `fs:mkdir-p` | 递归创建文件夹 |
+| `fs:delete` | 删除文件 / 文件夹 |
+| `fs:rename` | 重命名文件 / 文件夹 |
+
+---
+
+## 13. 多远程推送（v0.3.0）
+
+v0.3.0 起支持向多个 remote 分别推送，方便同时维护 GitHub / Gitee 双平台镜像。
+
+| 入口 | 行为 |
+| --- | --- |
+| RepoPage 头部 Push 按钮 | 改为下拉菜单，列出所有 remote（GitHub 灰色图标 / Gitee 红色图标）；点击「推送到 {name}」执行 `git push -u {remote} {branch}`，自动建立 upstream |
+| ChangesPanel「提交并推送」 | 同样支持下拉选择 remote 后提交并推送 |
+| RemotePanel | 仍可添加 / 删除 remote（见 §1.5） |
+
+---
+
+## 14. 云端仓库搜索（v0.3.4）
+
+v0.3.4 在 GitHub / Gitee 仓库页（RemotePage）顶部栏新增搜索框，输入防抖 300ms 后调用云端搜索，不再局限于本地已拉取的仓库列表。
+
+### 14.1 搜索实现
+
+| 平台 | 实现 | 说明 |
+| --- | --- | --- |
+| GitHub | 官方 Search API（`octokit.search.repos`） | 全平台搜索，不限「我的仓库」 |
+| Gitee | 官方 `/search/repositories` API 已失效（恒返回空数组） | 自动降级为「我的仓库」本地过滤，按名称 / 描述匹配 |
+
+- 显示搜索结果数量与空结果提示
+- 清空搜索框恢复「我的仓库」列表
+
+### 14.2 相关 IPC
+
+| IPC 通道 | 说明 |
+| --- | --- |
+| `gh:search-repos` | GitHub 云端仓库搜索 |
+| `gt:search-repos` | Gitee 仓库搜索（降级为「我的仓库」本地过滤） |
 
 ---
 

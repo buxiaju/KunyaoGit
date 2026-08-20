@@ -2,7 +2,7 @@
 
 > 本指南介绍 KunyaoGit 在 Windows 平台的安装、卸载、应用内更新以及从源码构建打包的完整流程。
 >
-> 当前版本：**v0.2.6**（v0.2.3+ 多语言、v0.2.4+ 下载提速 3~6 倍、v0.2.5+ 三主题、v0.2.6+ 探活修复）
+> 当前版本：**v0.3.4**（v0.3.0+ 文件管理 & 多远程推送、v0.3.1+ Gitee 下载源修复、v0.3.2+ 文件树折叠、v0.3.3+ 更新下载容错重试、v0.3.4+ 云端仓库搜索）
 
 ---
 
@@ -39,23 +39,23 @@
 
 KunyaoGit 提供 NSIS 安装包（推荐）与便携版两种分发形式，均托管于 GitHub 与 Gitee Release。
 
-### 2.1 最新版（v0.2.6）下载地址
+### 2.1 最新版（v0.3.4）下载地址
 
 **NSIS 安装包（推荐，约 86 MB）**
 
 | 平台 | 下载地址 |
 |------|----------|
-| GitHub | https://github.com/buxiaju/KunyaoGit/releases/download/v0.2.6/KunyaoGit-Setup-0.2.6-x64.exe |
-| Gitee | https://gitee.com/buxiaju/KunyaoGit/releases/v0.2.6 |
+| GitHub | https://github.com/buxiaju/KunyaoGit/releases/download/v0.3.4/KunyaoGit-Setup-0.3.4-x64.exe |
+| Gitee | https://gitee.com/buxiaju/KunyaoGit/releases/v0.3.4 |
 
-> Gitee 的安装包位于该 Release 页面的 `.release-assets/` 目录下，文件名为 `KunyaoGit-Setup-0.2.6-x64.exe`。
+> Gitee 的安装包位于该 Release 页面的 `.release-assets/` 目录下，文件名为 `KunyaoGit-Setup-0.3.4-x64.exe`。
 
 **便携版（约 3.5 MB，需本机已安装 Node.js）**
 
 | 平台 | 下载地址 |
 |------|----------|
-| GitHub | https://github.com/buxiaju/KunyaoGit/releases/download/v0.2.6/KunyaoGit-portable-v0.2.6.zip |
-| Gitee | https://gitee.com/buxiaju/KunyaoGit/releases/v0.2.6 |
+| GitHub | https://github.com/buxiaju/KunyaoGit/releases/download/v0.3.4/KunyaoGit-portable-v0.3.4.zip |
+| Gitee | https://gitee.com/buxiaju/KunyaoGit/releases/v0.3.4 |
 
 > 完整发布列表见 [附录 A. 版本与下载速查](#附录-a-版本与下载速查)。
 
@@ -74,7 +74,7 @@ KunyaoGit 提供 NSIS 安装包（推荐）与便携版两种分发形式，均�
 
 ### 3.1 运行安装程序
 
-1. 双击下载的 `KunyaoGit-Setup-0.2.6-x64.exe` 文件。
+1. 双击下载的 `KunyaoGit-Setup-0.3.4-x64.exe` 文件。
 2. 若出现 Windows SmartScreen 提示「Windows 已保护你的电脑」，点击「更多信息」→「仍要运行」。
 3. 若弹出用户账户控制（UAC）提示，点击「是」授权运行。
 
@@ -117,7 +117,7 @@ KunyaoGit 提供 NSIS 安装包（推荐）与便携版两种分发形式，均�
 
 ### 4.2 使用步骤
 
-1. 下载 `KunyaoGit-portable-v0.2.6.zip`。
+1. 下载 `KunyaoGit-portable-v0.3.4.zip`。
 2. 将压缩包解压到任意目录，例如 `D:\Tools\KunyaoGit`。
 3. 进入解压目录，双击运行 `kunyaogit.exe`。
 
@@ -146,6 +146,12 @@ KunyaoGit 内置自动更新检查，无需手动重新下载安装包。
 进入「设置 → 关于 → 检查更新」，可随时手动触发检查。结果卡片提供「立即下载并安装」「浏览器打开」「忽略此版本」等操作。
 
 > 详细操作说明见《用户操作指南》第 8 章。
+
+### 5.4 更新下载机制说明
+
+- **v0.3.1 起**：Gitee 下载源改为官方 Release 附件直链（`releases/download/vX.Y.Z/...`），不再走 raw 直链——Gitee raw 对大于 50MB 的文件返回 403，会导致大安装包下载失败。
+- **v0.3.3 起**：下载内置容错，网络波动时自动重试——探活每个源最多 2 次、整体最多 6 轮（约 2 分钟），界面会显示「网络波动，第 N/6 轮重试…」；下载中断时会对同一源自动重试，无需手动操作。
+- 若应用内更新持续失败（多为旧版本更新器 bug），请手动下载最新安装包覆盖安装（覆盖安装无需先卸载旧版本，配置数据会保留）。
 
 ---
 
@@ -238,7 +244,7 @@ npm run build:win
 产物输出在 `release` 目录下，文件名形如：
 
 ```
-release/KunyaoGit-Setup-0.2.6-x64.exe
+release/KunyaoGit-Setup-0.3.4-x64.exe
 ```
 
 ### 8.2 直接构建（含打包）
@@ -293,7 +299,7 @@ electron-builder 默认会自动下载所需 NSIS 工具到缓存目录（通常
 node scripts/build/package-portable.cjs
 ```
 
-产出 `KunyaoGit-portable-v0.2.6.zip`，体积小但需目标机器具备 Node.js 环境。
+产出 `KunyaoGit-portable-v0.3.4.zip`，体积小但需目标机器具备 Node.js 环境。
 
 ---
 
@@ -351,6 +357,12 @@ node scripts/build/package-portable.cjs
 
 **现象**：点击「立即下载并安装」后下载失败。
 
+**可能原因**：
+
+1. **旧版本更新器 bug**：v0.3.3 之前的版本存在 `req.end` 缺失问题，会导致应用内下载必然失败；请手动下载安装包覆盖安装，升级到 v0.3.3+ 后再试应用内更新。
+2. **Gitee raw 直链 403**：Gitee raw 对 >50MB 文件返回 403，v0.3.1 起已改为官方 Release 附件直链（`releases/download/vX.Y.Z/...`）；使用旧版本时请优先选择 GitHub 源或手动下载。
+3. **网络波动**：v0.3.3+ 下载内置容错会自动重试（探活每源 2 次 + 整体最多 6 轮约 2 分钟，界面显示「网络波动，第 N/6 轮重试…」）；若自动重试后仍失败，多为网络不通或源不可达。
+
 **解决**：
 
 1. 看错误信息：v0.2.6+ 会**列出所有源**的失败原因（如「github（请求失败（超时/网络））; gitee（Gitee raw 返 HTML（大文件受限））」），可以一眼判断是网络问题还是源问题。
@@ -358,7 +370,7 @@ node scripts/build/package-portable.cjs
 3. 若持续失败，点击「浏览器下载」跳转浏览器手动下载安装包。
 4. 检查网络是否能访问对应平台（GitHub 下载可能需要科学上网，可优先使用 Gitee 源）。
 5. 手动下载安装包后直接运行覆盖安装即可，无需先卸载旧版本。
-6. v0.2.4+ 下载走 4 路并发 HTTP Range，从 18s 降到 4-6s；v0.2.6+ 探活改 GET 替代 HEAD，避开部分网络对 HEAD 的限制。
+6. v0.2.4+ 下载走 4 路并发 HTTP Range，从 18s 降到 4-6s；v0.2.6+ 探活改 GET 替代 HEAD，避开部分网络对 HEAD 的限制；v0.3.3+ 网络波动自动重试，下载中断会同源重试。
 
 ### 9.7 安装后无法启动 / 闪退
 
@@ -412,6 +424,11 @@ node scripts/build/package-portable.cjs
 
 | 版本 | 安装包（GitHub） | 便携版（GitHub） | 主要变化 |
 |------|-------------------|------------------|----------|
+| v0.3.4 | `KunyaoGit-Setup-0.3.4-x64.exe` | `KunyaoGit-portable-v0.3.4.zip` | ☁️ 云端仓库搜索 |
+| v0.3.3 | `KunyaoGit-Setup-0.3.3-x64.exe` | `KunyaoGit-portable-v0.3.3.zip` | 🔁 更新下载修复 + 网络波动自动重试 |
+| v0.3.2 | `KunyaoGit-Setup-0.3.2-x64.exe` | `KunyaoGit-portable-v0.3.2.zip` | 🌲 文件树折叠 |
+| v0.3.1 | `KunyaoGit-Setup-0.3.1-x64.exe` | `KunyaoGit-portable-v0.3.1.zip` | 🔧 Gitee 下载源修复（改用 Release 附件直链）|
+| v0.3.0 | `KunyaoGit-Setup-0.3.0-x64.exe` | `KunyaoGit-portable-v0.3.0.zip` | 📁 文件管理 + 多远程推送 |
 | v0.2.6 | `KunyaoGit-Setup-0.2.6-x64.exe` | `KunyaoGit-portable-v0.2.6.zip` | 🐛 修应用内更新器探活用 GET 替代 HEAD |
 | v0.2.5 | `KunyaoGit-Setup-0.2.5-x64.exe` | `KunyaoGit-portable-v0.2.5.zip` | 🎨 三主题切换（暗色 / 深蓝 / 亮色）|
 | v0.2.4 | `KunyaoGit-Setup-0.2.4-x64.exe` | `KunyaoGit-portable-v0.2.4.zip` | ⚡ 下载速度优化 3~6 倍（4 路 Range 并发）|
