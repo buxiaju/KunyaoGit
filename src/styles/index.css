@@ -263,4 +263,11 @@
     background-color: var(--bg-active);
     color: var(--text-primary);
   }
+
+  /* Status bar (v0.4+) —— 底部 24px 横栏，VS Code / GitKraken 风格 */
+  .statusbar {
+    height: 24px;
+    background-color: var(--bg-panel);
+    border-color: var(--border-strong);
+  }
 }

@@ -1,8 +1,9 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { Home, FolderGit2, Globe, Tag, Settings, Github, ExternalLink, Languages, ChevronRight } from 'lucide-react';
+import { Home, FolderGit2, Globe, Tag, Settings, Github, ExternalLink, Languages, ChevronRight, Keyboard, Command } from 'lucide-react';
 import { useRepoStore } from '../../stores/repo';
 import { useSettingsStore } from '../../stores/settings';
 import { useI18n } from '../../i18n';
+import StatusBar from '../common/StatusBar';
 
 export default function Layout() {
   const current = useRepoStore((s) => s.current);
@@ -26,7 +27,9 @@ export default function Layout() {
   ];
 
   return (
-    <div className="h-full flex bg-gray-900 text-gray-100">
+    <div className="h-full flex flex-col bg-gray-900 text-gray-100">
+      {/* 主体 + 侧边栏（水平排列） */}
+      <div className="flex-1 flex overflow-hidden">
       {/* 侧边栏 */}
       <aside className="w-56 border-r border-gray-800 flex flex-col">
         <div className="px-4 py-3 border-b border-gray-800 flex items-center gap-2">
@@ -109,6 +112,31 @@ export default function Layout() {
               {lang === 'zh' ? 'EN' : '中文'}
             </button>
           </div>
+          {/* v0.4+ 快捷键入口：常驻显示，提示用户 */}
+          <div className="flex items-center gap-1 pt-1 border-t border-gray-800/50">
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent('kg:shortcut:cheatsheet'))}
+              className="flex-1 flex items-center gap-1.5 px-1.5 py-1 rounded text-gray-500 hover:text-gray-200 hover:bg-gray-800/60 transition-colors"
+              title={t('layout.shortcutsHint')}
+            >
+              <Keyboard size={11} />
+              <span>{t('layout.shortcuts')}</span>
+              <kbd className="ml-auto px-1 py-0.5 text-[9px] font-mono rounded border border-gray-700 text-gray-500">
+                ?
+              </kbd>
+            </button>
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent('kg:shortcut:open-palette'))}
+              className="flex-1 flex items-center gap-1.5 px-1.5 py-1 rounded text-gray-500 hover:text-gray-200 hover:bg-gray-800/60 transition-colors"
+              title={t('layout.commandPaletteHint')}
+            >
+              <Command size={11} />
+              <span>{t('layout.commands')}</span>
+              <kbd className="ml-auto px-1 py-0.5 text-[9px] font-mono rounded border border-gray-700 text-gray-500">
+                ⇧P
+              </kbd>
+            </button>
+          </div>
         </div>
       </aside>
 
@@ -116,6 +144,10 @@ export default function Layout() {
       <main className="flex-1 overflow-hidden">
         <Outlet />
       </main>
+      </div>
+
+      {/* 底部状态栏（v0.4+） */}
+      <StatusBar />
     </div>
   );
 }
