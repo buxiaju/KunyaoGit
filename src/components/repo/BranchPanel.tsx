@@ -1,19 +1,24 @@
 import { useState } from 'react';
 import { useRepoStore } from '../../stores/repo';
 import { useI18n } from '../../i18n';
-import { GitBranch, Plus, Trash2, Check, GitMerge } from 'lucide-react';
+import { GitBranch, Plus, Trash2, Check, GitMerge, GitPullRequest } from 'lucide-react';
 import { toast } from '../common/Toast';
+import CreatePRDialog from './CreatePRDialog';
 
 export default function BranchPanel() {
-  const { current, branches, refreshBranches } = useRepoStore();
+  const { current, branches, refreshBranches, remotes } = useRepoStore();
   const { t } = useI18n();
   const [newName, setNewName] = useState('');
   const [showNew, setShowNew] = useState(false);
+  const [prDialogOpen, setPrDialogOpen] = useState(false);
 
   if (!current) return null;
 
   const local = branches.filter((b) => !b.remote);
   const remote = branches.filter((b) => b.remote);
+  const currentBranch = local.find((b) => b.current);
+  // 是否有任意 github/gitee remote（parseRemote 在 CreatePRDialog 内做，这里粗判）
+  const hasPlatformRemote = remotes.some((r) => /github\.com|gitee\.com/i.test(r.url));
 
   const checkout = async (name: string) => {
     const r = await window.gitgui.git.checkout(current.path, name);
@@ -59,14 +64,35 @@ export default function BranchPanel() {
     }
   };
 
+  // 创建 PR 入口：ahead=0 时给提示但不阻止打开（允许先 push 后建）
+  const openPrDialog = () => {
+    if (currentBranch && (currentBranch.ahead === undefined || currentBranch.ahead === 0)) {
+      toast.warn(t('createPR.noNewCommitsHint'));
+    }
+    setPrDialogOpen(true);
+  };
+
   return (
     <div className="h-full overflow-auto p-4">
       <div className="max-w-3xl mx-auto">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-medium">{t('repo.branchLocal')}</h2>
-          <button onClick={() => setShowNew(!showNew)} className="btn-secondary text-xs">
-            <Plus size={12} /> {t('repo.newBranch')}
-          </button>
+          <div className="flex items-center gap-1.5">
+            {/* v0.4+ 创建 PR / MR：常驻按钮，便于发现 */}
+            {hasPlatformRemote && currentBranch && (
+              <button
+                onClick={openPrDialog}
+                className="btn-secondary text-xs"
+                title={t('createPR.buttonHint')}
+              >
+                <GitPullRequest size={12} />
+                {t('createPR.button')}
+              </button>
+            )}
+            <button onClick={() => setShowNew(!showNew)} className="btn-secondary text-xs">
+              <Plus size={12} /> {t('repo.newBranch')}
+            </button>
+          </div>
         </div>
 
         {showNew && (
@@ -142,6 +168,15 @@ export default function BranchPanel() {
           </>
         )}
       </div>
+
+      {/* v0.4+ 创建 PR / MR */}
+      {currentBranch && (
+        <CreatePRDialog
+          open={prDialogOpen}
+          headBranch={currentBranch.name}
+          onClose={() => setPrDialogOpen(false)}
+        />
+      )}
     </div>
   );
 }

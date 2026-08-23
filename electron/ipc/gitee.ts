@@ -248,4 +248,41 @@ export function registerGiteeHandlers() {
       return { ok: false, error: e.response?.data?.message || e.message };
     }
   });
+
+  // v0.4+ MR 创建（Gitee 的 PR 叫 Pull Request，API 一致）
+  ipcMain.handle(IPC.GT_CREATE_PR, async (_e, { owner, repo, title, body, head, base, draft }: { owner: string; repo: string; title: string; body?: string; head: string; base: string; draft?: boolean }): Promise<Result<{ number: number; url: string; htmlUrl: string }>> => {
+    const client = getClient();
+    if (!client) return { ok: false, error: '未配置 Gitee Token' };
+    try {
+      const r = await client.post(`/repos/${owner}/${repo}/pulls`, {
+        title,
+        body: body || '',
+        head,
+        base,
+        // Gitee 没有 draft 概念，忽略
+      });
+      return {
+        ok: true,
+        data: {
+          number: r.data.number,
+          url: r.data.url,
+          htmlUrl: r.data.html_url,
+        },
+      };
+    } catch (e: any) {
+      return { ok: false, error: e.response?.data?.message || e.message };
+    }
+  });
+
+  // v0.4+ 读 Gitee 仓库默认分支
+  ipcMain.handle(IPC.GT_GET_DEFAULT_BRANCH, async (_e, { owner, repo }: { owner: string; repo: string }): Promise<Result<string>> => {
+    const client = getClient();
+    if (!client) return { ok: false, error: '未配置 Gitee Token' };
+    try {
+      const r = await client.get(`/repos/${owner}/${repo}`);
+      return { ok: true, data: r.data.default_branch || 'master' };
+    } catch (e: any) {
+      return { ok: false, error: e.response?.data?.message || e.message };
+    }
+  });
 }

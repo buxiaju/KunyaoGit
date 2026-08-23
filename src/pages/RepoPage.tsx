@@ -11,6 +11,7 @@ import ChangesPanel from '../components/repo/ChangesPanel';
 import RemotePanel from '../components/repo/RemotePanel';
 import { ArrowLeft, RefreshCw, GitBranch, GitPullRequest, Plus, Upload, X, ChevronDown, Github, Globe, Loader2 } from 'lucide-react';
 import { toast } from '../components/common/Toast';
+import CreatePRDialog from '../components/repo/CreatePRDialog';
 
 type Tab = 'changes' | 'history' | 'branches' | 'remote' | 'files';
 
@@ -24,6 +25,7 @@ export default function RepoPage() {
   const [dragging, setDragging] = useState(false);
   const [pushMenuOpen, setPushMenuOpen] = useState(false);
   const [pushingTo, setPushingTo] = useState<string | null>(null);
+  const [prDialogOpen, setPrDialogOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pushMenuRef = useRef<HTMLDivElement>(null);
 
@@ -40,6 +42,37 @@ export default function RepoPage() {
   useEffect(() => {
     if (!current) nav('/');
   }, [current, nav]);
+
+  // v0.4+ 全局快捷键 / 命令面板派发的事件
+  useEffect(() => {
+    if (!current) return;
+    const onNavigateTab = (e: Event) => {
+      const tab = (e as CustomEvent).detail as Tab;
+      if (['changes', 'history', 'branches', 'remote', 'files'].includes(tab)) setTab(tab);
+    };
+    const onRefresh = () => {
+      handleRefresh();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      // 在 input / textarea / contentEditable 内不响应
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      if (e.altKey || e.ctrlKey || e.metaKey) return;
+      if (e.key === '1') setTab('changes');
+      else if (e.key === '2') setTab('history');
+      else if (e.key === '3') setTab('branches');
+      else if (e.key === '4') setTab('remote');
+      else if (e.key === '5') setTab('files');
+    };
+    window.addEventListener('kg:navigate:tab', onNavigateTab as EventListener);
+    window.addEventListener('kg:shortcut:refresh', onRefresh as EventListener);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('kg:navigate:tab', onNavigateTab as EventListener);
+      window.removeEventListener('kg:shortcut:refresh', onRefresh as EventListener);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [current]);
 
   if (!current) return null;
 
@@ -120,6 +153,14 @@ export default function RepoPage() {
     }
   };
 
+  // 创建 PR 入口：ahead=0 时给提示
+  const openPrDialog = () => {
+    if (currentBranch && (currentBranch.ahead === undefined || currentBranch.ahead === 0)) {
+      toast.warn(t('createPR.noNewCommitsHint'));
+    }
+    setPrDialogOpen(true);
+  };
+
   // 推送到指定 remote（GitHub / Gitee / ...）
   const handlePushTo = async (remote: { name: string; url: string; type: 'github' | 'gitee' | 'other' }) => {
     if (!current) return;
@@ -146,6 +187,8 @@ export default function RepoPage() {
   const currentBranch = branches.find((b) => b.current);
   const stagedCount = status.filter((s) => s.staged).length;
   const changedCount = status.length;
+  // 是否有平台 remote（GitHub / Gitee）
+  const hasPlatformRemote = remotes.some((r) => /github\.com|gitee\.com/i.test(r.url));
 
   return (
     <div
@@ -203,6 +246,16 @@ export default function RepoPage() {
           <button onClick={handleFetch} className="btn-ghost">
             <GitPullRequest size={14} /> Fetch
           </button>
+          {/* v0.4+ 创建 PR / MR：常驻按钮（仅在有平台 remote 时显示） */}
+          {hasPlatformRemote && (
+            <button
+              onClick={openPrDialog}
+              className="btn-ghost"
+              title={t('createPR.buttonHint')}
+            >
+              <GitPullRequest size={14} /> {t('createPR.button')}
+            </button>
+          )}
           <button onClick={handlePull} className="btn-secondary">{t('repo.pull')}</button>
           {/* Push：主按钮推默认 upstream，下拉选择指定 remote（GitHub / Gitee） */}
           <div className="relative" ref={pushMenuRef}>
@@ -275,6 +328,15 @@ export default function RepoPage() {
             <div className="text-xs text-gray-400 mt-1">{t('repo.dropDesc')}</div>
           </div>
         </div>
+      )}
+
+      {/* v0.4+ 创建 PR / MR 对话框（顶部工具栏触发） */}
+      {currentBranch && (
+        <CreatePRDialog
+          open={prDialogOpen}
+          headBranch={currentBranch.name}
+          onClose={() => setPrDialogOpen(false)}
+        />
       )}
     </div>
   );

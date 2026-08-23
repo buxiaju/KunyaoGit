@@ -200,4 +200,35 @@ export function registerGithubHandlers() {
       return { ok: false, error: e.message };
     }
   });
+
+  // v0.4+ PR 创建
+  ipcMain.handle(IPC.GH_CREATE_PR, async (_e, { owner, repo, title, body, head, base, draft }: { owner: string; repo: string; title: string; body?: string; head: string; base: string; draft?: boolean }): Promise<Result<{ number: number; url: string; htmlUrl: string }>> => {
+    const oct = getOctokit();
+    if (!oct) return { ok: false, error: '未配置 GitHub Token' };
+    try {
+      const r = await oct.pulls.create({ owner, repo, title, body, head, base, draft });
+      return {
+        ok: true,
+        data: {
+          number: r.data.number,
+          url: r.data.url,
+          htmlUrl: r.data.html_url,
+        },
+      };
+    } catch (e: any) {
+      return { ok: false, error: e.response?.data?.message || e.message };
+    }
+  });
+
+  // v0.4+ 读仓库默认分支
+  ipcMain.handle(IPC.GH_GET_DEFAULT_BRANCH, async (_e, { owner, repo }: { owner: string; repo: string }): Promise<Result<string>> => {
+    const oct = getOctokit();
+    if (!oct) return { ok: false, error: '未配置 GitHub Token' };
+    try {
+      const r = await oct.repos.get({ owner, repo });
+      return { ok: true, data: r.data.default_branch };
+    } catch (e: any) {
+      return { ok: false, error: e.response?.data?.message || e.message };
+    }
+  });
 }
