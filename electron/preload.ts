@@ -46,10 +46,20 @@ const api = {
       ipcRenderer.invoke(IPC.GIT_DIFF_FILE, { path: repoPath, file, ...opts }),
     stash: (repoPath: string, message?: string) => ipcRenderer.invoke(IPC.GIT_STASH, { path: repoPath, message }),
     stashPop: (repoPath: string) => ipcRenderer.invoke(IPC.GIT_STASH_POP, repoPath),
+    // v0.4+ Stash 队列管理
+    stashList: (repoPath: string) => ipcRenderer.invoke(IPC.GIT_STASH_LIST, repoPath),
+    stashShow: (repoPath: string, ref: string) => ipcRenderer.invoke(IPC.GIT_STASH_SHOW, { path: repoPath, ref }),
+    stashApply: (repoPath: string, ref: string) => ipcRenderer.invoke(IPC.GIT_STASH_APPLY, { path: repoPath, ref }),
+    stashDrop: (repoPath: string, ref: string) => ipcRenderer.invoke(IPC.GIT_STASH_DROP, { path: repoPath, ref }),
     reset: (repoPath: string, target: string, mode?: 'soft' | 'mixed' | 'hard') =>
       ipcRenderer.invoke(IPC.GIT_RESET, { path: repoPath, target, mode }),
     resolveConflict: (repoPath: string, file: string, side: 'ours' | 'theirs') =>
       ipcRenderer.invoke(IPC.GIT_RESOLVE_CONFLICT, { path: repoPath, file, side }),
+    // v0.4+ Cherry-pick / Revert
+    cherryPick: (repoPath: string, hash: string, opts?: { mainline?: number }) =>
+      ipcRenderer.invoke(IPC.GIT_CHERRY_PICK, { path: repoPath, hash, ...opts }),
+    revert: (repoPath: string, hash: string, opts?: { mainline?: number }) =>
+      ipcRenderer.invoke(IPC.GIT_REVERT, { path: repoPath, hash, ...opts }),
     readConflict: (repoPath: string, file: string) =>
       ipcRenderer.invoke(IPC.GIT_READ_CONFLICT, { path: repoPath, file }),
     remoteList: (repoPath: string) => ipcRenderer.invoke(IPC.GIT_REMOTE_LIST, repoPath),
@@ -104,6 +114,11 @@ const api = {
       ipcRenderer.invoke(IPC.GH_CONTENTS_WRITE, params),
     contentsDelete: (params: { owner: string; repo: string; path: string; message: string; sha: string; branch?: string }) =>
       ipcRenderer.invoke(IPC.GH_CONTENTS_DELETE, params),
+    // v0.4+ PR
+    createPR: (params: { owner: string; repo: string; title: string; body?: string; head: string; base: string; draft?: boolean }) =>
+      ipcRenderer.invoke(IPC.GH_CREATE_PR, params),
+    getDefaultBranch: (owner: string, repo: string) =>
+      ipcRenderer.invoke(IPC.GH_GET_DEFAULT_BRANCH, { owner, repo }),
   },
 
   // Gitee
@@ -128,6 +143,11 @@ const api = {
       ipcRenderer.invoke(IPC.GT_CONTENTS_WRITE, params),
     contentsDelete: (params: { owner: string; repo: string; path: string; message: string; sha: string; branch?: string }) =>
       ipcRenderer.invoke(IPC.GT_CONTENTS_DELETE, params),
+    // v0.4+ PR
+    createPR: (params: { owner: string; repo: string; title: string; body?: string; head: string; base: string; draft?: boolean }) =>
+      ipcRenderer.invoke(IPC.GT_CREATE_PR, params),
+    getDefaultBranch: (owner: string, repo: string) =>
+      ipcRenderer.invoke(IPC.GT_GET_DEFAULT_BRANCH, { owner, repo }),
   },
 
   // 设置

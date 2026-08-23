@@ -81,12 +81,38 @@ export function registerGitHandlers() {
     return getGit(repoPath).stashPop();
   });
 
+  // v0.4+ Stash 队列管理
+  ipcMain.handle(IPC.GIT_STASH_LIST, async (_e, repoPath: string) => {
+    return getGit(repoPath).stashList();
+  });
+
+  ipcMain.handle(IPC.GIT_STASH_SHOW, async (_e, { path: p, ref }: { path: string; ref: string }) => {
+    return getGit(p).stashShow(ref);
+  });
+
+  ipcMain.handle(IPC.GIT_STASH_APPLY, async (_e, { path: p, ref }: { path: string; ref: string }) => {
+    return getGit(p).stashApply(ref);
+  });
+
+  ipcMain.handle(IPC.GIT_STASH_DROP, async (_e, { path: p, ref }: { path: string; ref: string }) => {
+    return getGit(p).stashDrop(ref);
+  });
+
   ipcMain.handle(IPC.GIT_RESET, async (_e, { path, target, mode }: { path: string; target: string; mode?: 'soft' | 'mixed' | 'hard' }) => {
     return getGit(path).reset(target, mode);
   });
 
   ipcMain.handle(IPC.GIT_RESOLVE_CONFLICT, async (_e, { path, file, side }: { path: string; file: string; side: 'ours' | 'theirs' }) => {
     return getGit(path).resolveConflict(file, side);
+  });
+
+  // v0.4+ Cherry-pick / Revert
+  ipcMain.handle(IPC.GIT_CHERRY_PICK, async (_e, { path, hash, mainline }: { path: string; hash: string; mainline?: number }) => {
+    return getGit(path).cherryPick(hash, { mainline });
+  });
+
+  ipcMain.handle(IPC.GIT_REVERT, async (_e, { path, hash, mainline }: { path: string; hash: string; mainline?: number }) => {
+    return getGit(path).revert(hash, { mainline });
   });
 
   ipcMain.handle(IPC.GIT_READ_CONFLICT, async (_e, { path, file }: { path: string; file: string }) => {

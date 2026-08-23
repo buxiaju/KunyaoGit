@@ -29,9 +29,16 @@ export const IPC = {
   GIT_DIFF_FILE: 'git:diff-file',
   GIT_STASH: 'git:stash',
   GIT_STASH_POP: 'git:stash-pop',
+  GIT_STASH_LIST: 'git:stash-list',
+  GIT_STASH_SHOW: 'git:stash-show',
+  GIT_STASH_APPLY: 'git:stash-apply',
+  GIT_STASH_DROP: 'git:stash-drop',
   GIT_RESET: 'git:reset',
   GIT_RESOLVE_CONFLICT: 'git:resolve-conflict',
   GIT_READ_CONFLICT: 'git:read-conflict',
+  // v0.4+ Cherry-pick / Revert
+  GIT_CHERRY_PICK: 'git:cherry-pick',
+  GIT_REVERT: 'git:revert',
   GIT_REMOTE_LIST: 'git:remote-list',
   GIT_REMOTE_ADD: 'git:remote-add',
   GIT_REMOTE_REMOVE: 'git:remote-remove',
@@ -65,6 +72,9 @@ export const IPC = {
   GH_CONTENTS_READ: 'gh:contents-read',
   GH_CONTENTS_WRITE: 'gh:contents-write',
   GH_CONTENTS_DELETE: 'gh:contents-delete',
+  // v0.4+ PR 创建
+  GH_CREATE_PR: 'gh:create-pr',
+  GH_GET_DEFAULT_BRANCH: 'gh:get-default-branch',
 
   // Gitee
   GT_LIST_REPOS: 'gt:list-repos',
@@ -77,6 +87,9 @@ export const IPC = {
   GT_CONTENTS_READ: 'gt:contents-read',
   GT_CONTENTS_WRITE: 'gt:contents-write',
   GT_CONTENTS_DELETE: 'gt:contents-delete',
+  // v0.4+ PR 创建
+  GT_CREATE_PR: 'gt:create-pr',
+  GT_GET_DEFAULT_BRANCH: 'gt:get-default-branch',
 
   // 设置
   SETTINGS_GET: 'settings:get',

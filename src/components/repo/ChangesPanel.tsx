@@ -3,6 +3,7 @@ import { useRepoStore } from '../../stores/repo';
 import { useI18n } from '../../i18n';
 import { CheckSquare, Square, RotateCcw, Plus, Minus, FileText, Edit2, Trash2, AlertCircle, Copy, Upload, ChevronDown, Github, Globe, GitBranch, Loader2 } from 'lucide-react';
 import { toast } from '../common/Toast';
+import StashList from './StashList';
 
 const STATUS_META = {
   added: { label: '新增', color: 'text-git-add', icon: Plus, bg: 'bg-emerald-900/20' },
@@ -128,6 +129,8 @@ export default function ChangesPanel() {
 
   return (
     <div className="h-full flex flex-col border-r border-gray-800 overflow-hidden">
+      {/* v0.4+ Stash 队列面板 */}
+      <StashList />
       <div className="flex-1 overflow-auto">
         {/* 已暂存 */}
         {staged.length > 0 && (

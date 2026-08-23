@@ -14,6 +14,7 @@ import type {
   DiffLine,
   Result,
   RemoteInfo,
+  StashEntry,
 } from '../../shared/types';
 
 export class GitService {
@@ -300,10 +301,123 @@ export class GitService {
     }
   }
 
+  /**
+   * v0.4+ 列出 stash 队列
+   * 用 --format 自定义输出：stash@{0}|hash|subject|isoDate
+   * 同时解析 "WIP on branch: hash subject" 提取分支名
+   */
+  async stashList(): Promise<Result<StashEntry[]>> {
+    try {
+      // 用空 format 占位，然后单独读每条 message（更可靠）
+      const out = await this.git.raw([
+        'stash', 'list',
+        '--format=%gd|%h|%cI|%s',
+      ]);
+      if (!out.trim()) return { ok: true, data: [] };
+      const lines = out.split('\n').filter(Boolean);
+      const entries: StashEntry[] = [];
+      for (let i = 0; i < lines.length; i++) {
+        const parts = lines[i].split('|');
+        if (parts.length < 4) continue;
+        const [ref, hash, date, ...msgParts] = parts;
+        const message = msgParts.join('|');
+        // 提取分支：形如 "WIP on main: 9c9a1b4 xxx" → main
+        const m = message.match(/^(?:WIP on |On )([^:]+?):\s*[0-9a-f]+\s*(.*)$/i);
+        const branch = m ? m[1] : '';
+        const subject = m ? m[2] : message;
+        entries.push({
+          index: i,
+          ref,
+          message: subject || message,
+          branch,
+          hash,
+          date,
+        });
+      }
+      return { ok: true, data: entries };
+    } catch (e) {
+      return { ok: false, error: (e as Error).message };
+    }
+  }
+
+  /**
+   * v0.4+ 显示某个 stash 的 diff（不应用）
+   */
+  async stashShow(ref: string): Promise<Result<FileDiff[]>> {
+    try {
+      const out = await this.git.raw(['stash', 'show', '-p', '--no-color', ref]);
+      return { ok: true, data: parseUnifiedDiff(out) };
+    } catch (e) {
+      return { ok: false, error: (e as Error).message };
+    }
+  }
+
+  /**
+   * v0.4+ 应用指定 stash（保留在队列中）
+   */
+  async stashApply(ref: string): Promise<Result<void>> {
+    try {
+      await this.git.stash(['apply', ref]);
+      return { ok: true, data: undefined };
+    } catch (e) {
+      return { ok: false, error: (e as Error).message };
+    }
+  }
+
+  /**
+   * v0.4+ 删除指定 stash（不应用）
+   */
+  async stashDrop(ref: string): Promise<Result<void>> {
+    try {
+      await this.git.stash(['drop', ref]);
+      return { ok: true, data: undefined };
+    } catch (e) {
+      return { ok: false, error: (e as Error).message };
+    }
+  }
+
   async reset(target: string, mode: 'soft' | 'mixed' | 'hard' = 'mixed'): Promise<Result<void>> {
     try {
       await this.git.reset([`--${mode}`, target]);
       return { ok: true, data: undefined };
+    } catch (e) {
+      return { ok: false, error: (e as Error).message };
+    }
+  }
+
+  /**
+   * v0.4+ Cherry-pick：把指定 commit 应用到当前分支
+   * @param hash 完整或短 SHA
+   * @param opts.noCommit 不自动提交（v0.4 暂不暴露 UI）
+   * @param opts.mainline 合并提交的 parent index（-m 1）
+   */
+  async cherryPick(hash: string, opts: { noCommit?: boolean; mainline?: number } = {}): Promise<Result<{ hash?: string }>> {
+    try {
+      const args: string[] = ['cherry-pick'];
+      if (opts.mainline !== undefined) args.push('-m', String(opts.mainline));
+      if (opts.noCommit) args.push('--no-commit');
+      args.push(hash);
+      const out = await this.git.raw(args);
+      // 成功：解析 [branch hash] 行
+      const m = out.match(/\[([^\s]+)(?: \([^)]+\))? ([0-9a-f]{7,40})\]/i);
+      return { ok: true, data: { hash: m ? m[2] : undefined } };
+    } catch (e) {
+      return { ok: false, error: (e as Error).message };
+    }
+  }
+
+  /**
+   * v0.4+ Revert：回退指定 commit（生成一个新 commit 反向应用）
+   */
+  async revert(hash: string, opts: { noCommit?: boolean; mainline?: number } = {}): Promise<Result<{ hash?: string }>> {
+    try {
+      const args: string[] = ['revert'];
+      if (opts.mainline !== undefined) args.push('-m', String(opts.mainline));
+      if (opts.noCommit) args.push('--no-commit');
+      args.push(hash);
+      const out = await this.git.raw(args);
+      const m = out.match(/\[([^\s]+)(?: \([^)]+\))? ([0-9a-f]{7,40})\]/i);
+      return { ok: true, data: { hash: m ? m[2] : undefined } };
     } catch (e) {
       return { ok: false, error: (e as Error).message };
     }

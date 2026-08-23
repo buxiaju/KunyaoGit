@@ -158,6 +158,16 @@ export interface ChangelogGroup {
   commits: CommitInfo[];
 }
 
+// v0.4+ Stash 列表条目
+export interface StashEntry {
+  index: number;          // 0-based（stash@{0}）
+  ref: string;            // 'stash@{0}'
+  message: string;        // 提交说明（去掉 "WIP on branch: hash" 前缀）
+  branch: string;         // 创建时的分支
+  hash: string;           // 完整 SHA
+  date: string;           // ISO
+}
+
 export type Result<T> = { ok: true; data: T } | { ok: false; error: string };
 
 export interface AppUpdateInfo {
