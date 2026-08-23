@@ -127,7 +127,7 @@ export default function ChangesPanel() {
   };
 
   return (
-    <div className="h-full flex flex-col border-r border-gray-800">
+    <div className="h-full flex flex-col border-r border-gray-800 overflow-hidden">
       <div className="flex-1 overflow-auto">
         {/* 已暂存 */}
         {staged.length > 0 && (

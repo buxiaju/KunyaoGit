@@ -10,16 +10,15 @@ pnpm-debug.log*
 dist/
 dist-electron/
 release/
+release-v*/
 release-new/
-release-v024/
-release-v025/
 release3/
 out/
 .build-config.json
 
-# 发布日志
-publish-log.txt
-build-log*.txt
+# 日志（统一归档到 logs/）
+logs/
+*.log
 
 # 本地工具（NSIS 编译器等，不入库）
 tools/
@@ -42,10 +41,6 @@ Thumbs.db
 .env.local
 .env.*.local
 
-# 日志
-*.log
-logs/
-
 # 测试
 coverage/
 .nyc_output/
@@ -54,33 +49,3 @@ coverage/
 *.dll
 *.exe
 *.pdb
-
-# 例外：发布资产中的安装包 / 便携包需要入库（供 Gitee Release 走 git 分发）
-!.release-assets/*.exe
-!.release-assets/*.zip
-
-release-v025/
-
-release-v026/
-
-release-v027/
-
-release-v028/
-
-release-v029/
-
-release-v030/
-
-release-v031/
-
-release-v032/
-
-release-v033/
-
-release-v034/
-
-
-# 大安装包不再入库（Release 附件走 Gitee/GitHub API 分发）
-.release-assets/*.exe
-.release-assets/*.zip
-

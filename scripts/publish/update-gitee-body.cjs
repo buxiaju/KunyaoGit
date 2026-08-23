@@ -1,7 +1,7 @@
 // Create / Update Gitee Release: body + installer asset upload
 // Usage: node scripts/publish/update-gitee-body.cjs
 //   或 GT_TOKEN=xxx node scripts/publish/update-gitee-body.cjs
-// 日志: 同步写入项目根目录 publish-log.txt
+// 日志: 同步写入 logs/publish/publish-log.txt
 
 const https = require('node:https');
 const path = require('node:path');
@@ -12,11 +12,11 @@ const TAG = `v${VERSION}`;
 const GT_TOKEN = process.env.GT_TOKEN || 'a0d56558c30d9a083fe33282b946cf95';
 const GT_OWNER = 'buxiaju';
 const REPO = 'KunyaoGit';
-const LOG_FILE = path.join(ROOT, 'publish-log.txt');
+const LOG_FILE = path.join(ROOT, 'logs', 'publish', 'publish-log.txt');
 
 // 安装包路径
-const INSTALLER = path.join(ROOT, '.release-assets', `KunyaoGit-Setup-${VERSION}-x64.exe`);
-const PORTABLE  = path.join(ROOT, '.release-assets', `KunyaoGit-portable-v${VERSION}.zip`);
+const INSTALLER = path.join(ROOT, 'release', `KunyaoGit-Setup-${VERSION}-x64.exe`);
+const PORTABLE  = path.join(ROOT, 'release', `KunyaoGit-portable-v${VERSION}.zip`);
 
 // ─── 日志 ───
 function log(msg) {

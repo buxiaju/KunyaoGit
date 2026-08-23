@@ -1,7 +1,7 @@
 # KunyaoGit 开发指南
 
 > 面向接手开发者的完整开发 / 打包 / 发布手册。配套阅读：[`ARCHITECTURE.md`](../ARCHITECTURE.md)、[`features.md`](./features.md)。
-> 当前版本：**v0.3.4**（v0.2.3+ 多语言、v0.2.4+ 下载提速、v0.2.5+ 三主题、v0.2.6+ 探活修复、v0.3.3+ 更新下载请求修复、v0.3.4+ 云端仓库搜索 / Gitee 搜索降级）。
+> 当前版本：**v0.3.8**（v0.2.3+ 多语言、v0.2.4+ 下载提速、v0.2.5+ 三主题、v0.2.6+ 探活修复、v0.3.3+ 更新下载请求修复、v0.3.4+ 云端仓库搜索 / Gitee 搜索降级、v0.3.8+ 日志归档 / 目录清理）。
 
 ---
 
@@ -143,7 +143,10 @@ KunyaoGit/
 ├── scripts/                  # 打包 / 发布 / 调试脚本（.cjs / .ps1 / .nsi）
 ├── assets/                   # 应用图标源（icon-master.png + icon.ico）
 ├── docs/                     # 文档（features.md / development-guide.md）
-├── .release-assets/          # 入库的"已发布"安装包（供 Gitee 走 git 分发）
+├── logs/                     # 日志归档（gitignored）
+│   ├── build/                #   构建日志
+│   ├── publish/              #   发布日志
+│   └── debug/                #   调试日志
 ├── release/                 # electron-builder 产物（gitignored）
 ├── index.html                # Vite 渲染进程入口
 ├── vite.config.ts            # Vite + vite-plugin-electron 配置
@@ -151,7 +154,7 @@ KunyaoGit/
 ├── tailwind.config.js
 ├── postcss.config.js
 ├── package.json              # ★ 改版本号改这里
-└── .gitignore                # 已放行 !.release-assets/*.exe / *.zip
+└── .gitignore                # 已统一忽略 logs/ / release-v*/ / *.log
 ```
 
 ### 目录职责约定
@@ -164,7 +167,7 @@ KunyaoGit/
 | `scripts/` | 打包 / 发布 / 调试脚本 | 独立运行，不进 asar |
 | `assets/` | 应用图标等入库资源 | - |
 | `docs/` | 开发者文档 | - |
-| `.release-assets/` | 已发布安装包（Gitee 走 git raw 分发） | 入库 |
+| `logs/` | 构建 / 发布 / 调试日志归档（gitignored） | 独立存放，不进库 |
 
 ---
 
@@ -517,14 +520,14 @@ set GH_TOKEN=github_pat_XXX
 
 # 直接复用模板脚本，不要另存为 publish-vXXX.cjs：
 # 只需更新脚本顶部的 RELEASE_BODY（本次发版说明）后运行
-node scripts/publish/publish-v023.cjs
+node scripts/publish/publish-v026.cjs
 ```
 
-`publish-v023.cjs` 逻辑（模板，直接复用）：
+`publish-v026.cjs` 逻辑（模板，直接复用）：
 1. `GET /repos/{owner}/{repo}/releases/tags/vX.Y.Z`：已存在则复用，404 则创建
 2. `PATCH` 更新 release body
 3. **流式上传** `KunyaoGit-Setup-X.Y.Z-x64.exe` 与 `KunyaoGit-portable-vX.Y.Z.zip`（`fs.createReadStream().pipe()`，避免大文件一次性读入内存；已存在则跳过）
-4. 全程日志写入 `publish-log.txt`（带 ISO 时间戳）
+4. 全程日志写入 `logs/publish/publish-log.txt`（带 ISO 时间戳）
 
 已有 release 仅替换安装包：
 
@@ -539,13 +542,13 @@ node scripts/publish/upload-installer.cjs     # 更新 body + 跳过已存在 as
 node scripts/publish/update-gitee-body.cjs    # 同步 Gitee Release body + 流式上传安装包 attach file
 ```
 
-> v0.2.3 起 `update-gitee-body.cjs` 集成了安装包上传（multipart 流式），并优先读 `process.env.GT_TOKEN`，fallback 为脚本内硬编码值。全程日志写入 `publish-log.txt`。
+> v0.2.3 起 `update-gitee-body.cjs` 集成了安装包上传（multipart 流式），并优先读 `process.env.GT_TOKEN`，fallback 为脚本内硬编码值。全程日志写入 `logs/publish/publish-log.txt`。
 
 ### 8.6 提交 + push
 
 ```bash
-git add .release-assets/ package.json
-git commit -m "release: v0.3.4"
+git add package.json
+git commit -m "release: v0.3.8"
 git push gitee master
 git push github master
 ```

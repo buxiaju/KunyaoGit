@@ -1,7 +1,7 @@
 // Create GitHub Release + stream-upload NSIS installer + portable zip
 // Usage: GH_TOKEN=xxx node scripts/publish/publish-v025.cjs
 //   (未设 GH_TOKEN 时自动从 git remote 'github' 的 URL 里提取 PAT)
-// 日志: 同步写入项目根目录 publish-log.txt
+// 日志: 同步写入 logs/publish/publish-log.txt
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -13,7 +13,7 @@ const VERSION = require(path.join(ROOT, 'package.json')).version;
 const TAG = `v${VERSION}`;
 const REPO = 'KunyaoGit';
 const OWNER = process.env.GH_OWNER || 'buxiaju';
-const LOG_FILE = path.join(ROOT, 'publish-log.txt');
+const LOG_FILE = path.join(ROOT, 'logs', 'publish', 'publish-log.txt');
 
 // ─── 日志 ───
 function log(msg) {

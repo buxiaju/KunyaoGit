@@ -1,7 +1,7 @@
 // Create GitHub Release + stream-upload NSIS installer + portable zip
 // Usage: GH_TOKEN=xxx node scripts/publish/publish-v026.cjs
 //   (未设 GH_TOKEN 时自动从 git remote 'github' 的 URL 里提取 PAT)
-// 日志: 同步写入项目根目录 publish-log.txt
+// 日志: 同步写入 logs/publish/publish-log.txt
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -13,7 +13,7 @@ const VERSION = require(path.join(ROOT, 'package.json')).version;
 const TAG = `v${VERSION}`;
 const REPO = 'KunyaoGit';
 const OWNER = process.env.GH_OWNER || 'buxiaju';
-const LOG_FILE = path.join(ROOT, 'publish-log.txt');
+const LOG_FILE = path.join(ROOT, 'logs', 'publish', 'publish-log.txt');
 
 // ─── 日志 ───
 function log(msg) {
@@ -34,36 +34,20 @@ if (!TOKEN) {
 }
 if (!TOKEN) { log('❌ 缺少 GH_TOKEN，也无法从 git remote github 提取'); process.exit(1); }
 
-const INSTALLER = path.join(ROOT, '.release-assets', `KunyaoGit-Setup-${VERSION}-x64.exe`);
-const PORTABLE  = path.join(ROOT, '.release-assets', `KunyaoGit-portable-v${VERSION}.zip`);
+const INSTALLER = path.join(ROOT, 'release', `KunyaoGit-Setup-${VERSION}-x64.exe`);
+const PORTABLE  = path.join(ROOT, 'release', `KunyaoGit-portable-v${VERSION}.zip`);
 if (!fs.existsSync(INSTALLER)) { log('❌ missing ' + INSTALLER); process.exit(1); }
 
 const RELEASE_BODY = `# KunyaoGit v${VERSION}
 
-## v0.2.6 修复
-- 🔧 **应用内更新器探活改用 GET 替代 HEAD** —— 很多 CDN / 防火墙对 HEAD 请求更敏感（直接 403 / 超时），改成 \`Range: bytes=0-0\` 的 GET 兼容性远好。206 响应里 \`Content-Range: bytes 0-0/{total}\` 直接给到总大小，\`Content-Type\` / \`Accept-Ranges\` 头也都在。
-- ⏱ **探活超时从 8s 提到 15s** —— 慢网络更稳。
-- 📋 **错误信息汇总所有源失败原因** —— 不再只显示最后一个错的源，所有源（gitee / github）的失败原因并列出来，方便判断是网络问题还是源问题。
-
-## v0.2.5 特性（沿用）
-- 🎨 **三主题切换**（暗色 / 深蓝 / 亮色）— 设置页一键切换，整套 UI 实时跟随，包括 Monaco 代码编辑器：
-  - **暗色**（默认）—— 原汁原味的 KunyaoGit 暗灰，emerald 品牌色
-  - **深蓝** —— 深海 navy 背景，blue 系 primary，沉稳又有色彩
-  - **亮色** —— 浅白底，emerald 品牌色，适合白天 / 投影
-- 🔧 **零业务代码迁移实现** —— 通过 CSS 变量 + 选择器覆盖，所有现有 \`bg-gray-XXX\` / \`text-gray-XXX\` 等 Tailwind class 不动一行，自动随主题切换。
-- 💾 **主题自动持久化** —— 跟语言设置一样存到 electron-store，下次启动保留。
-
-## v0.2.4 特性（沿用）
-- ⚡ **下载速度大幅提升（3~6 倍）** — 应用内更新下载器重构：HEAD 并行探活 + HTTP Range 多连接 + keep-alive + 100ms 节流 + 单 chunk 重试。
+## v0.3.8 改动
+- 📁 **项目目录清理** — 根目录 48 个日志文件统一归档到 \`logs/\` 目录（build/publish/debug 三类）
+- 🔧 **变更面板布局修复** — 文件多时提交信息框不再被挤出可视区域，文件列表可正常滚动
+- 📝 **文档完善** — 更新 ARCHITECTURE.md / development-guide.md / features.md 反映最新结构
+- 🧹 **.gitignore 优化** — 合并冗余 release-v* 规则，统一日志忽略模式
 
 ## 下载
 - **KunyaoGit-Setup-${VERSION}-x64.exe** — NSIS 安装包（推荐）
-- **KunyaoGit-portable-v${VERSION}.zip** — 便携版
-
-## 升级
-- v0.2.4 / v0.2.5 用户：本次是修复自动更新下载，对 v0.2.5 探测 GET 失败的场景做了 fallback；正常自动更新会成功。万一自动更新还失败，点「浏览器下载」走手动即可。
-- v0.2.0 ~ v0.2.3 用户：先升到 v0.2.4 走原下载器，然后升到 v0.2.5/0.2.6。
-- 全新用户：直接装 v0.2.6。
 
 ## 仓库
 - GitHub: https://github.com/buxiaju/KunyaoGit

@@ -295,7 +295,7 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
 
 function ChangesLayout() {
   return (
-    <div className="h-full grid grid-cols-[320px_1fr]">
+    <div className="h-full grid grid-cols-[320px_1fr] overflow-hidden">
       <ChangesPanel />
       <DiffViewer />
     </div>
@@ -304,7 +304,7 @@ function ChangesLayout() {
 
 function FileTreeView() {
   return (
-    <div className="h-full grid grid-cols-[280px_1fr]">
+    <div className="h-full grid grid-cols-[280px_1fr] overflow-hidden">
       <FileTree />
       <EditorPane />
     </div>

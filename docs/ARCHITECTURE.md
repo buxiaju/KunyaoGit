@@ -29,11 +29,11 @@
 
 | 维度 | 数值 |
 | --- | --- |
-| 当前版本 | `0.3.4`（见 `package.json`） |
+| 当前版本 | `0.3.8`（见 `package.json`） |
 | 维护者 | `buxiaju`（GitHub + Gitee 同名） |
 | 主仓库 | https://github.com/buxiaju/KunyaoGit |
 | 镜像 | https://gitee.com/buxiaju/KunyaoGit |
-| Release | GitHub 与 Gitee 都有 v0.1.0 / v0.2.0 / v0.2.1 / v0.2.2 / v0.2.3 / v0.2.4 / v0.2.5 / v0.2.6 / v0.3.0 / v0.3.1 / v0.3.2 / v0.3.3 / v0.3.4 |
+| Release | GitHub 与 Gitee 双平台同步发布（v0.1.0 ~ v0.3.8） |
 | 平台目标 | Windows 10/11 x64（macOS / Linux 暂未验证） |
 | 包大小 | NSIS 安装包 ~86 MB，便携版 ~3.5 MB |
 | License | MIT |
@@ -223,6 +223,11 @@ KunyaoGit/
 │   ├── user-guide.md               # 用户操作指南
 │   └── development-guide.md        # 开发规范与注意事项
 │
+├── logs/                           # ★ gitignored（v0.3.8 日志归档）
+│   ├── build/                      # 构建日志（build.log / build-v*.log / dev.log / vite.log）
+│   ├── publish/                    # 发布日志（publish-log.txt / publish-v*-gitee/github.log）
+│   └── debug/                      # 调试日志（diag-*.log / e2e-*.log 等）
+│
 ├── tools/                          # ★ gitignored（本地工具，NSIS 编译器）
 │   └── nsis/nsis-3.11/
 │
@@ -243,7 +248,7 @@ KunyaoGit/
 ├── LICENSE                         # MIT
 ├── README.md                       # 用户文档
 ├── ARCHITECTURE.md                 # 本文件
-└── .gitignore                      # 已特殊放行 !.release-assets/*.exe / *.zip
+└── .gitignore                      # 已统一忽略 logs/ / release-v*/ / *.log
 ```
 
 ---
@@ -633,15 +638,15 @@ copy /Y release\KunyaoGit-Setup-0.3.0-x64.exe .release-assets\
 # 准备 token（GH_TOKEN 自动从 git remote github URL 提取，也可手动设）
 set GT_TOKEN=a0d56558c30d9a083fe33282b946cf95   # Gitee（也支持内嵌在脚本里）
 
-# GitHub：创建 release + 流式上传安装包（日志写入 publish-log.txt）
-node scripts\publish\publish-v023.cjs
+# GitHub：创建 release + 流式上传安装包（日志写入 logs/publish/publish-log.txt）
+node scripts\publish\publish-v026.cjs
 
-# Gitee：更新 release body + 流式上传安装包 attach file（日志写入 publish-log.txt）
+# Gitee：更新 release body + 流式上传安装包 attach file（日志写入 logs/publish/publish-log.txt）
 node scripts\publish\update-gitee-body.cjs
 
 # 提交 + push
-git add .release-assets\ package.json README.md
-git commit -m "release: v0.3.0"
+git add package.json
+git commit -m "release: v0.3.8"
 git push gitee master
 git push github master
 ```
