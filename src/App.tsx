@@ -10,8 +10,11 @@ import { useSettingsStore } from './stores/settings';
 import { useEffect, useCallback } from 'react';
 import { Toaster } from './components/common/Toast';
 import { UpdateDialog } from './components/common/UpdateDialog';
+import CommandPalette from './components/common/CommandPalette';
+import Cheatsheet from './components/common/Cheatsheet';
 import { useUpdateCheck } from './hooks/useUpdateCheck';
 import { useThemeSync } from './hooks/useTheme';
+import { useGlobalShortcuts } from './hooks/useShortcuts';
 import { I18nProvider, type Lang } from './i18n';
 
 export default function App() {
@@ -25,6 +28,7 @@ export default function App() {
 
   useUpdateCheck();
   useThemeSync();
+  useGlobalShortcuts();
 
   const setLang = useCallback(
     (l: Lang) => {
@@ -48,6 +52,8 @@ export default function App() {
       </Routes>
       <Toaster />
       <UpdateDialog />
+      <CommandPalette />
+      <Cheatsheet />
     </I18nProvider>
   );
 }
