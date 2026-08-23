@@ -49,3 +49,7 @@ coverage/
 *.dll
 *.exe
 *.pdb
+
+# 安装包（入 .release-assets/ 供 Gitee raw 路径分发，详见 development-guide §8.3）
+!.release-assets/*.exe
+!.release-assets/*.zip

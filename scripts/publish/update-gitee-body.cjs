@@ -154,11 +154,12 @@ const RELEASE_BODY = `# KunyaoGit v${VERSION}
 - GitHub: https://github.com/buxiaju/KunyaoGit
 - Gitee:  https://gitee.com/buxiaju/KunyaoGit
 
-## NSIS 安装包下载（Gitee raw 路径）
-由于 Gitee Release 附件配额 1 GB 已用完，NSIS 安装包（86 MB）从仓库 raw 路径下载：
-- 国内推荐：https://gitee.com/buxiaju/KunyaoGit/raw/master/.release-assets/KunyaoGit-Setup-0.4.0-x64.exe
-- 国外：https://github.com/buxiaju/KunyaoGit/releases/download/v0.4.0/KunyaoGit-Setup-0.4.0-x64.exe
-- 校验：sha256 校验和见 \`scripts/build/check-expected-hash.cjs\`
+## NSIS 安装包下载
+由于 Gitee Release 附件配额 1 GB 已用完且 Gitee raw 路径对 .exe 返回 403，NSIS 安装包（86 MB）请从 GitHub 下载：
+- https://github.com/buxiaju/KunyaoGit/releases/download/v0.4.0/KunyaoGit-Setup-0.4.0-x64.exe
+
+Gitee 用户也可 \`git clone\` 本仓库后在 \`.release-assets/KunyaoGit-Setup-0.4.0-x64.exe\` 路径获取。
+校验：sha256 校验和见 \`scripts/build/check-expected-hash.cjs\`。
 `;
 
 // ─── HTTP 请求（缓冲模式，用于 JSON API 调用）───
