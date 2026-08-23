@@ -28,6 +28,16 @@ function log(msg) {
 
 const RELEASE_BODY = `# KunyaoGit v${VERSION}
 
+## v0.4.0 特性
+- 📊 **底部状态栏** — 三段式布局实时显示：左（仓库名/分支/↑N↓M 同步）、中（已暂存/未暂存/冲突 计数）、右（应用版本号）
+- ⌨️ **全局快捷键** — Ctrl/Cmd+Shift+P 打开命令面板、Ctrl/Cmd+R 刷新、Shift+? 显示速查表（输入框内自动让位）
+- 🔍 **命令面板** — VS Code 式 Ctrl+Shift+P 模态：4 类 20+ 命令（git/navigation/view/settings），支持模糊搜索 + 键盘导航
+- 📦 **Stash 队列** — 折叠面板集成在 ChangesPanel 顶部，提供 Apply（保留）/ Pop（应用+删除）/ Show Diff（弹窗）/ Drop；message 自定义
+- 🍒 **Cherry-pick / Revert** — Commit 历史每行 hover 工具条入口，冲突时 toast 引导到变更页（复用现有冲突解决流程）
+- 🌐 **PR / MR 创建** — 解析远程 URL（https / ssh / 含凭据）→ 自动拉默认 base 分支 + 默认 title 取 log[0] subject → GitHub（含 draft）+ Gitee 双平台支持
+- 👁️ **可发现性改进** — 侧边栏底部「快捷键 ?」+「命令面板 ⇧P」常驻双按钮；「创建 Pull Request」按钮从 hover 提到 BranchPanel 标题行 + RepoPage 顶部工具栏（双入口常驻）
+- 🧪 **自动化测试** — 218 例单元 + 组件测试（10 文件，约 3 秒跑完）：Vitest 4 + happy-dom + Testing Library 16；覆盖 parseRemote / parseUnifiedDiff / GitService / i18n / commands / StatusBar / CommandPalette / StashList / CreatePRDialog / useShortcuts
+
 ## v0.3.7 修复（工作区状态解析错误——「提交失败」的真正根因）
 - 🔧 **修复未暂存修改被误显示为「已暂存」**：
   - 根因：simple-git 的 \`status()\` 中 \`modified\` 数组**同时包含未暂存与已暂存修改**，旧代码把它全部标为 \`staged: true\`，导致 UI 把「未暂存修改」显示成「已暂存」——用户以为已暂存去点提交，实际暂存区为空，git 报「nothing to commit」（此前 v0.3.5/v0.3.6 的提交失败即由此引发）
@@ -143,6 +153,12 @@ const RELEASE_BODY = `# KunyaoGit v${VERSION}
 ## 仓库
 - GitHub: https://github.com/buxiaju/KunyaoGit
 - Gitee:  https://gitee.com/buxiaju/KunyaoGit
+
+## NSIS 安装包下载（Gitee raw 路径）
+由于 Gitee Release 附件配额 1 GB 已用完，NSIS 安装包（86 MB）从仓库 raw 路径下载：
+- 国内推荐：https://gitee.com/buxiaju/KunyaoGit/raw/master/.release-assets/KunyaoGit-Setup-0.4.0-x64.exe
+- 国外：https://github.com/buxiaju/KunyaoGit/releases/download/v0.4.0/KunyaoGit-Setup-0.4.0-x64.exe
+- 校验：sha256 校验和见 \`scripts/build/check-expected-hash.cjs\`
 `;
 
 // ─── HTTP 请求（缓冲模式，用于 JSON API 调用）───
