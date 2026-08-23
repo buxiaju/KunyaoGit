@@ -1,7 +1,7 @@
 # KunyaoGit 开发指南
 
 > 面向接手开发者的完整开发 / 打包 / 发布手册。配套阅读：[`ARCHITECTURE.md`](../ARCHITECTURE.md)、[`features.md`](./features.md)。
-> 当前版本：**v0.3.8**（v0.2.3+ 多语言、v0.2.4+ 下载提速、v0.2.5+ 三主题、v0.2.6+ 探活修复、v0.3.3+ 更新下载请求修复、v0.3.4+ 云端仓库搜索 / Gitee 搜索降级、v0.3.8+ 日志归档 / 目录清理）。
+> 当前版本：**v0.4.0**（v0.2.3+ 多语言、v0.2.4+ 下载提速、v0.2.5+ 三主题、v0.2.6+ 探活修复、v0.3.3+ 更新下载请求修复、v0.3.4+ 云端仓库搜索 / Gitee 搜索降级、**v0.4+ 命令面板/快捷键/Stash 队列/Cherry-pick/Revert/PR 创建/底部状态栏**）。
 
 ---
 
@@ -16,6 +16,7 @@
 7. [打包流程](#7-打包流程)
 8. [发布流程](#8-发布流程)
 9. [常见陷阱](#9-常见陷阱)
+10. [★ v0.4+ 自动化测试](#10-v04-自动化测试)
 
 ---
 
@@ -128,17 +129,23 @@ KunyaoGit/
 │   │       └── RemotePanel.tsx
 │   ├── hooks/
 │   │   ├── useUpdateCheck.ts   # 启动 1.5s 后静默检查
-│   │   └── useTheme.ts         # ★ v0.2.5：主题管理（同步 data-theme + 派发 kg-theme-change 事件）
+│   │   ├── useTheme.ts         # ★ v0.2.5：主题管理（同步 data-theme + 派发 kg-theme-change 事件）
+│   │   ├── useShortcuts.ts     # ★ v0.4+ 全局快捷键（Ctrl+Shift+P / Ctrl+R / ?）
+│   │   └── useCommandPalette.ts # ★ v0.4+ 命令面板状态（open / close / toggle）
 │   ├── stores/               #   Zustand 状态
 │   │   ├── repo.ts
 │   │   ├── settings.ts
 │   │   └── update.ts
+│   ├── lib/                    # ★ v0.4+ 通用工具
+│   │   └── parseRemote.ts      # ★ v0.4+ 远程 URL → owner/repo/platform
+│   ├── config/                 # ★ v0.4+ 全局配置
+│   │   └── commands.ts         # ★ v0.4+ 命令面板注册表
 │   ├── i18n/                  # ★ v0.2.3：国际化
 │   │   ├── index.tsx           #   I18nProvider / useI18n hook
 │   │   ├── zh.ts               #   中文翻译字典
 │   │   └── en.ts               #   英文翻译字典
 │   └── styles/
-│       └── index.css         #   Tailwind 入口 + ★ v0.2.5 CSS 变量主题 + 自定义组件类
+│       └── index.css         #   Tailwind 入口 + ★ v0.2.5 CSS 变量主题 + 自定义组件类 + ★ v0.4 .statusbar
 │
 ├── scripts/                  # 打包 / 发布 / 调试脚本（.cjs / .ps1 / .nsi）
 ├── assets/                   # 应用图标源（icon-master.png + icon.ico）
@@ -181,8 +188,11 @@ KunyaoGit/
 | `npm run build` | `tsc -b && vite build && electron-builder` | 类型检查 + 渲染打包 + electron-builder 出包 |
 | `npm run build:win` | `tsc -b && vite build && electron-builder --win` | 仅 Windows 平台打包 |
 | `npm run typecheck` | `tsc -b --noEmit` | 仅类型检查，不产出 |
-| `npm run lint` | `eslint . --ext .ts,.tsx --fix` | ESLint 检查并自动修复 |
+| `npm run lint` | `eslint . --ext .ts,.tsx --fix` | ESLint 检查并自动修复（**注：v0.4 暂未安装依赖**） |
 | `npm run preview` | `vite preview` | 预览构建产物 |
+| `npm test` | `vitest run` | ★ v0.4+ 跑全部测试（一次性，跑完即退出） |
+| `npm run test:watch` | `vitest` | ★ v0.4+ 监听模式（开发时反复跑） |
+| `npm run test:ui` | `vitest --ui` | ★ v0.4+ 启动 Vitest 浏览器 UI（需 `@vitest/ui`） |
 
 ### 3.1 开发模式
 
@@ -718,7 +728,165 @@ HTTPS 连接阶段的计时不要只监听 `connect`——`tls.TLSSocket` 不触
 
 ---
 
-## 附录：端口与关键路径
+## 10. ★ v0.4+ 自动化测试
+
+> 目标：纯函数 / 业务逻辑 / 组件交互都能在 CI 上无环境依赖地跑过。**所有测试都用 mock 隔离外部依赖**，不需要真实 git 仓库 / GitHub Token。
+
+### 10.1 测试栈
+
+| 工具 | 用途 |
+| --- | --- |
+| **Vitest 4.x** | 测试运行器（与 Vite 共用 ESM/TS 配置，启动 < 1s） |
+| **happy-dom 20.x** | 浏览器环境（比 jsdom 更轻量，TypeScript 类型内置） |
+| **@testing-library/react 16.x** | React 组件渲染 + 事件模拟 + 异步断言 |
+| **@testing-library/dom 10.x** | DOM 查询原语（被上面 transitive 依赖，显式锁版本） |
+
+依赖装在 `devDependencies`，`package.json` 已固化。
+
+### 10.2 目录结构
+
+```
+tests/
+├── setup.ts                 # 每次测试自动重置 window.gitgui mock
+├── stubs/
+│   └── electron-store.ts    # electron-store 的内存版 stub（路径别名替换）
+└── unit/                    # 所有测试文件
+    ├── parseRemote.test.ts        # 远程 URL 解析（22 例）
+    ├── parseUnifiedDiff.test.ts   # diff 解析（11 例）
+    ├── gitService.test.ts         # GitService mock（35 例）
+    ├── i18n.test.ts               # i18n 完整性 + t() 插值（27 例）
+    ├── commands.test.ts           # 命令面板注册表 + 过滤（20 例）
+    ├── StatusBar.test.tsx         # 底部状态栏组件（21 例）
+    ├── CommandPalette.test.tsx    # 命令面板交互（28 例）
+    ├── useShortcuts.test.tsx      # 全局快捷键 hook（14 例）
+    ├── StashList.test.tsx         # Stash 队列面板（18 例）
+    └── CreatePRDialog.test.tsx    # PR/MR 创建弹窗（22 例）
+```
+
+合计 **218 例**，10 个测试文件，跑完约 3 秒。
+
+### 10.3 跑测试
+
+```bash
+# 全部测试
+npm test
+
+# 监听模式（推荐开发时）
+npm run test:watch
+
+# 跑单个文件
+npx.cmd vitest run tests/unit/parseRemote.test.ts
+
+# 跑名字匹配
+npx.cmd vitest run -t "i18n"
+
+# 启动浏览器 UI（需先 npm i -D @vitest/ui）
+npm run test:ui
+```
+
+> **PowerShell 下的 vitest 退出码陷阱**：Node 22+ 对 `package.json` 缺 `"type"` 字段会打 MODULE_TYPELESS_PACKAGE_JSON 警告，PowerShell 把 stderr 计入 exit code，**`npm test` 会报 exit 1 但测试全部通过**。判断成败看输出最后两行 `Test Files N passed` / `Tests N passed`。
+>
+> 不要给 `package.json` 加 `"type": "module"`——主进程是 CJS，会炸。
+
+### 10.4 配置文件 `vitest.config.ts`
+
+**不复用 `vite.config.ts`**，独立出一个，原因写在文件顶部注释里：
+
+> `vite.config.ts` 里的 `vite-plugin-electron/simple` 会把 `node:path` 等内置模块重写为 `.vite-electron-renderer/path.mjs` shim，shim 内部用 CJS `require`，在 Vitest 的 ESM 环境下抛 `ReferenceError: require is not defined in ES module scope`。
+>
+> 测试不需要 Electron 打包链路，所以这里只保留 `react` 插件 + 路径别名（含 `electron-store` → stub）。
+
+```ts
+// vitest.config.ts 关键片段
+export default defineConfig({
+  plugins: [react()],
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+      '@electron': path.resolve(__dirname, './electron'),
+      '@shared': path.resolve(__dirname, './shared'),
+      'electron-store': path.resolve(__dirname, './tests/stubs/electron-store.ts'),
+    },
+  },
+  test: {
+    environment: 'happy-dom',
+    include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx'],
+    globals: true,                              // describe/it/expect/beforeEach 直接可用
+    setupFiles: ['./tests/setup.ts'],
+  },
+});
+```
+
+### 10.5 全局 Mock：`tests/setup.ts`
+
+`window.gitgui` 在每个测试前会被 `createGitguiMock()` 重新填充一次（清空旧 spy）。所有方法默认 `mockResolvedValue(ok(默认值))`，测试里可以 `mockResolvedValue` / `mockReturnValue` 覆盖。
+
+```ts
+// 用法：覆盖特定方法的返回值
+import { beforeEach, vi } from 'vitest';
+
+beforeEach(() => {
+  (window.gitgui.github.getDefaultBranch as any).mockResolvedValue({ ok: true, data: 'main' });
+  (window.gitgui.git.stashList as any).mockResolvedValue({ ok: true, data: [...fakeEntries] });
+});
+```
+
+#### ⚠️ 常见踩坑
+
+1. **`window.gitgui.git.refreshStatus` 不存在**——`refreshStatus` 是 store 方法（`useRepoStore.getState().refreshStatus`），不是 IPC 方法。组件测试里如果用 `useRepoStore.setState` 预设数据，store action 不需要 mock。
+2. **`window.confirm` 在 happy-dom 下不存在**——需要 `vi.stubGlobal('confirm', vi.fn(() => true))`，用 `vi.spyOn(window, 'confirm')` 会报 "can only spy on a function"。
+3. **命令面板 `c.run()` 是 `Promise.resolve().then()` 异步执行**——断言前必须 `await act(async () => { await Promise.resolve(); })` 冲刷微任务。
+4. **`<label>` 没写 `htmlFor`**——`getByLabelText` 在大多数组件里取不到，要用 `getByPlaceholderText` / `getByTitle` / `within(...).querySelector` 替代。
+5. **`RemoteInfo` 类型是 `{name, url, type}`**——不是 `{name, refs:{fetch,push}}`，写测试数据时按 `url` 字段填。
+
+### 10.6 写测试的最小示例
+
+```tsx
+// tests/unit/StatusBar.test.tsx
+import { describe, it, expect, beforeEach } from 'vitest';
+import { render, screen, cleanup } from '@testing-library/react';
+import StatusBar from '../../src/components/common/StatusBar';
+import { I18nProvider } from '../../src/i18n';
+import { useRepoStore } from '../../src/stores/repo';
+
+describe('StatusBar', () => {
+  beforeEach(() => {
+    useRepoStore.setState({ current: null, status: [], branches: [], log: [], remotes: [] });
+  });
+
+  it('无仓库时显示未打开仓库', () => {
+    render(
+      <I18nProvider lang="zh" setLang={() => {}}>
+        <StatusBar />
+      </I18nProvider>
+    );
+    expect(screen.getByText('未打开仓库')).toBeTruthy();
+  });
+});
+```
+
+### 10.7 覆盖的回归点（v0.3.7 → v0.4）
+
+| Bug | 触发场景 | 测试位置 |
+| --- | --- | --- |
+| `status()` 误判部分暂存 | `index=M workdir=M` 应产生 2 条记录 | `gitService.test.ts` status 段 |
+| `status()` 缺 `conflicted` 字段 | mock 不全会 `for...of undefined` 抛错 | `gitService.test.ts` 多个用例 |
+| i18n 中英 key 数量不一致 | 新增 zh 但漏 en（或反之） | `i18n.test.ts` 完整性段 |
+| i18n 占位符 `{name}` 缺失 | 某语言翻译没填占位符，运行时返回原始 key | `i18n.test.ts` 占位符段 |
+| 命令 id 重复 / 分类无效 | 命令面板注册表脏数据 | `commands.test.ts` 必填字段段 |
+| 远端 URL 含 user:pass 解析失败 | 注入 token 后的 https URL | `parseRemote.test.ts` 凭据段 |
+
+### 10.8 当前未覆盖（v0.5 候选）
+
+| 缺失 | 原因 / 建议 |
+| --- | --- |
+| 主进程 IPC handler 端到端 | 需启动 Electron + 真实 git 仓库，建议用 Playwright + spectron 替代 |
+| StashList 的 hover 工具条 / diff 弹窗关闭按钮 | 已有 diff 调用和 pop / drop 测试；浮层关闭是次要 UI 行为 |
+| 主题切换时的 CSS 变量切换 | 需要 visual regression（如 Percy / Chromatic），成本高 |
+| 国际化文案语义正确性 | 只能靠人工 review |
+| ESLint 集成 | `npm run lint` 依赖未装（v0.4 不阻塞，详见 §9） |
+
+---
 
 | 用途 | 路径 |
 | --- | --- |

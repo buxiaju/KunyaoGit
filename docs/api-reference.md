@@ -2,7 +2,7 @@
 
 > 本文档面向 KunyaoGit Electron 应用的开发者，全面描述渲染进程可用的 `window.gitgui` API、共享类型定义、主进程配置以及 IPC 通道清单。
 >
-> 适用版本：**v0.3.4**（v0.2.3+ 主题与语言、v0.2.4+ 下载速度优化、v0.2.5+ 三主题切换、v0.2.6+ 探活修复、v0.3.0+ 文件管理/多远程推送、v0.3.1+/v0.3.3+ 更新下载修复、v0.3.4+ 云端搜索）
+> 适用版本：**v0.4.0**（v0.2.3+ 主题与语言、v0.2.4+ 下载速度优化、v0.2.5+ 三主题切换、v0.2.6+ 探活修复、v0.3.0+ 文件管理/多远程推送、v0.3.1+/v0.3.3+ 更新下载修复、v0.3.4+ 云端搜索、**v0.4+ 命令面板/快捷键/Stash 队列/Cherry-pick/Revert/PR 创建/状态栏**）
 >
 > 源码依据：
 > - `shared/ipc-channels.ts`
@@ -295,7 +295,20 @@ Changelog 生成结果中按 conventional-commits 类型分组的条目。
 | `type` | `'feat' \| 'fix' \| 'docs' \| 'refactor' \| 'perf' \| 'chore' \| 'other'` | 提交类型 |
 | `commits` | `CommitInfo[]` | 该类型下的提交列表 |
 
-### 2.19 `Result<T>`
+### 2.19 `StashEntry`（★ v0.4+）
+
+Stash 队列条目，描述一次 stash 暂存的元信息。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `index` | `number` | 0-based 索引（`stash@{0}` 对应 0） |
+| `ref` | `string` | 完整 ref，如 `'stash@{0}'` |
+| `message` | `string` | 提交说明（已剥离 `WIP on branch: hash` 前缀） |
+| `branch` | `string` | 创建时的分支名 |
+| `hash` | `string` | 完整 SHA |
+| `date` | `string` | ISO 时间 |
+
+### 2.20 `Result<T>`
 
 统一返回包装类型。
 
@@ -306,7 +319,7 @@ export type Result<T> = { ok: true; data: T } | { ok: false; error: string };
 - 成功：`{ ok: true, data: T }`
 - 失败：`{ ok: false, error: string }`
 
-### 2.20 `AppUpdateInfo`
+### 2.21 `AppUpdateInfo`
 
 应用更新检查结果。
 
@@ -330,7 +343,7 @@ export type Result<T> = { ok: true; data: T } | { ok: false; error: string };
 | `sources[].release?` | `AppUpdateInfo['latest']` | 该来源对应的 Release |
 | `dismissed?` | `boolean` | 当前版本是否已被用户忽略 |
 
-### 2.21 `DownloadPhase` 与 `DownloadProgress`
+### 2.22 `DownloadPhase` 与 `DownloadProgress`
 
 应用内安装包下载进度相关类型。
 
@@ -419,6 +432,12 @@ export type DownloadPhase = 'preparing' | 'downloading' | 'done' | 'error' | 'ca
 | `stashPop` | `git:stash-pop` | `(repoPath: string) => Promise<Result<void>>` | 弹出最近一次储藏 |
 | `reset` | `git:reset` | `(repoPath: string, target: string, mode?: 'soft' \| 'mixed' \| 'hard') => Promise<Result<void>>` | 重置到 `target`，可指定模式 |
 | `resolveConflict` | `git:resolve-conflict` | `(repoPath: string, file: string, side: 'ours' \| 'theirs') => Promise<Result<void>>` | 以 `ours` 或 `theirs` 方式解决冲突文件 |
+| `cherryPick` ★ v0.4+ | `git:cherry-pick` | `(repoPath: string, hash: string, opts?: { mainline?: number }) => Promise<Result<{ hash?: string }>>` | Cherry-pick 一个 commit 到当前分支；`mainline` 用于合并提交 |
+| `revert` ★ v0.4+ | `git:revert` | `(repoPath: string, hash: string, opts?: { mainline?: number }) => Promise<Result<{ hash?: string }>>` | 回退一个 commit（生成反向 commit） |
+| `stashList` ★ v0.4+ | `git:stash-list` | `(repoPath: string) => Promise<Result<StashEntry[]>>` | 列出 stash 队列 |
+| `stashShow` ★ v0.4+ | `git:stash-show` | `(repoPath: string, ref: string) => Promise<Result<FileDiff[]>>` | 显示某个 stash 的 diff |
+| `stashApply` ★ v0.4+ | `git:stash-apply` | `(repoPath: string, ref: string) => Promise<Result<void>>` | 应用 stash（保留在队列） |
+| `stashDrop` ★ v0.4+ | `git:stash-drop` | `(repoPath: string, ref: string) => Promise<Result<void>>` | 从队列删除 stash |
 | `readConflict` | `git:read-conflict` | `(repoPath: string, file: string) => Promise<Result<FileDiff>>` | 读取冲突文件 diff（用于三向视图） |
 | `remoteList` | `git:remote-list` | `(repoPath: string) => Promise<Result<RemoteInfo[]>>` | 列出所有远程 |
 | `remoteAdd` | `git:remote-add` | `(repoPath: string, name: string, url: string) => Promise<Result<void>>` | 添加远程 |
@@ -483,6 +502,8 @@ export type DownloadPhase = 'preparing' | 'downloading' | 'done' | 'error' | 'ca
 | `contentsRead` | `gh:contents-read` | `(owner: string, repo: string, path: string, ref?: string) => Promise<Result<RemoteFileContent>>` | 读取远程文件内容 |
 | `contentsWrite` | `gh:contents-write` | `(params: { owner: string; repo: string; path: string; content: string; message: string; sha?: string; branch?: string }) => Promise<Result<void>>` | 创建/更新远程文件（更新时需提供 `sha`） |
 | `contentsDelete` | `gh:contents-delete` | `(params: { owner: string; repo: string; path: string; message: string; sha: string; branch?: string }) => Promise<Result<void>>` | 删除远程文件（必填 `sha`） |
+| `createPR` ★ v0.4+ | `gh:create-pr` | `(params: { owner: string; repo: string; title: string; body?: string; head: string; base: string; draft?: boolean }) => Promise<Result<{ number: number; url: string; htmlUrl: string }>>` | 创建 GitHub PR；返回 PR 编号和 URL |
+| `getDefaultBranch` ★ v0.4+ | `gh:get-default-branch` | `(owner: string, repo: string) => Promise<Result<string>>` | 读取仓库默认分支名 |
 
 `listRepos` 参数说明：
 - `visibility`：可选，按可见性过滤。
@@ -515,6 +536,8 @@ export type DownloadPhase = 'preparing' | 'downloading' | 'done' | 'error' | 'ca
 | `contentsWrite` | `gt:contents-write` | `(params: { owner: string; repo: string; path: string; content: string; message: string; sha?: string; branch?: string }) => Promise<Result<void>>` | 无 |
 | `contentsDelete` | `gt:contents-delete` | `(params: { owner: string; repo: string; path: string; message: string; sha: string; branch?: string }) => Promise<Result<void>>` | 无 |
 | `searchRepos` | `gt:search-repos` | `(query: string, sort?: string) => Promise<Result<any[]>>` | ★ v0.3.4：**搜索降级**。优先调用 Gitee `/search/repositories` 搜索 API；该 API 目前对仓库搜索恒返回空数组（已失效），空结果时自动降级为「我的仓库」（`/user/repos`）本地过滤（按名称/描述匹配 `query`） |
+| `createPR` ★ v0.4+ | `gt:create-pr` | `(params: { owner: string; repo: string; title: string; body?: string; head: string; base: string }) => Promise<Result<{ number: number; url: string; htmlUrl: string }>>` | 创建 Gitee MR（Gitee 没有 draft 概念，忽略该参数） |
+| `getDefaultBranch` ★ v0.4+ | `gt:get-default-branch` | `(owner: string, repo: string) => Promise<Result<string>>` | 读取 Gitee 仓库默认分支名 |
 
 ---
 

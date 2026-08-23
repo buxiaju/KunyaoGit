@@ -6,7 +6,7 @@
 
 > 一个 Git 桌面客户端，深度集成 **GitHub** 和 **Gitee**（码云）。
 
-![Electron](https://img.shields.io/badge/Electron-33-9feaf9) ![React](https://img.shields.io/badge/React-18-61dafb) ![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178c6) ![License](https://img.shields.io/badge/license-MIT-green) ![Version](https://img.shields.io/badge/version-v0.3.7-22c55e)
+![Electron](https://img.shields.io/badge/Electron-33-9feaf9) ![React](https://img.shields.io/badge/React-18-61dafb) ![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178c6) ![License](https://img.shields.io/badge/license-MIT-green) ![Version](https://img.shields.io/badge/version-v0.4.0-22c55e)
 
 ## 特性
 
@@ -16,7 +16,8 @@
 - 提交、推送、拉取、Fetch
 - 分支管理：创建、切换、删除、合并
 - 提交历史时间线（含 Tag / 分支引用标记）
-- Stash 暂存
+- **Stash 队列管理**（v0.4+）：list / apply / pop / drop / show diff
+- **Cherry-pick / Revert**（v0.4+）：提交行 hover 一键操作
 - 冲突解决：一键 ours / theirs
 - **拖拽上传本地文件 / 文件夹**（自动保留目录结构 + `git add`）
 
@@ -32,6 +33,7 @@
 ### 🌐 远程仓库管理（GitHub + Gitee）
 - 仓库列表 + **云端仓库搜索**（v0.3.4：顶部搜索框，GitHub 官方 Search API 全平台搜索，Gitee 自动降级本地过滤）
 - **在线浏览 / 编辑 / 新建 / 删除远程仓库文件**（直接调 Contents API）
+- **★ 创建 PR / MR**（v0.4+）：从分支页一键创建，owner/repo 自动从 remote URL 推断
 - 浏览器中跳转
 - 完整的 OAuth Token 安全存储（electron-store）
 
@@ -59,6 +61,8 @@
 - 自定义 Git 可执行路径
 - **三主题切换**（暗色 / 深蓝 / 亮色，v0.2.5）
 - **多语言切换**（中文 / English，设置页或侧边栏一键切换，v0.2.3）
+- **命令面板 + 全局快捷键**（v0.4+：Ctrl+Shift+P 调用 15+ 命令 / Ctrl+R 刷新 / 1-5 切 tab / ? 速查）
+- **底部状态栏**（v0.4+：仓库 / 分支 / 同步 / 暂存计数 / 应用版本，三段式）
 - **专属应用图标**（Jade 绿 + K + Git 分支节点）
 
 ## 截图
@@ -162,6 +166,11 @@ KunyaoGit/
 - [x] Release 管理
 - [x] 自动更新检查（GitHub + Gitee 双源）
 - [x] 应用内自动更新（下载 + 安装，v0.2.2；下载修复 + 自动重试 v0.3.3）
+- [x] Stash 队列管理（v0.4+）
+- [x] Cherry-pick / Revert（v0.4+）
+- [x] 创建 PR / MR（v0.4+）
+- [x] 命令面板 + 全局快捷键（v0.4+）
+- [x] 底部状态栏（v0.4+）
 - [ ] 子模块管理
 - [ ] SSH key 管理
 - [ ] Git LFS 支持

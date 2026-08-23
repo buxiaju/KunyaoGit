@@ -29,7 +29,7 @@
 
 | 维度 | 数值 |
 | --- | --- |
-| 当前版本 | `0.3.8`（见 `package.json`） |
+| 当前版本 | `0.4.0`（见 `package.json`） |
 | 维护者 | `buxiaju`（GitHub + Gitee 同名） |
 | 主仓库 | https://github.com/buxiaju/KunyaoGit |
 | 镜像 | https://gitee.com/buxiaju/KunyaoGit |
@@ -40,6 +40,12 @@
 
 **核心能力**：
 - 本地 Git 全套操作（status / log / stage / commit / push / pull / fetch / branch / merge / stash / reset / 冲突解决）
+- **★ v0.4+ Stash 队列管理**（stashList / stashShow / stashApply / stashDrop；apply 保留在队列 / pop 移除 / 弹窗 diff 预览）
+- **★ v0.4+ Cherry-pick / Revert**（提交历史 hover 工具条，apply 任意 commit / 回退 commit，冲突复用现有解决流程）
+- **★ v0.4+ PR / MR 创建**（GitHub + Gitee 双平台；自动解析 remote URL 推断 owner/repo；自动拉默认分支作为 base；当前分支 ahead>0 时一键创建）
+- **★ v0.4+ 命令面板**（Ctrl/Cmd+Shift+P 全局命令入口，15+ 命令分类覆盖 Git / 导航 / 视图 / 设置）
+- **★ v0.4+ 全局快捷键**（Ctrl+R 刷新、? 速查表、1-5 切 tab、输入框内自动让位）
+- **★ v0.4+ 底部状态栏**（仓库 / 分支 / 同步状态 / 暂存计数 / 应用版本，三段式 VS Code / GitKraken 风格）
 - **本地文件管理**（文件树：新建文件 / 新建文件夹 / 重命名 / 删除，右键菜单 + 工具栏；操作后自动刷新 git status）
 - **多 remote 推送**（Push 下拉可选择推送到指定 remote，如 GitHub / Gitee；「提交并推送」同样支持选择 remote）
 - GitHub + Gitee 双平台 REST API（Octokit + axios）
@@ -68,6 +74,7 @@
 | `electron` | ^33.3.0 | 主进程 + 渲染进程壳 |
 | `react` / `react-dom` | ^18.3.1 | UI 框架 |
 | `react-router-dom` | ^7.1.1 | 路由（Home / Repo / Remote / Release / Settings） |
+| `react-hotkeys-hook` | ^5.3.3 | **v0.4+** 全局快捷键 / 命令面板按键处理 |
 | `zustand` | ^5.0.2 | 状态管理（settings / repo 两个 store） |
 | `simple-git` | ^3.27.0 | 封装本地 `git` CLI |
 | `@octokit/rest` | ^21.0.2 | GitHub REST 客户端 |
@@ -148,28 +155,40 @@ KunyaoGit/
 │   │   │   └── Layout.tsx          # 侧边栏 + Outlet + ★ 语言快捷切换按钮
 │   │   ├── common/
 │   │   │   ├── Toast.tsx           # 全局 Toaster（zustand 实现）
-│   │   │   └── UpdateDialog.tsx    # ★ 应用内更新对话框（询问/下载进度/完成/错误）
+│   │   │   ├── UpdateDialog.tsx    # ★ 应用内更新对话框（询问/下载进度/完成/错误）
+│   │   │   ├── StatusBar.tsx       # ★ v0.4+ 底部状态栏（仓库/分支/同步/暂存/版本）
+│   │   │   ├── CommandPalette.tsx  # ★ v0.4+ Ctrl+Shift+P 命令面板（VS Code 式模态）
+│   │   │   └── Cheatsheet.tsx      # ★ v0.4+ ? 快捷键速查表
 │   │   └── repo/
-│   │       ├── BranchPanel.tsx     # 分支列表 + checkout / new / delete / merge
-│   │       ├── ChangesPanel.tsx    # 工作区文件状态 + stage / unstage / discard
-│   │       ├── CommitHistory.tsx   # git log 时间线（含 Tag / 分支引用）
+│   │       ├── BranchPanel.tsx     # 分支列表 + checkout / new / delete / merge + ★ v0.4 创建 PR
+│   │       ├── ChangesPanel.tsx    # 工作区文件状态 + stage / unstage / discard + ★ v0.4 Stash 队列
+│   │       ├── CommitHistory.tsx   # git log 时间线（含 Tag / 分支引用） + ★ v0.4 hover 工具条（cherry-pick/revert/copy）
+│   │       ├── CommitActionsModal.tsx # ★ v0.4+ 通用确认弹窗（cherry-pick / revert 复用）
+│   │       ├── CreatePRDialog.tsx  # ★ v0.4+ 创建 PR / MR（双平台 owner/repo 推断）
+│   │       ├── StashList.tsx       # ★ v0.4+ Stash 队列（list / apply / pop / drop / show diff）
 │   │       ├── DiffViewer.tsx      # 自实现 unified diff（并排 / 统一两种模式）
 │   │       ├── EditorPane.tsx      # Monaco 包装
 │   │       ├── FileTree.tsx        # 文件树（v0.3.0 工具栏新建/右键菜单增删改；v0.3.2 默认折叠）
 │   │       └── RemotePanel.tsx     # remote 列表 + add / remove
 │   ├── hooks/
 │   │   ├── useUpdateCheck.ts       # ★ 启动 1.5s 后静默检查更新
-│   │   └── useTheme.ts             # ★ v0.2.5：主题管理（data-theme + Monaco 跟随）
+│   │   ├── useTheme.ts             # ★ v0.2.5：主题管理（data-theme + Monaco 跟随）
+│   │   ├── useShortcuts.ts         # ★ v0.4+ 全局快捷键（Ctrl+Shift+P / Ctrl+R / ?）
+│   │   └── useCommandPalette.ts    # ★ v0.4+ 命令面板状态（open / close / toggle）
 │   ├── stores/
 │   │   ├── repo.ts                 # 当前仓库信息
 │   │   ├── settings.ts             # 设置（theme / gitPath / auth / language / ...）
 │   │   └── update.ts               # ★ 更新对话框状态 + 下载/安装流程
+│   ├── lib/                         # ★ v0.4+ 通用工具
+│   │   └── parseRemote.ts          # ★ v0.4+ 远程 URL → owner/repo/platform 解析
+│   ├── config/                      # ★ v0.4+ 全局配置
+│   │   └── commands.ts             # ★ v0.4+ 命令面板注册表（约 15 条命令）
 │   ├── i18n/                        # ★ v0.2.3：国际化（React Context + useI18n hook）
 │   │   ├── index.tsx                # I18nProvider / useI18n() / t() 函数
 │   │   ├── zh.ts                    # 中文翻译
 │   │   └── en.ts                    # 英文翻译
 │   └── styles/
-│       └── index.css               # Tailwind base + 自定义 utility (.btn-primary / .panel / .input)
+│       └── index.css               # Tailwind base + 自定义 utility (.btn-primary / .panel / .input / .statusbar)
 │
 ├── assets/                         # 入库
 │   ├── icon-master.png             # 1024×1024 主图标源
@@ -328,7 +347,9 @@ KunyaoGit/
 | `git:checkout` / `git:create-branch` / `git:delete-branch` | 分支操作 |
 | `git:merge` | 合并（noFF / squash / custom message） |
 | `git:diff` / `git:diff-file` | unified diff（主进程自实现解析） |
-| `git:stash` / `git:stash-pop` | stash |
+| `git:stash` / `git:stash-pop` | stash（v0.3 基础） |
+| `git:stash-list` / `git:stash-show` / `git:stash-apply` / `git:stash-drop` | **★ v0.4+ Stash 队列**（list / show diff / apply 保留 / drop 删除） |
+| `git:cherry-pick` / `git:revert` | **★ v0.4+ Cherry-pick / Revert**（支持 `-m` 合并提交 parent） |
 | `git:reset` | soft / mixed / hard |
 | `git:resolve-conflict` / `git:read-conflict` | 冲突文件 ours / theirs |
 | `git:remote-list` / `git:remote-add` / `git:remote-remove` | remote 管理 |
@@ -343,11 +364,11 @@ KunyaoGit/
 
 ### GitHub（`github.*`）
 
-`list-repos` / **`search-repos`（v0.3.4 云端仓库搜索）** / `create-repo` / `delete-repo` / `list-prs` / `list-issues` / `contents-list` / `contents-read` / `contents-write` / `contents-delete`
+`list-repos` / **`search-repos`（v0.3.4 云端仓库搜索）** / `create-repo` / `delete-repo` / `list-prs` / `list-issues` / `contents-list` / `contents-read` / `contents-write` / `contents-delete` / **`create-pr`（★ v0.4+ 创建 PR）** / **`get-default-branch`（★ v0.4+ 读仓库默认分支）**
 
 ### Gitee（`gitee.*`）
 
-同 GitHub，用 axios 直连 `https://gitee.com/api/v5/...`
+同 GitHub，用 axios 直连 `https://gitee.com/api/v5/...`，含 `create-pr` / `get-default-branch`（★ v0.4+）
 
 ### 设置 + 通用
 

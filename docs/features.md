@@ -1,6 +1,6 @@
 # KunyaoGit 功能详解
 
-> 面向用户与开发者的完整功能清单。当前版本：**v0.3.8**（见 `package.json`）。
+> 面向用户与开发者的完整功能清单。当前版本：**v0.4.0**（见 `package.json`）。
 > 所有功能均通过 Electron IPC 实现，渲染进程仅通过 `window.gitgui.*` 调用，主进程负责真正的本地 Git / 远程 API / 文件系统操作。
 
 ---
@@ -21,6 +21,11 @@
 12. [本地文件管理（v0.3.0）](#12-本地文件管理v030)
 13. [多远程推送（v0.3.0）](#13-多远程推送v030)
 14. [云端仓库搜索（v0.3.4）](#14-云端仓库搜索v034)
+15. [Stash 队列管理（v0.4）](#15-stash-队列管理v04)
+16. [Cherry-pick / Revert（v0.4）](#16-cherry-pick--revertv04)
+17. [创建 PR / MR（v0.4）](#17-创建-pr--mrv04)
+18. [命令面板与快捷键（v0.4）](#18-命令面板与快捷键v04)
+19. [底部状态栏（v0.4）](#19-底部状态栏v04)
 
 ---
 
@@ -619,6 +624,215 @@ v0.3.4 在 GitHub / Gitee 仓库页（RemotePage）顶部栏新增搜索框，�
 | Diff | 自实现 unified diff + 并排 / 统一渲染 |
 | 配置存储 | electron-store v8（必须 v8，见开发指南陷阱） |
 | 打包 | electron-builder（NSIS） |
+
+---
+
+## 15. Stash 队列管理（v0.4）
+
+v0.4 起，stash 从「只能 push / pop 最新的」升级为完整队列管理。
+
+### 15.1 新增 IPC 通道
+
+| 通道 | 实现 |
+|---|---|
+| `git:stash-list` | `git stash list --format=%gd\|%h\|%cI\|%s` → `StashEntry[]` |
+| `git:stash-show` | `git stash show -p --no-color <ref>` → `FileDiff[]`（复用 diff 解析） |
+| `git:stash-apply` | `git stash apply <ref>`（不删 stash） |
+| `git:stash-drop` | `git stash drop <ref>` |
+
+### 15.2 StashEntry 类型
+
+```ts
+// shared/types.ts
+export interface StashEntry {
+  index: number;          // 0-based（stash@{0}）
+  ref: string;            // 'stash@{0}'
+  message: string;        // 提交说明（去掉 "WIP on branch: hash" 前缀）
+  branch: string;         // 创建时的分支
+  hash: string;           // 完整 SHA
+  date: string;           // ISO
+}
+```
+
+### 15.3 UI 集成
+
+- 入口：仓库页 → 变更 Tab → 顶部「Stash 队列」折叠面板
+- 操作：
+  - **保存当前修改**：输入可选描述 → 推入队列
+  - **应用（保留）**：把 stash 应用到工作区，stash 仍在队列
+  - **应用并移除**：等于「应用 + 删除」（组合实现，避免再加 IPC）
+  - **查看 diff**：弹窗显示该 stash 包含的文件变更
+  - **删除**：二次确认后从队列移除
+
+### 15.4 相关文件
+
+| 文件 | 职责 |
+|---|---|
+| `electron/services/git.ts` | `stashList` / `stashShow` / `stashApply` / `stashDrop` |
+| `electron/ipc/git.ts` | 注册 4 个 handler |
+| `electron/preload.ts` | 暴露 4 个 API（`gitgui.git.stashList` 等） |
+| `src/components/repo/StashList.tsx` | Stash 队列 UI |
+| `src/components/repo/ChangesPanel.tsx` | 顶部集成 StashList |
+| `src/i18n/{zh,en}.ts` | `stash.*` 段（22 条 key） |
+
+---
+
+## 16. Cherry-pick / Revert（v0.4）
+
+v0.4 起，提交历史支持「拣一个 commit」和「回退一个 commit」两条高频命令。
+
+### 16.1 新增 IPC 通道
+
+| 通道 | 实现 |
+|---|---|
+| `git:cherry-pick` | `git cherry-pick [-m N] <hash>` |
+| `git:revert` | `git revert [-m N] <hash>` |
+
+`mainline` 参数用于合并提交（merge commit），指定保留哪个 parent（`-m 1` 取第一个 parent）。
+
+### 16.2 UI 集成
+
+- 入口：仓库页 → 历史 Tab → 每个 commit 行 hover 显示工具条（复制 hash / Cherry-pick / Revert）
+- 复制 hash：用 `navigator.clipboard.writeText()` 复制完整 SHA
+- Cherry-pick / Revert：弹通用确认弹窗（CommitActionsModal）→ 显示 hash / 作者 / 主题 → 确认后执行
+- 冲突处理：错误信息中识别 "conflict" 关键字 → toast 黄色提示「请在变更页解决」
+
+### 16.3 安全设计
+
+- Revert 弹窗标记为 `danger`（红色边框 + 黄色警告条）
+- 所有操作通过通用 CommitActionsModal，便于未来扩展 force-push 等危险动作
+
+### 16.4 相关文件
+
+| 文件 | 职责 |
+|---|---|
+| `electron/services/git.ts` | `cherryPick` / `revert` |
+| `electron/ipc/git.ts` | 注册 2 个 handler |
+| `electron/preload.ts` | 暴露 2 个 API |
+| `src/components/repo/CommitHistory.tsx` | hover 工具条 + 弹窗触发 |
+| `src/components/repo/CommitActionsModal.tsx` | 通用确认弹窗（v0.4+ 复用） |
+| `src/i18n/{zh,en}.ts` | `commitActions.*` 段（18 条 key） |
+
+---
+
+## 17. 创建 PR / MR（v0.4）
+
+v0.4 起，从「只能看 PR」升级到「应用内创建 PR / MR」，凸显双平台差异化优势。
+
+### 17.1 新增 IPC 通道
+
+| 通道 | 实现 |
+|---|---|
+| `gh:create-pr` | `octokit.pulls.create({ owner, repo, title, body, head, base, draft })` |
+| `gh:get-default-branch` | `octokit.repos.get({ owner, repo }).default_branch` |
+| `gt:create-pr` | `POST /repos/{owner}/{repo}/pulls`（Gitee 没有 draft 概念） |
+| `gt:get-default-branch` | `GET /repos/{owner}/{repo}` 读 `default_branch` |
+
+### 17.2 远程 URL 解析
+
+新增 `src/lib/parseRemote.ts`，从 git remote URL 推断 owner/repo/platform，支持：
+- `https://github.com/owner/repo.git`
+- `git@github.com:owner/repo.git`
+- `ssh://git@github.com/owner/repo.git`
+- `https://username:password@github.com/owner/repo.git`（自动剥离 user:pass）
+- Gitee 同样支持
+
+### 17.3 UI 集成
+
+- 入口：仓库页 → 分支 Tab → 当前分支行（仅当 `ahead > 0` 且存在 GitHub / Gitee remote 时显示 `<GitPullRequest>` 按钮）
+- 弹窗流程：
+  1. 自动选中第一个 GitHub / Gitee remote（多 remote 时让用户选）
+  2. 并行：调 `getDefaultBranch` 拉默认 base + 取最后一次 commit message 作为默认 title
+  3. 用户填写 title / body / 选 base / GitHub 可勾选 draft
+  4. 提交 → 成功页显示 `htmlUrl` + 「在浏览器打开」按钮
+
+### 17.4 相关文件
+
+| 文件 | 职责 |
+|---|---|
+| `electron/ipc/github.ts` | `createPR` + `getDefaultBranch` |
+| `electron/ipc/gitee.ts` | `createPR` + `getDefaultBranch` |
+| `electron/preload.ts` | 暴露 4 个 API |
+| `src/lib/parseRemote.ts` | URL → { owner, repo, platform } 解析 |
+| `src/components/repo/CreatePRDialog.tsx` | 创建 PR 模态 |
+| `src/components/repo/BranchPanel.tsx` | 当前分支行加 `<GitPullRequest>` 按钮 |
+| `src/i18n/{zh,en}.ts` | `createPR.*` 段（17 条 key） |
+
+---
+
+## 18. 命令面板与快捷键（v0.4）
+
+v0.4 起，引入 VS Code 式命令面板和全局快捷键，把高频动作收口到统一入口。
+
+### 18.1 全局快捷键
+
+| 快捷键 | 动作 | 作用域 |
+|---|---|---|
+| `Ctrl/Cmd + Shift + P` | 打开命令面板 | 全局 |
+| `Ctrl/Cmd + R` | 刷新仓库 | 不在 input 内 |
+| `?`（需 Shift） | 显示快捷键速查表 | 不在 input 内 |
+
+### 18.2 命令面板
+
+- 入口：按 `Ctrl/Cmd + Shift + P` 或 `?` 速查表里的提示
+- 模态弹窗：顶部搜索框 + 下方按 4 类分组的命令列表（git / navigation / view / settings）
+- 键盘导航：↑↓ 移动、Enter 执行、Esc 关闭
+- 命令清单（约 15 条）：见 `src/config/commands.ts`
+  - Git：fetch / pull / push / refresh / stash / openChanges
+  - Navigation：home / repo / github / gitee / releases / settings / openRepo
+  - View：theme.{dark,ocean,light} / lang.{zh,en}
+  - Settings：checkUpdate / openDataDir
+
+### 18.3 快捷键速查表
+
+按 `?` 打开，列出所有可用快捷键 + 作用域说明。
+
+### 18.4 输入框让位
+
+`useShortcuts` 在 `INPUT` / `TEXTAREA` / `contentEditable` 内自动让位，避免影响输入。
+
+### 18.5 相关文件
+
+| 文件 | 职责 |
+|---|---|
+| `src/hooks/useShortcuts.ts` | 全局快捷键（keydown 监听 + input 让位） |
+| `src/hooks/useCommandPalette.ts` | 命令面板状态（open / close / toggle） |
+| `src/components/common/CommandPalette.tsx` | 模态弹窗 UI |
+| `src/components/common/Cheatsheet.tsx` | 快捷键速查表 |
+| `src/config/commands.ts` | 命令注册表 |
+| `src/pages/RepoPage.tsx` | 1-5 切 tab + 监听 `kg:navigate:tab` / `kg:shortcut:refresh` 事件 |
+| `src/App.tsx` | 挂载 CommandPalette + Cheatsheet + useGlobalShortcuts |
+| `src/i18n/{zh,en}.ts` | `command.*` + `cheatsheet.*` 段（30 条 key） |
+
+---
+
+## 19. 底部状态栏（v0.4）
+
+v0.4 起，底部 24px 状态栏常驻显示当前仓库运行态（VS Code / GitKraken 风格）。
+
+### 19.1 三段式
+
+| 段 | 内容 |
+|---|---|
+| **左** | 仓库名（带 `FolderGit2` 图标）+ 当前分支（带 `GitBranch` 图标）+ 同步状态（`↑N` 领先 / `↓N` 落后，颜色区分） |
+| **中** | 已暂存 N（emerald 绿）/ 未暂存 N（amber 黄）/ 冲突 N（red 红） |
+| **右** | `KunyaoGit v{version}`（从主进程 `app:get-version` 拉） |
+
+### 19.2 实现细节
+
+- 订阅 `useRepoStore` 自动响应仓库变化
+- 高度固定 24px（`.statusbar` CSS 工具类）
+- 主题色通过 `var(--bg-panel)` 跟随三主题
+- 应用版本异步加载（不阻塞首屏）
+
+### 19.3 相关文件
+
+| 文件 | 职责 |
+|---|---|
+| `src/components/common/StatusBar.tsx` | 组件本体 |
+| `src/components/Layout/Layout.tsx` | 底部挂载 |
+| `src/styles/index.css` | `.statusbar` 工具类 |
+| `src/i18n/{zh,en}.ts` | `statusBar.*` 段（11 条 key） |
 
 ---
 
