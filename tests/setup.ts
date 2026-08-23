@@ -1,0 +1,140 @@
+// v0.4+ Vitest 全局 setup
+// 主要职责：给渲染层组件测试提供 window.gitgui mock
+
+import { vi, beforeEach } from 'vitest';
+
+/** 生成一个成功的 Result */
+export const ok = <T>(data: T) => ({ ok: true as const, data });
+/** 生成一个失败的 Result */
+export const err = (error: string) => ({ ok: false as const, error });
+
+/**
+ * 创建 window.gitgui 的完整 mock
+ * 所有方法默认返回 ok(空值)，测试里可用 mockResolvedValue 覆盖
+ */
+export function createGitguiMock() {
+  return {
+    app: {
+      getVersion: vi.fn().mockResolvedValue('0.4.0'),
+      openExternal: vi.fn().mockResolvedValue(undefined),
+      shellOpen: vi.fn().mockResolvedValue(undefined),
+      openPath: vi.fn().mockResolvedValue(undefined),
+      relaunch: vi.fn(),
+      quit: vi.fn(),
+    },
+    dialog: {
+      openDirectory: vi.fn().mockResolvedValue(null),
+      openFile: vi.fn().mockResolvedValue(null),
+    },
+    settings: {
+      get: vi.fn().mockResolvedValue(ok({})),
+      set: vi.fn().mockResolvedValue(ok(undefined)),
+    },
+    git: {
+      status: vi.fn().mockResolvedValue(ok([])),
+      log: vi.fn().mockResolvedValue(ok([])),
+      branches: vi.fn().mockResolvedValue(ok([])),
+      stage: vi.fn().mockResolvedValue(ok(undefined)),
+      unstage: vi.fn().mockResolvedValue(ok(undefined)),
+      discard: vi.fn().mockResolvedValue(ok(undefined)),
+      commit: vi.fn().mockResolvedValue(ok({ hash: 'abc1234' })),
+      push: vi.fn().mockResolvedValue(ok('')),
+      pull: vi.fn().mockResolvedValue(ok('')),
+      fetch: vi.fn().mockResolvedValue(ok(undefined)),
+      checkout: vi.fn().mockResolvedValue(ok(undefined)),
+      createBranch: vi.fn().mockResolvedValue(ok(undefined)),
+      deleteBranch: vi.fn().mockResolvedValue(ok(undefined)),
+      merge: vi.fn().mockResolvedValue(ok('')),
+      diff: vi.fn().mockResolvedValue(ok([])),
+      diffFile: vi.fn().mockResolvedValue(ok(null)),
+      stash: vi.fn().mockResolvedValue(ok(undefined)),
+      stashPop: vi.fn().mockResolvedValue(ok(undefined)),
+      // v0.4+
+      stashList: vi.fn().mockResolvedValue(ok([])),
+      stashShow: vi.fn().mockResolvedValue(ok([])),
+      stashApply: vi.fn().mockResolvedValue(ok(undefined)),
+      stashDrop: vi.fn().mockResolvedValue(ok(undefined)),
+      cherryPick: vi.fn().mockResolvedValue(ok({ hash: 'def5678' })),
+      revert: vi.fn().mockResolvedValue(ok({ hash: 'ghi9012' })),
+      reset: vi.fn().mockResolvedValue(ok(undefined)),
+      resolveConflict: vi.fn().mockResolvedValue(ok(undefined)),
+      readConflict: vi.fn().mockResolvedValue(ok({ ours: '', base: '', theirs: '' })),
+      remoteList: vi.fn().mockResolvedValue(ok([])),
+      remoteAdd: vi.fn().mockResolvedValue(ok(undefined)),
+      remoteRemove: vi.fn().mockResolvedValue(ok(undefined)),
+      currentBranch: vi.fn().mockResolvedValue(ok('main')),
+    },
+    repo: {
+      open: vi.fn().mockResolvedValue(ok(null)),
+      clone: vi.fn().mockResolvedValue(ok(null)),
+      init: vi.fn().mockResolvedValue(ok(null)),
+      recent: vi.fn().mockResolvedValue(ok([])),
+    },
+    fsLocal: {
+      readFile: vi.fn().mockResolvedValue(ok('')),
+      writeFile: vi.fn().mockResolvedValue(ok(undefined)),
+      tree: vi.fn().mockResolvedValue(ok([])),
+      createFile: vi.fn().mockResolvedValue(ok(undefined)),
+      createDir: vi.fn().mockResolvedValue(ok(undefined)),
+      rename: vi.fn().mockResolvedValue(ok(undefined)),
+      remove: vi.fn().mockResolvedValue(ok(undefined)),
+    },
+    github: {
+      listRepos: vi.fn().mockResolvedValue(ok([])),
+      searchRepos: vi.fn().mockResolvedValue(ok([])),
+      createRepo: vi.fn().mockResolvedValue(ok(null)),
+      deleteRepo: vi.fn().mockResolvedValue(ok(undefined)),
+      listPRs: vi.fn().mockResolvedValue(ok([])),
+      listIssues: vi.fn().mockResolvedValue(ok([])),
+      contentsList: vi.fn().mockResolvedValue(ok([])),
+      contentsRead: vi.fn().mockResolvedValue(ok({ content: '', sha: '' })),
+      contentsWrite: vi.fn().mockResolvedValue(ok(undefined)),
+      contentsDelete: vi.fn().mockResolvedValue(ok(undefined)),
+      // v0.4+
+      createPR: vi.fn().mockResolvedValue(
+        ok({ number: 1, url: 'https://api.github.com/pulls/1', htmlUrl: 'https://github.com/o/r/pull/1' })
+      ),
+      getDefaultBranch: vi.fn().mockResolvedValue(ok('main')),
+    },
+    gitee: {
+      listRepos: vi.fn().mockResolvedValue(ok([])),
+      searchRepos: vi.fn().mockResolvedValue(ok([])),
+      createRepo: vi.fn().mockResolvedValue(ok(null)),
+      deleteRepo: vi.fn().mockResolvedValue(ok(undefined)),
+      listPRs: vi.fn().mockResolvedValue(ok([])),
+      listIssues: vi.fn().mockResolvedValue(ok([])),
+      contentsList: vi.fn().mockResolvedValue(ok([])),
+      contentsRead: vi.fn().mockResolvedValue(ok({ content: '', sha: '' })),
+      contentsWrite: vi.fn().mockResolvedValue(ok(undefined)),
+      contentsDelete: vi.fn().mockResolvedValue(ok(undefined)),
+      // v0.4+
+      createPR: vi.fn().mockResolvedValue(
+        ok({ number: 1, url: 'https://gitee.com/api/v5/pulls/1', htmlUrl: 'https://gitee.com/o/r/pulls/1' })
+      ),
+      getDefaultBranch: vi.fn().mockResolvedValue(ok('master')),
+    },
+    release: {
+      listTags: vi.fn().mockResolvedValue(ok([])),
+      createTag: vi.fn().mockResolvedValue(ok(undefined)),
+      deleteTag: vi.fn().mockResolvedValue(ok(undefined)),
+      pushTag: vi.fn().mockResolvedValue(ok(undefined)),
+      generateChangelog: vi.fn().mockResolvedValue(ok('')),
+      listReleases: vi.fn().mockResolvedValue(ok([])),
+      createRelease: vi.fn().mockResolvedValue(ok(null)),
+      deleteRelease: vi.fn().mockResolvedValue(ok(undefined)),
+    },
+    update: {
+      check: vi.fn().mockResolvedValue(ok(null)),
+      download: vi.fn().mockResolvedValue(ok('')),
+      install: vi.fn().mockResolvedValue(ok(undefined)),
+      onProgress: vi.fn().mockReturnValue(() => {}),
+      cancel: vi.fn().mockResolvedValue(ok(undefined)),
+    },
+  };
+}
+
+// 每个测试前重置 window.gitgui
+beforeEach(() => {
+  (globalThis as any).window = (globalThis as any).window || {};
+  (globalThis as any).window.gitgui = createGitguiMock();
+});
