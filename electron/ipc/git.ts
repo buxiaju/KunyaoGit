@@ -119,6 +119,11 @@ export function registerGitHandlers() {
     return getGit(path).readConflictFile(file);
   });
 
+  // v0.5+ 列出仓库所有工作区文件（tracked + untracked）
+  ipcMain.handle(IPC.GIT_LS_FILES, async (_e, { path, maxCount, withStatus }: { path: string; maxCount?: number; withStatus?: boolean }) => {
+    return getGit(path).listFiles({ maxCount, withStatus });
+  });
+
   ipcMain.handle(IPC.GIT_REMOTE_LIST, async (_e, repoPath: string) => {
     return getGit(repoPath).remoteList();
   });

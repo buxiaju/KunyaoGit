@@ -467,6 +467,9 @@ export const en: TranslationDict = {
     openDataDir: 'Open data directory',
     navigate: 'Navigate',
     run: 'Run',
+    // v0.5+ File search mode
+    filePlaceholder: 'Type a file path to jump…',
+    fileHint: 'File jump',
   },
 
   // Cheatsheet (v0.4+)

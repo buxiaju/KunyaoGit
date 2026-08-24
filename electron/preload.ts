@@ -66,6 +66,9 @@ const api = {
     remoteAdd: (repoPath: string, name: string, url: string) =>
       ipcRenderer.invoke(IPC.GIT_REMOTE_ADD, { path: repoPath, name, url }),
     remoteRemove: (repoPath: string, name: string) => ipcRenderer.invoke(IPC.GIT_REMOTE_REMOVE, { path: repoPath, name }),
+    // v0.5+ 列出仓库所有工作区文件（用于 Ctrl+P 跳转）
+    listFiles: (repoPath: string, opts?: { maxCount?: number; withStatus?: boolean }) =>
+      ipcRenderer.invoke(IPC.GIT_LS_FILES, { path: repoPath, ...opts }),
   },
 
   // 文件系统

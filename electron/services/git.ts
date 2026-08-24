@@ -15,6 +15,7 @@ import type {
   Result,
   RemoteInfo,
   StashEntry,
+  GitFile,
 } from '../../shared/types';
 
 export class GitService {
@@ -517,6 +518,50 @@ export class GitService {
     const all = await this.diff(opts);
     if (!all.ok) return all;
     return { ok: true, data: all.data.find((d) => d.path === file || d.oldPath === file) || null };
+  }
+
+  /**
+   * v0.5+ 列出仓库所有工作区文件（tracked + untracked，已排除 .gitignore）
+   * 用于 Ctrl+P 跳转文件搜索
+   * @param opts.maxCount 上限（默认 5000），防止大仓库卡死
+   * @param opts.staged 可选附带当前暂存状态（额外调一次 status() 拼装）
+   */
+  async listFiles(opts: { maxCount?: number; withStatus?: boolean } = {}): Promise<Result<GitFile[]>> {
+    const max = opts.maxCount ?? 5000;
+    try {
+      // --cached: tracked；--others: untracked；--exclude-standard: 应用 .gitignore
+      // -c: cached only（不重复 untracked）；-o: others only（用两个调用合并去重）
+      // --full-name: 相对仓库根，不用 a/ b/ 前缀
+      const out = await this.git.raw([
+        'ls-files',
+        '--cached', '--others', '--exclude-standard',
+        '-z',           // NUL 分隔避免文件名含空格
+        '--full-name',
+      ]);
+      const paths = out.split('\0').filter(Boolean);
+      // 截断 + 去重（理论上不会重复但保险）
+      const unique = Array.from(new Set(paths)).slice(0, max);
+
+      // 附带暂存状态
+      if (opts.withStatus) {
+        const st = await this.status();
+        const statusMap = new Map<string, FileStatus['status']>();
+        if (st.ok) {
+          for (const f of st.data) {
+            // 同一文件可能两条（暂存 + 未暂存），优先取更严重的
+            const cur = statusMap.get(f.path);
+            const order: Record<FileStatus['status'], number> = {
+              conflicted: 5, deleted: 4, modified: 3, renamed: 3, added: 2, untracked: 1,
+            };
+            if (!cur || order[f.status] > order[cur]) statusMap.set(f.path, f.status);
+          }
+        }
+        return { ok: true, data: unique.map((p) => ({ path: p, status: statusMap.get(p) })) };
+      }
+      return { ok: true, data: unique.map((p) => ({ path: p })) };
+    } catch (e) {
+      return { ok: false, error: (e as Error).message };
+    }
   }
 }
 

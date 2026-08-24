@@ -1,5 +1,6 @@
 // v0.4+ 全局快捷键 hook
 // 在 App 根挂一次即可；input / textarea 内自动让位
+// v0.5+ 加 Ctrl/Cmd + P 打开文件搜索模式
 
 import { useEffect } from 'react';
 import { useCommandPalette } from './useCommandPalette';
@@ -22,10 +23,17 @@ export function useGlobalShortcuts() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      // 1. Ctrl/Cmd + Shift + P → 打开命令面板（在任何地方都生效）
+      // 1. Ctrl/Cmd + Shift + P → 打开命令面板的「命令搜索」模式
       if (isMod(e) && e.shiftKey && (e.key === 'P' || e.key === 'p')) {
         e.preventDefault();
-        togglePalette();
+        togglePalette('command');
+        return;
+      }
+
+      // 1b. v0.5+ Ctrl/Cmd + P / Ctrl/Cmd + E → 打开命令面板的「文件搜索」模式
+      if (isMod(e) && !e.shiftKey && (e.key === 'p' || e.key === 'P' || e.key === 'e' || e.key === 'E')) {
+        e.preventDefault();
+        togglePalette('file');
         return;
       }
 
@@ -49,9 +57,9 @@ export function useGlobalShortcuts() {
     return () => window.removeEventListener('keydown', onKey);
   }, [togglePalette]);
 
-  // 监听「点侧边栏按钮打开命令面板」事件
+  // 监听「点侧边栏按钮打开命令面板」事件（默认命令模式）
   useEffect(() => {
-    const onOpenPalette = () => togglePalette();
+    const onOpenPalette = () => togglePalette('command');
     window.addEventListener('kg:shortcut:open-palette', onOpenPalette as EventListener);
     return () => window.removeEventListener('kg:shortcut:open-palette', onOpenPalette as EventListener);
   }, [togglePalette]);

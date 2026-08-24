@@ -168,6 +168,12 @@ export interface StashEntry {
   date: string;           // ISO
 }
 
+// v0.5+ 工作区文件条目（用于 Ctrl+P 跳转）
+export interface GitFile {
+  path: string;           // 相对仓库根的路径（含 untracked）
+  status?: FileStatus['status']; // 暂存状态（truncated 为空字符串时为 tracked-but-clean）
+}
+
 export type Result<T> = { ok: true; data: T } | { ok: false; error: string };
 
 export interface AppUpdateInfo {

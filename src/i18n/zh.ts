@@ -477,6 +477,9 @@ export const zh = {
     openDataDir: '打开数据目录',
     navigate: '导航',
     run: '执行',
+    // v0.5+ 文件搜索模式
+    filePlaceholder: '输入文件名跳转…',
+    fileHint: '文件跳转',
   },
 
   // Cheatsheet (v0.4+)
