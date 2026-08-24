@@ -369,4 +369,98 @@ index 111..222 100644
       expect(r.ok).toBe(false);
     });
   });
+
+  // ============ v0.5+ listFiles（Ctrl+P 跳转）============
+  describe('listFiles', () => {
+    it('空输出返回空数组', async () => {
+      mockRaw.mockResolvedValue('');
+      const r = await svc.listFiles();
+      expect(r.ok).toBe(true);
+      if (r.ok) expect(r.data).toEqual([]);
+    });
+
+    it('NUL 分隔正常解析', async () => {
+      // git ls-files -z 输出以 NUL 分隔，结尾通常不带 NUL
+      mockRaw.mockResolvedValue('src/index.ts\0src/utils.ts\0README.md');
+      const r = await svc.listFiles();
+      expect(r.ok).toBe(true);
+      if (r.ok) {
+        expect(r.data.length).toBe(3);
+        expect(r.data[0]).toEqual({ path: 'src/index.ts', status: undefined });
+        expect(r.data[1].path).toBe('src/utils.ts');
+        expect(r.data[2].path).toBe('README.md');
+      }
+    });
+
+    it('处理 NUL 结尾的输出', async () => {
+      mockRaw.mockResolvedValue('a.ts\0b.ts\0');
+      const r = await svc.listFiles();
+      expect(r.ok).toBe(true);
+      if (r.ok) expect(r.data.map((f) => f.path)).toEqual(['a.ts', 'b.ts']);
+    });
+
+    it('去重（理论上 ls-files 不会重复但保险）', async () => {
+      mockRaw.mockResolvedValue('a.ts\0a.ts\0b.ts');
+      const r = await svc.listFiles();
+      expect(r.ok).toBe(true);
+      if (r.ok) expect(r.data.length).toBe(2);
+    });
+
+    it('超过 maxCount 时截断', async () => {
+      const out = Array.from({ length: 100 }, (_, i) => `f${i}.ts`).join('\0');
+      mockRaw.mockResolvedValue(out);
+      const r = await svc.listFiles({ maxCount: 10 });
+      expect(r.ok).toBe(true);
+      if (r.ok) expect(r.data.length).toBe(10);
+    });
+
+    it('withStatus=true 时调 status() 拼装状态', async () => {
+      mockRaw.mockResolvedValue('src/index.ts\0new.ts');
+      mockStatus.mockResolvedValue({
+        files: [
+          { path: 'new.ts', index: '?', working_dir: '?' },
+          { path: 'src/index.ts', index: 'M', working_dir: ' ' },
+        ],
+        conflicted: [],
+      });
+      const r = await svc.listFiles({ withStatus: true });
+      expect(r.ok).toBe(true);
+      if (r.ok) {
+        expect(r.data[0]).toEqual({ path: 'src/index.ts', status: 'modified' });
+        expect(r.data[1]).toEqual({ path: 'new.ts', status: 'untracked' });
+      }
+    });
+
+    it('同名文件 modified + untracked 选最严重的（modified 优先）', async () => {
+      // 实际上 status() 同一文件可能产生两条（暂存 + 未暂存），按 order 选最严重
+      mockRaw.mockResolvedValue('foo.ts');
+      mockStatus.mockResolvedValue({
+        files: [
+          { path: 'foo.ts', index: 'M', working_dir: ' ' },  // modified staged
+          { path: 'foo.ts', index: ' ', working_dir: '?' }, // untracked workdir
+        ],
+        conflicted: [],
+      });
+      const r = await svc.listFiles({ withStatus: true });
+      expect(r.ok).toBe(true);
+      if (r.ok) expect(r.data[0].status).toBe('modified');
+    });
+
+    it('git 抛错时返回 ok:false', async () => {
+      mockRaw.mockRejectedValue(new Error('fatal: not a git repository'));
+      const r = await svc.listFiles();
+      expect(r.ok).toBe(false);
+    });
+
+    it('withStatus 时 status() 失败降级（files 仍返回，status 缺省）', async () => {
+      mockRaw.mockResolvedValue('a.ts');
+      mockStatus.mockRejectedValue(new Error('boom'));
+      const r = await svc.listFiles({ withStatus: true });
+      // 降级：status 失败不影响主流程，files 仍返回，status 字段为 undefined
+      expect(r.ok).toBe(true);
+      if (r.ok) {
+        expect(r.data).toEqual([{ path: 'a.ts', status: undefined }]);
+      }
+    });
+  });
 });

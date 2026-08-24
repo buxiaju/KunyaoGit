@@ -164,4 +164,49 @@ describe('useGlobalShortcuts', () => {
     expect(onRefresh).not.toHaveBeenCalled();
     window.removeEventListener('kg:shortcut:refresh', onRefresh);
   });
+
+  // ============ v0.5+ Ctrl+P / Ctrl+E 文件模式 ============
+  describe('v0.5+ Ctrl+P 打开文件模式', () => {
+    it('Ctrl+P 打开面板并设置 mode=file', () => {
+      render(<Harness />);
+      pressKey({ key: 'P', ctrlKey: true });
+      const st = useCommandPalette.getState();
+      expect(st.open).toBe(true);
+      expect(st.mode).toBe('file');
+    });
+
+    it('Cmd+P（mac）也能打开文件模式', () => {
+      render(<Harness />);
+      pressKey({ key: 'P', metaKey: true });
+      expect(useCommandPalette.getState().mode).toBe('file');
+    });
+
+    it('Ctrl+E 也能打开文件模式（VS Code 兼容）', () => {
+      render(<Harness />);
+      pressKey({ key: 'E', ctrlKey: true });
+      expect(useCommandPalette.getState().mode).toBe('file');
+    });
+
+    it('小写 p 也能触发', () => {
+      render(<Harness />);
+      pressKey({ key: 'p', ctrlKey: true });
+      expect(useCommandPalette.getState().mode).toBe('file');
+    });
+
+    it('Ctrl+Shift+P 仍走 command 模式（不冲突）', () => {
+      render(<Harness />);
+      pressKey({ key: 'P', ctrlKey: true, shiftKey: true });
+      expect(useCommandPalette.getState().mode).toBe('command');
+    });
+
+    it('Ctrl+P 在 input 内仍触发（命令面板任何时候都可开）', () => {
+      const input = document.createElement('input');
+      document.body.appendChild(input);
+      render(<Harness />);
+      pressKey({ key: 'P', ctrlKey: true, target: input });
+      expect(useCommandPalette.getState().open).toBe(true);
+      expect(useCommandPalette.getState().mode).toBe('file');
+      document.body.removeChild(input);
+    });
+  });
 });

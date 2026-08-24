@@ -63,6 +63,8 @@ export function createGitguiMock() {
       remoteAdd: vi.fn().mockResolvedValue(ok(undefined)),
       remoteRemove: vi.fn().mockResolvedValue(ok(undefined)),
       currentBranch: vi.fn().mockResolvedValue(ok('main')),
+      // v0.5+ 列出仓库文件（用于 Ctrl+P 跳转）
+      listFiles: vi.fn().mockResolvedValue(ok([])),
     },
     repo: {
       open: vi.fn().mockResolvedValue(ok(null)),

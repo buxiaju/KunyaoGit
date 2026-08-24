@@ -2,13 +2,14 @@
 // 覆盖：显隐、搜索过滤、分组渲染、键盘导航（↑↓/Enter/Esc）、鼠标点击、遮罩关闭
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, cleanup, fireEvent, act } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, act, waitFor } from '@testing-library/react';
 import CommandPalette from '../../src/components/common/CommandPalette';
 import { I18nProvider } from '../../src/i18n';
 import { useCommandPalette } from '../../src/hooks/useCommandPalette';
 import { useRepoStore } from '../../src/stores/repo';
 import { commands } from '../../src/config/commands';
 import type { RepoInfo } from '../../shared/types';
+import { ok } from '../setup';
 
 const fakeRepo: RepoInfo = {
   path: 'C:/projects/my-app',
@@ -323,6 +324,99 @@ describe('CommandPalette', () => {
       const input = screen.getByPlaceholderText('输入命令或搜索…');
       fireEvent.mouseDown(input);
       expect(useCommandPalette.getState().open).toBe(true);
+    });
+  });
+
+  // ============ v0.5+ file 模式 ============
+  describe('v0.5+ file 模式', () => {
+    const fakeFiles = [
+      { path: 'src/components/Button.tsx' },
+      { path: 'src/components/Input.tsx' },
+      { path: 'src/utils/helper.ts' },
+      { path: 'package.json' },
+      { path: 'README.md' },
+    ];
+
+    beforeEach(() => {
+      useRepoStore.setState({ current: fakeRepo });
+      (window.gitgui.git.listFiles as any).mockResolvedValue(ok(fakeFiles));
+    });
+
+    it('openPalette("file") 进入 file 模式', () => {
+      renderPalette();
+      act(() => useCommandPalette.getState().openPalette('file'));
+      expect(useCommandPalette.getState().mode).toBe('file');
+      expect(screen.getByPlaceholderText('输入文件名跳转…')).toBeTruthy();
+    });
+
+    it('file 模式打开时自动调 listFiles 拉文件列表', async () => {
+      renderPalette();
+      act(() => useCommandPalette.getState().openPalette('file'));
+      await waitFor(() => {
+        expect(window.gitgui.git.listFiles).toHaveBeenCalledWith(fakeRepo.path, { maxCount: 5000 });
+      });
+    });
+
+    it('file 模式显示所有文件', async () => {
+      renderPalette();
+      act(() => useCommandPalette.getState().openPalette('file'));
+      await waitFor(() => screen.getByText('src/components/Button.tsx'));
+      for (const f of fakeFiles) {
+        expect(screen.getByText(f.path)).toBeTruthy();
+      }
+    });
+
+    it('file 模式搜索按钮名能过滤', async () => {
+      const { container } = renderPalette();
+      act(() => useCommandPalette.getState().openPalette('file'));
+      await waitFor(() => {
+        const btns = Array.from(container.querySelectorAll('button'));
+        expect(btns.some((b) => b.textContent?.includes('Button.tsx'))).toBe(true);
+      });
+      const input = screen.getByPlaceholderText('输入文件名跳转…') as HTMLInputElement;
+      fireEvent.change(input, { target: { value: 'btn' } });
+      await flush();
+      const btns = Array.from(container.querySelectorAll('button'));
+      expect(btns.some((b) => b.textContent?.includes('Button.tsx'))).toBe(true);
+      expect(btns.some((b) => b.textContent?.includes('README.md'))).toBe(false);
+    });
+
+    it('file 模式搜索无结果时显示空提示', async () => {
+      renderPalette();
+      act(() => useCommandPalette.getState().openPalette('file'));
+      await waitFor(() => screen.getByText('src/components/Button.tsx'));
+      const input = screen.getByPlaceholderText('输入文件名跳转…') as HTMLInputElement;
+      fireEvent.change(input, { target: { value: 'zzzznotexist' } });
+      await flush();
+      expect(screen.getByText('没有匹配的命令')).toBeTruthy();
+    });
+
+    it('file 模式点文件调 selectFileForEdit + 关面板', async () => {
+      useRepoStore.setState({ current: fakeRepo, selectedFile: null });
+      renderPalette();
+      act(() => useCommandPalette.getState().openPalette('file'));
+      await waitFor(() => screen.getByText('src/components/Button.tsx'));
+      fireEvent.click(screen.getByText('src/components/Button.tsx'));
+      await flush();
+      const st = useRepoStore.getState();
+      expect(st.selectedFile).toBe('src/components/Button.tsx');
+      expect(useCommandPalette.getState().open).toBe(false);
+    });
+
+    it('file 模式无仓库时不调 listFiles', () => {
+      useRepoStore.setState({ current: null });
+      (window.gitgui.git.listFiles as any).mockClear();
+      renderPalette();
+      act(() => useCommandPalette.getState().openPalette('file'));
+      expect(window.gitgui.git.listFiles).not.toHaveBeenCalled();
+    });
+
+    it('listFiles 失败时不抛错（files 为空）', async () => {
+      (window.gitgui.git.listFiles as any).mockResolvedValue({ ok: false, error: 'boom' });
+      renderPalette();
+      act(() => useCommandPalette.getState().openPalette('file'));
+      await flush();
+      expect(screen.queryByText('src/components/Button.tsx')).toBeNull();
     });
   });
 });
