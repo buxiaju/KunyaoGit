@@ -530,6 +530,17 @@ export const en: TranslationDict = {
     revertFailed: 'Revert {hash} failed: {error}',
   },
 
+  // File history & Blame (v0.5+)
+  fileHistory: {
+    title: 'File History',
+    open: 'View file history (Blame / Log)',
+    empty: 'No commit history',
+    loadFailed: 'Failed to load file history',
+    noChanges: 'This commit has no file changes',
+    diffEmpty: 'No diff data',
+    blameLoading: 'Loading blame…',
+  },
+
   // Create PR / MR (v0.4+)
   createPR: {
     button: 'Create Pull Request',

@@ -65,6 +65,10 @@ export function createGitguiMock() {
       currentBranch: vi.fn().mockResolvedValue(ok('main')),
       // v0.5+ 列出仓库文件（用于 Ctrl+P 跳转）
       listFiles: vi.fn().mockResolvedValue(ok([])),
+      // v0.5+ Blame / 文件历史 / 文件 diff
+      blame: vi.fn().mockResolvedValue(ok([])),
+      fileLog: vi.fn().mockResolvedValue(ok([])),
+      fileDiff: vi.fn().mockResolvedValue(ok(null)),
     },
     repo: {
       open: vi.fn().mockResolvedValue(ok(null)),

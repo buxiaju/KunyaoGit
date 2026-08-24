@@ -16,6 +16,7 @@ import type {
   RemoteInfo,
   StashEntry,
   GitFile,
+  BlameLine,
 } from '../../shared/types';
 
 export class GitService {
@@ -559,6 +560,143 @@ export class GitService {
         return { ok: true, data: unique.map((p) => ({ path: p, status: statusMap.get(p) })) };
       }
       return { ok: true, data: unique.map((p) => ({ path: p })) };
+    } catch (e) {
+      return { ok: false, error: (e as Error).message };
+    }
+  }
+
+  /**
+   * v0.5+ 解析 git blame --line-porcelain 输出为 BlameLine[]
+   * 输出格式：每行 3 段（被换行符分隔）
+   *   <sha> <原始行号> <最终行号>
+   *   author <name>
+   *   author-mail <<email>>
+   *   author-time <unix-timestamp>
+   *   author-tz <tz>
+   *   summary <message 第一行>
+   *   [filename <file>]
+   *   <上一行继续>
+   *   <空行>
+   */
+  async blame(file: string): Promise<Result<BlameLine[]>> {
+    try {
+      // 切到仓库根目录运行 blame（file 相对路径）
+      const out = await this.git.raw(['blame', '--line-porcelain', '--', file]);
+      const lines = out.split('\n');
+      const result: BlameLine[] = [];
+      let current: Partial<BlameLine> = {};
+      let pendingLine = 0;
+      for (const raw of lines) {
+        // 头部行：<sha> <orig> <final>
+        const headerMatch = raw.match(/^([0-9a-f]{7,40})\s+\d+\s+(\d+)/);
+        if (headerMatch) {
+          // 上一个块未完成，先 push
+          if (current.line && current.hash) {
+            result.push({
+              line: current.line,
+              hash: current.hash,
+              author: current.author || '',
+              email: current.email || '',
+              date: current.date || '',
+              message: current.message || '',
+            });
+          }
+          current = { hash: headerMatch[1], line: parseInt(headerMatch[2], 10) };
+          pendingLine = parseInt(headerMatch[2], 10);
+          continue;
+        }
+        if (raw.startsWith('author ')) current.author = raw.slice('author '.length).trim();
+        else if (raw.startsWith('author-mail ')) current.email = raw.slice('author-mail '.length).replace(/^<|>$/g, '');
+        else if (raw.startsWith('author-time ')) {
+          const ts = parseInt(raw.slice('author-time '.length).trim(), 10);
+          if (!isNaN(ts)) current.date = new Date(ts * 1000).toISOString();
+        } else if (raw.startsWith('summary ')) current.message = raw.slice('summary '.length).trim();
+        else if (raw === '' && current.line && current.hash) {
+          // 块结束：author-time/summary 可能因为边界行缺失，但 line 必有
+          if (!current.date) current.date = '';
+          if (!current.author) current.author = '';
+          if (!current.email) current.email = '';
+          if (!current.message) current.message = '';
+          result.push({
+            line: current.line,
+            hash: current.hash,
+            author: current.author,
+            email: current.email,
+            date: current.date,
+            message: current.message,
+          });
+          current = {};
+        }
+        // 其他字段（committer / previous / boundary 等）忽略
+      }
+      // 收尾：最后一个块可能没遇到空行
+      if (current.line && current.hash) {
+        result.push({
+          line: current.line,
+          hash: current.hash,
+          author: current.author || '',
+          email: current.email || '',
+          date: current.date || '',
+          message: current.message || '',
+        });
+      }
+      return { ok: true, data: result };
+    } catch (e) {
+      return { ok: false, error: (e as Error).message };
+    }
+  }
+
+  /**
+   * v0.5+ 列出文件历史（用 --follow 跟踪重命名）
+   * 返回 CommitInfo[]，按时间倒序
+   */
+  async fileLog(file: string, opts: { maxCount?: number; follow?: boolean } = {}): Promise<Result<CommitInfo[]>> {
+    const maxCount = opts.maxCount ?? 50;
+    const follow = opts.follow ?? true;
+    try {
+      const args = ['log', `--max-count=${maxCount}`, '--format=%H|%h|%an|%ae|%cI|%s'];
+      if (follow) args.push('--follow');
+      args.push('--', file);
+      const out = await this.git.raw(args);
+      if (!out.trim()) return { ok: true, data: [] };
+      const lines = out.split('\n').filter(Boolean);
+      const result: CommitInfo[] = lines.map((line) => {
+        const [hash, shortHash, author, email, date, ...msgParts] = line.split('|');
+        return {
+          hash,
+          shortHash,
+          author,
+          email,
+          date,
+          message: msgParts.join('|'),
+          refs: [],
+        };
+      });
+      return { ok: true, data: result };
+    } catch (e) {
+      return { ok: false, error: (e as Error).message };
+    }
+  }
+
+  /**
+   * v0.5+ 获取文件两个版本之间的 diff
+   * 用于 FileHistoryPanel「点击某次 commit 看 diff」
+   * @param fromHash 较早的 commit（不含），undefined 表示与 HEAD 对比
+   * @param toHash 较新的 commit（含），undefined 表示工作区
+   */
+  async fileDiff(
+    file: string,
+    opts: { fromHash?: string; toHash?: string } = {}
+  ): Promise<Result<FileDiff | null>> {
+    try {
+      const args: string[] = ['diff', '--no-color'];
+      if (opts.fromHash) args.push(`${opts.fromHash}^`);
+      if (opts.toHash) args.push(opts.toHash);
+      else if (opts.fromHash) args.push(opts.fromHash);
+      args.push('--', file);
+      const out = await this.git.raw(args);
+      const all = parseUnifiedDiff(out);
+      return { ok: true, data: all.find((d) => d.path === file || d.oldPath === file) || null };
     } catch (e) {
       return { ok: false, error: (e as Error).message };
     }

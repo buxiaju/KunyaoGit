@@ -124,6 +124,21 @@ export function registerGitHandlers() {
     return getGit(path).listFiles({ maxCount, withStatus });
   });
 
+  // v0.5+ Blame（编辑器 gutter hover 用）
+  ipcMain.handle(IPC.GIT_BLAME, async (_e, { path, file }: { path: string; file: string }) => {
+    return getGit(path).blame(file);
+  });
+
+  // v0.5+ 文件历史（FileHistoryPanel 用）
+  ipcMain.handle(IPC.GIT_FILE_LOG, async (_e, { path, file, maxCount, follow }: { path: string; file: string; maxCount?: number; follow?: boolean }) => {
+    return getGit(path).fileLog(file, { maxCount, follow });
+  });
+
+  // v0.5+ 文件某次 commit 的 diff（FileHistoryPanel 详情用）
+  ipcMain.handle(IPC.GIT_FILE_DIFF, async (_e, { path, file, fromHash, toHash }: { path: string; file: string; fromHash?: string; toHash?: string }) => {
+    return getGit(path).fileDiff(file, { fromHash, toHash });
+  });
+
   ipcMain.handle(IPC.GIT_REMOTE_LIST, async (_e, repoPath: string) => {
     return getGit(repoPath).remoteList();
   });

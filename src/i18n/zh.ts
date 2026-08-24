@@ -540,6 +540,17 @@ export const zh = {
     revertFailed: 'Revert {hash} 失败：{error}',
   },
 
+  // File history & Blame (v0.5+)
+  fileHistory: {
+    title: '文件历史',
+    open: '查看文件历史（Blame / Log）',
+    empty: '暂无提交历史',
+    loadFailed: '加载文件历史失败',
+    noChanges: '该 commit 没有文件变更',
+    diffEmpty: '无 diff 数据',
+    blameLoading: '加载 Blame 中…',
+  },
+
   // Create PR / MR (v0.4+)
   createPR: {
     button: '创建 Pull Request',

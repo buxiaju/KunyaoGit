@@ -38,6 +38,9 @@ export const IPC = {
   GIT_READ_CONFLICT: 'git:read-conflict',
   // v0.5+ 文件列表（用于 Ctrl+P 跳转）
   GIT_LS_FILES: 'git:ls-files',
+  GIT_BLAME: 'git:blame',
+  GIT_FILE_LOG: 'git:file-log',
+  GIT_FILE_DIFF: 'git:file-diff',
   // v0.4+ Cherry-pick / Revert
   GIT_CHERRY_PICK: 'git:cherry-pick',
   GIT_REVERT: 'git:revert',

@@ -69,6 +69,12 @@ const api = {
     // v0.5+ 列出仓库所有工作区文件（用于 Ctrl+P 跳转）
     listFiles: (repoPath: string, opts?: { maxCount?: number; withStatus?: boolean }) =>
       ipcRenderer.invoke(IPC.GIT_LS_FILES, { path: repoPath, ...opts }),
+    blame: (repoPath: string, file: string) =>
+      ipcRenderer.invoke(IPC.GIT_BLAME, { path: repoPath, file }),
+    fileLog: (repoPath: string, file: string, opts?: { maxCount?: number; follow?: boolean }) =>
+      ipcRenderer.invoke(IPC.GIT_FILE_LOG, { path: repoPath, file, ...opts }),
+    fileDiff: (repoPath: string, file: string, opts?: { fromHash?: string; toHash?: string }) =>
+      ipcRenderer.invoke(IPC.GIT_FILE_DIFF, { path: repoPath, file, ...opts }),
   },
 
   // 文件系统

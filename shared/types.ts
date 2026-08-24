@@ -174,6 +174,16 @@ export interface GitFile {
   status?: FileStatus['status']; // 暂存状态（truncated 为空字符串时为 tracked-but-clean）
 }
 
+// v0.5+ Blame 单行记录（用于编辑器左侧 gutter hover）
+export interface BlameLine {
+  line: number;           // 1-based
+  hash: string;           // 完整 SHA
+  author: string;         // 作者名
+  email: string;
+  date: string;           // ISO
+  message: string;        // commit message 第一行
+}
+
 export type Result<T> = { ok: true; data: T } | { ok: false; error: string };
 
 export interface AppUpdateInfo {
