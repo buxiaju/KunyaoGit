@@ -6,7 +6,7 @@
 
 > 一个 Git 桌面客户端，深度集成 **GitHub** 和 **Gitee**（码云）。
 
-![Electron](https://img.shields.io/badge/Electron-33-9feaf9) ![React](https://img.shields.io/badge/React-18-61dafb) ![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178c6) ![License](https://img.shields.io/badge/license-MIT-green) ![Version](https://img.shields.io/badge/version-v0.4.0-22c55e)
+![Electron](https://img.shields.io/badge/Electron-33-9feaf9) ![React](https://img.shields.io/badge/React-18-61dafb) ![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178c6) ![License](https://img.shields.io/badge/license-MIT-green) ![Version](https://img.shields.io/badge/version-v0.5.0-22c55e)
 
 ## 特性
 
@@ -62,6 +62,7 @@
 - **三主题切换**（暗色 / 深蓝 / 亮色，v0.2.5）
 - **多语言切换**（中文 / English，设置页或侧边栏一键切换，v0.2.3）
 - **命令面板 + 全局快捷键**（v0.4+：Ctrl+Shift+P 调用 15+ 命令 / Ctrl+R 刷新 / 1-5 切 tab / ? 速查）
+- **Ctrl+P 跳转文件**（v0.5+：VS Code 式快速跳转 + 模糊搜索 + 匹配高亮，5k 文件仓库实测即时响应）
 - **底部状态栏**（v0.4+：仓库 / 分支 / 同步 / 暂存计数 / 应用版本，三段式）
 - **专属应用图标**（Jade 绿 + K + Git 分支节点）
 
@@ -170,7 +171,9 @@ KunyaoGit/
 - [x] Cherry-pick / Revert（v0.4+）
 - [x] 创建 PR / MR（v0.4+）
 - [x] 命令面板 + 全局快捷键（v0.4+）
+- [x] Ctrl+P 跳转文件（v0.5+）
 - [x] 底部状态栏（v0.4+）
+- [ ] 文件历史 + Blame（v0.5 P0.2 待做）
 - [ ] 子模块管理
 - [ ] SSH key 管理
 - [ ] Git LFS 支持

@@ -29,7 +29,7 @@
 
 | 维度 | 数值 |
 | --- | --- |
-| 当前版本 | `0.4.0`（见 `package.json`） |
+| 当前版本 | `0.5.0`（见 `package.json`） |
 | 维护者 | `buxiaju`（GitHub + Gitee 同名） |
 | 主仓库 | https://github.com/buxiaju/KunyaoGit |
 | 镜像 | https://gitee.com/buxiaju/KunyaoGit |
@@ -44,6 +44,7 @@
 - **★ v0.4+ Cherry-pick / Revert**（提交历史 hover 工具条，apply 任意 commit / 回退 commit，冲突复用现有解决流程）
 - **★ v0.4+ PR / MR 创建**（GitHub + Gitee 双平台；自动解析 remote URL 推断 owner/repo；自动拉默认分支作为 base；当前分支 ahead>0 时一键创建）
 - **★ v0.4+ 命令面板**（Ctrl/Cmd+Shift+P 全局命令入口，15+ 命令分类覆盖 Git / 导航 / 视图 / 设置）
+- **★ v0.5+ Ctrl+P 跳转文件**（复用命令面板组件，VS Code 式模糊搜索 + 匹配高亮，git ls-files --others --exclude-standard 上限 5000 文件）
 - **★ v0.4+ 全局快捷键**（Ctrl+R 刷新、? 速查表、1-5 切 tab、输入框内自动让位）
 - **★ v0.4+ 底部状态栏**（仓库 / 分支 / 同步状态 / 暂存计数 / 应用版本，三段式 VS Code / GitKraken 风格）
 - **本地文件管理**（文件树：新建文件 / 新建文件夹 / 重命名 / 删除，右键菜单 + 工具栏；操作后自动刷新 git status）
@@ -157,7 +158,7 @@ KunyaoGit/
 │   │   │   ├── Toast.tsx           # 全局 Toaster（zustand 实现）
 │   │   │   ├── UpdateDialog.tsx    # ★ 应用内更新对话框（询问/下载进度/完成/错误）
 │   │   │   ├── StatusBar.tsx       # ★ v0.4+ 底部状态栏（仓库/分支/同步/暂存/版本）
-│   │   │   ├── CommandPalette.tsx  # ★ v0.4+ Ctrl+Shift+P 命令面板（VS Code 式模态）
+│   │   │   ├── CommandPalette.tsx  # ★ v0.4+ Ctrl+Shift+P 命令面板（VS Code 式模态；v0.5+ 加 Ctrl+P 跳转文件）
 │   │   │   └── Cheatsheet.tsx      # ★ v0.4+ ? 快捷键速查表
 │   │   └── repo/
 │   │       ├── BranchPanel.tsx     # 分支列表 + checkout / new / delete / merge + ★ v0.4 创建 PR
@@ -180,7 +181,8 @@ KunyaoGit/
 │   │   ├── settings.ts             # 设置（theme / gitPath / auth / language / ...）
 │   │   └── update.ts               # ★ 更新对话框状态 + 下载/安装流程
 │   ├── lib/                         # ★ v0.4+ 通用工具
-│   │   └── parseRemote.ts          # ★ v0.4+ 远程 URL → owner/repo/platform 解析
+│   │   ├── parseRemote.ts          # ★ v0.4+ 远程 URL → owner/repo/platform 解析
+│   │   └── fuzzyMatch.ts            # ★ v0.5+ 模糊搜索算法（Ctrl+P 跳转文件用）
 │   ├── config/                      # ★ v0.4+ 全局配置
 │   │   └── commands.ts             # ★ v0.4+ 命令面板注册表（约 15 条命令）
 │   ├── i18n/                        # ★ v0.2.3：国际化（React Context + useI18n hook）
@@ -234,6 +236,22 @@ KunyaoGit/
 │   ├── KunyaoGit-portable-v0.2.1.zip
 │   ├── KunyaoGit-portable-v0.2.2.zip
 │   └── KunyaoGit-portable-v0.2.3.zip
+│
+├── tests/                           # ★ v0.4+ 自动化测试（Vitest 4 + happy-dom + Testing Library 16）
+│   ├── setup.ts                    #   window.gitgui 全局 mock（每个测试前重置）
+│   ├── stubs/electron-store.ts     #   electron-store 内存 stub
+│   └── unit/                       #   测试文件
+│       ├── parseRemote.test.ts     #   22 例：远程 URL 解析
+│       ├── parseUnifiedDiff.test.ts #  11 例：unified diff 解析
+│       ├── gitService.test.ts      #   44 例：GitService mock
+│       ├── i18n.test.ts            #   27 例：i18n 完整性 + t() 插值
+│       ├── commands.test.ts         #   20 例：命令面板注册表
+│       ├── fuzzyMatch.test.ts      #   ★ v0.5+ 14 例：模糊搜索
+│       ├── StatusBar.test.tsx       #   21 例：底部状态栏
+│       ├── CommandPalette.test.tsx  #   36 例：命令面板（v0.4+ + v0.5+ file 模式）
+│       ├── useShortcuts.test.tsx    #   20 例：全局快捷键（v0.4+ + v0.5+ Ctrl+P）
+│       ├── StashList.test.tsx       #   18 例：Stash 队列
+│       └── CreatePRDialog.test.tsx  #   22 例：PR/MR 创建
 │
 ├── docs/                           # ★ 项目文档（v0.2.2 新增）
 │   ├── api-reference.md            # window.gitgui API 完整参考
@@ -353,6 +371,7 @@ KunyaoGit/
 | `git:reset` | soft / mixed / hard |
 | `git:resolve-conflict` / `git:read-conflict` | 冲突文件 ours / theirs |
 | `git:remote-list` / `git:remote-add` / `git:remote-remove` | remote 管理 |
+| `git:ls-files` | **★ v0.5+ 列出仓库工作区文件**（tracked + untracked，--exclude-standard；用于 Ctrl+P 跳转） |
 
 ### 文件系统
 

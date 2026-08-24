@@ -1,6 +1,6 @@
 # KunyaoGit 功能详解
 
-> 面向用户与开发者的完整功能清单。当前版本：**v0.4.0**（见 `package.json`）。
+> 面向用户与开发者的完整功能清单。当前版本：**v0.5.0**（见 `package.json`）。
 > 所有功能均通过 Electron IPC 实现，渲染进程仅通过 `window.gitgui.*` 调用，主进程负责真正的本地 Git / 远程 API / 文件系统操作。
 
 ---
@@ -26,6 +26,7 @@
 17. [创建 PR / MR（v0.4）](#17-创建-pr--mrv04)
 18. [命令面板与快捷键（v0.4）](#18-命令面板与快捷键v04)
 19. [底部状态栏（v0.4）](#19-底部状态栏v04)
+20. [Ctrl+P 跳转文件（v0.5）](#20-ctrlp-跳转文件v05)
 
 ---
 
@@ -833,6 +834,85 @@ v0.4 起，底部 24px 状态栏常驻显示当前仓库运行态（VS Code / Gi
 | `src/components/Layout/Layout.tsx` | 底部挂载 |
 | `src/styles/index.css` | `.statusbar` 工具类 |
 | `src/i18n/{zh,en}.ts` | `statusBar.*` 段（11 条 key） |
+
+---
+
+## 20. Ctrl+P 跳转文件（v0.5）
+
+v0.5 兑现 v0.4 release body 里的预告「v0.5 补 `Ctrl+P` 快速跳转」。复用 v0.4 的命令面板组件，加一个 file 模式；5 千文件的仓库实测从打开到跳转 < 200 ms。
+
+### 20.1 快捷键
+
+| 快捷键 | 模式 | 说明 |
+|---|---|---|
+| `Ctrl/Cmd + P` | file | ★ v0.5+ 打开文件跳转模式 |
+| `Ctrl/Cmd + E` | file | 同上（VS Code 兼容键） |
+| `Ctrl/Cmd + Shift + P` | command | v0.4+ 打开命令搜索模式（不变） |
+
+### 20.2 UI 行为
+
+- 顶部 input 占位符切到「输入文件名跳转…」
+- 模式徽标从「命令」切到「文件」（顶部 FileText / Hash 图标）
+- 打开 file 模式时自动调 `git:ls-files` 拉当前仓库 tracked + untracked 文件
+- 模糊搜索：自实现 `fuzzyMatch`（顺序子序列匹配 + 连续字符加分 + 路径分隔符后字符加分）
+- 匹配字符高亮（emerald 色）
+- 选中文件后：调 `useRepoStore.selectFileForEdit` + 派发 `kg:navigate:tab:files` 切到「文件」Tab
+- 顶部状态栏 / 底部状态栏 / 各种弹窗里的输入框**不受影响**（`useShortcuts` 在 input 内让位）
+
+### 20.3 后端实现
+
+新增 IPC `git:ls-files`，主进程用 `git ls-files --cached --others --exclude-standard -z --full-name`：
+
+| 参数 | 含义 |
+|---|---|
+| `--cached` | 列出所有 tracked 文件 |
+| `--others` | 列出 untracked 但未被 `.gitignore` 忽略的文件 |
+| `--exclude-standard` | 应用所有 `.gitignore` 规则 |
+| `-z` | NUL 分隔（避免文件名含空格） |
+| `--full-name` | 相对仓库根，不带 `a/` `b/` 前缀 |
+
+可选 `opts.withStatus: true` 时附调 `git status`，把每个文件的当前暂存 / 工作区状态拼装到 `GitFile.status`（用于将来在结果旁标 ❗ 等标记；v0.5 UI 暂未展示）。
+
+`maxCount` 默认 5000 — 防止 10k+ 文件仓库把渲染层打爆。
+
+### 20.4 模糊匹配算法
+
+`src/lib/fuzzyMatch.ts`（~50 行）：
+
+```ts
+export function fuzzyMatch(query: string, target: string): FuzzyResult | null
+export function fuzzySearch<T>(query: string, items: T[], getKey: (x: T) => string, topN?: number): { item, result }[]
+```
+
+- **顺序子序列**：query 字符必须按顺序在 target 中出现
+- **连续字符加分**：连续命中权重高于分散命中（5+连续×3）
+- **路径分隔符后首字符加分**：`/`、`.` 后第一个字符额外 +8（文件名开头 > 目录名）
+- **完全大小写匹配**：再加 +1
+- **target 越短越好**：同等分数下，target 越短分越高（每字符 +0.1）
+- **不匹配返 null**（过滤掉）
+
+实测：5 千文件目录搜索「btn」< 50ms（无任何依赖，fuse.js / fuzzysort 都没必要引）。
+
+### 20.5 相关文件
+
+| 文件 | 职责 |
+|---|---|
+| `shared/types.ts` | + `GitFile` 类型（path, status?） |
+| `shared/ipc-channels.ts` | + `GIT_LS_FILES` 通道 |
+| `electron/services/git.ts` | + `listFiles()`（ls-files + 可选 status 拼装） |
+| `electron/ipc/git.ts` | 注册 handler |
+| `electron/preload.ts` | 暴露 `listFiles` API |
+| `src/hooks/useCommandPalette.ts` | + `mode: 'command' \| 'file'` 状态 + `openPalette(mode?)` |
+| `src/hooks/useShortcuts.ts` | + `Ctrl/Cmd + P` / `Ctrl/Cmd + E` 打开 file 模式 |
+| `src/lib/fuzzyMatch.ts` | ★ 模糊搜索算法 |
+| `src/components/common/CommandPalette.tsx` | + file 模式 UI（FileText / Hash 图标 + 模式徽标 + 高亮） |
+| `src/i18n/{zh,en}.ts` | + `command.filePlaceholder` / `fileHint`（2 条） |
+
+### 20.6 已知限制
+
+- 暂不支持 `:` 行号跳转（VS Code 的 `file.ts:42` 语法；v0.6 候选）
+- 不支持 `git grep`（全文内容搜索；v0.5 候选）
+- 大仓库（> 50k 文件）当前会全量加载到内存（5000 上限只是默认）；未来考虑流式 / 增量
 
 ---
 

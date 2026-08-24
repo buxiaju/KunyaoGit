@@ -2,7 +2,7 @@
 
 > 本文档面向 KunyaoGit Electron 应用的开发者，全面描述渲染进程可用的 `window.gitgui` API、共享类型定义、主进程配置以及 IPC 通道清单。
 >
-> 适用版本：**v0.4.0**（v0.2.3+ 主题与语言、v0.2.4+ 下载速度优化、v0.2.5+ 三主题切换、v0.2.6+ 探活修复、v0.3.0+ 文件管理/多远程推送、v0.3.1+/v0.3.3+ 更新下载修复、v0.3.4+ 云端搜索、**v0.4+ 命令面板/快捷键/Stash 队列/Cherry-pick/Revert/PR 创建/状态栏**）
+> 适用版本：**v0.5.0**（v0.2.3+ 主题与语言、v0.2.4+ 下载速度优化、v0.2.5+ 三主题切换、v0.2.6+ 探活修复、v0.3.0+ 文件管理/多远程推送、v0.3.1+/v0.3.3+ 更新下载修复、v0.3.4+ 云端搜索、v0.4+ 命令面板/快捷键/Stash 队列/Cherry-pick/Revert/PR 创建/状态栏、**v0.5+ Ctrl+P 跳转文件**）
 >
 > 源码依据：
 > - `shared/ipc-channels.ts`
@@ -308,7 +308,16 @@ Stash 队列条目，描述一次 stash 暂存的元信息。
 | `hash` | `string` | 完整 SHA |
 | `date` | `string` | ISO 时间 |
 
-### 2.20 `Result<T>`
+### 2.20 `GitFile`（★ v0.5+）
+
+`git.listFiles` 返回的工作区文件条目。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `path` | `string` | 相对仓库根的路径 |
+| `status?` | `FileStatus['status']` | 仅当 `listFiles` 传 `withStatus: true` 时附带：表示该文件当前暂存/工作区状态；纯 clean tracked 文件为 `undefined` |
+
+### 2.21 `Result<T>`
 
 统一返回包装类型。
 
@@ -442,6 +451,7 @@ export type DownloadPhase = 'preparing' | 'downloading' | 'done' | 'error' | 'ca
 | `remoteList` | `git:remote-list` | `(repoPath: string) => Promise<Result<RemoteInfo[]>>` | 列出所有远程 |
 | `remoteAdd` | `git:remote-add` | `(repoPath: string, name: string, url: string) => Promise<Result<void>>` | 添加远程 |
 | `remoteRemove` | `git:remote-remove` | `(repoPath: string, name: string) => Promise<Result<void>>` | 移除远程 |
+| `listFiles` ★ v0.5+ | `git:ls-files` | `(repoPath: string, opts?: { maxCount?: number; withStatus?: boolean }) => Promise<Result<GitFile[]>>` | 列出仓库所有工作区文件（tracked + untracked，`.gitignore` 已应用）。`maxCount` 默认 5000；`withStatus: true` 时附带 `status` 字段（从 `git status` 拼装）。用于 Ctrl+P 跳转文件 |
 
 ---
 
@@ -738,6 +748,7 @@ nativeTheme.themeSource = 'dark';
 | `GIT_REMOTE_LIST` | `git:remote-list` |
 | `GIT_REMOTE_ADD` | `git:remote-add` |
 | `GIT_REMOTE_REMOVE` | `git:remote-remove` |
+| `GIT_LS_FILES` | **★ v0.5+ 列出仓库工作区文件**（tracked + untracked，NUL 分隔；用于 Ctrl+P 跳转） |
 
 ### 5.3 文件系统 / 编辑器（`fs`）
 
