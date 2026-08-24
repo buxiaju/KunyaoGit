@@ -2,7 +2,7 @@
 // 侧边抽屉（drawer）显示某文件的 commit 列表，点击展开 diff
 // 复用 DiffViewer 渲染
 
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRepoStore } from '../../stores/repo';
 import { useI18n } from '../../i18n';
 import type { CommitInfo, FileDiff } from '../../../shared/types';
@@ -26,27 +26,24 @@ export default function FileHistoryPanel({ file, open, onClose }: Props) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [diffs, setDiffs] = useState<Record<string, FileDiff | null>>({});
   const [diffLoading, setDiffLoading] = useState<string | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
 
   // 打开时拉历史
   useEffect(() => {
     if (!open || !file || !current) return;
-    abortRef.current?.abort();
-    const ctrl = new AbortController();
-    abortRef.current = ctrl;
     setLoading(true);
     setError(null);
     setCommits([]);
     setExpanded(null);
     setDiffs({});
+    let cancelled = false;
     window.gitgui.git.fileLog(current.path, file, { maxCount: 50 })
       .then((r) => {
-        if (ctrl.signal.aborted) return;
+        if (cancelled) return;
         if (r.ok) setCommits(r.data);
         else setError(r.error);
       })
-      .finally(() => { if (!ctrl.signal.aborted) setLoading(false); });
-    return () => ctrl.abort();
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, [open, file, current?.path]);
 
   // 展开某 commit 时拉 diff
@@ -141,33 +138,27 @@ export default function FileHistoryPanel({ file, open, onClose }: Props) {
                             <Loader2 size={12} className="animate-spin" />
                             {t('common.loading')}
                           </div>
-                        ) : diff ? (
+                        ) : diff && diff.hunks.length > 0 ? (
                           <div className="font-mono whitespace-pre-wrap break-all bg-gray-900/60 rounded p-2 max-h-96 overflow-y-auto">
-                            {diff.hunks.length === 0 ? (
-                              <div className="text-gray-500 text-center py-2">
-                                {t('fileHistory.noChanges')}
+                            {diff.hunks.flatMap((h) => h.lines).map((l, i) => (
+                              <div
+                                key={i}
+                                className={clsx(
+                                  'px-1',
+                                  l.type === 'add' && 'text-emerald-300 bg-emerald-900/20',
+                                  l.type === 'del' && 'text-red-300 bg-red-900/20',
+                                  l.type === 'context' && 'text-gray-400'
+                                )}
+                              >
+                                <span className="text-gray-600 inline-block w-3 mr-2 select-none">
+                                  {l.type === 'add' ? '+' : l.type === 'del' ? '-' : ' '}
+                                </span>
+                                {l.content}
                               </div>
-                            ) : (
-                              diff.hunks.flatMap((h) => h.lines).map((l, i) => (
-                                <div
-                                  key={i}
-                                  className={clsx(
-                                    'px-1',
-                                    l.type === 'add' && 'text-emerald-300 bg-emerald-900/20',
-                                    l.type === 'del' && 'text-red-300 bg-red-900/20',
-                                    l.type === 'context' && 'text-gray-400'
-                                  )}
-                                >
-                                  <span className="text-gray-600 inline-block w-3 mr-2 select-none">
-                                    {l.type === 'add' ? '+' : l.type === 'del' ? '-' : ' '}
-                                  </span>
-                                  {l.content}
-                                </div>
-                              ))
-                            )}
+                            ))}
                           </div>
                         ) : (
-                          <div className="text-gray-500 py-2">{t('fileHistory.diffEmpty')}</div>
+                          <div className="text-gray-500 py-2">{t('fileHistory.noChanges')}</div>
                         )}
                       </div>
                     )}
