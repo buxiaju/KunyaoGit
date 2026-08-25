@@ -92,6 +92,8 @@
 | `date-fns` | ^4.1.0 | 日期格式化 |
 | `clsx` | ^2.1.1 | className 拼接 |
 | `nanoid` | ^5.0.9 | toast id |
+| `marked` | ^15.x | ★ v0.6+ Markdown 渲染（Release body） |
+| `form-data` | ^4.x | ★ v0.6+ Gitee Release 附件 multipart 上传 |
 
 ### 构建时
 
@@ -125,6 +127,8 @@ KunyaoGit/
 ├── electron/                       # 主进程
 │   ├── main.ts                     # 入口：创建 BrowserWindow、注册所有 IPC handler
 │   ├── preload.ts                  # contextBridge 暴露 window.gitgui.* API
+│   ├── lib/                        # ★ v0.6+ 主进程共享工具（与 src/lib 解耦的镜像）
+│   │   └── parseRemote.ts          # ★ v0.6+ 远程 URL 解析（与 src/lib/parseRemote.ts 镜像，主进程不能跨层 import）
 │   ├── ipc/
 │   │   ├── dialog.ts               # 打开文件/目录对话框
 │   │   ├── fs.ts                   # 文件系统（read / write / tree / mkdir / delete / rename）
@@ -177,7 +181,11 @@ KunyaoGit/
 │   │       ├── DiffViewer.tsx      # 自实现 unified diff（并排 / 统一两种模式）
 │   │       ├── EditorPane.tsx      # Monaco 包装
 │   │       ├── FileTree.tsx        # 文件树（v0.3.0 工具栏新建/右键菜单增删改；v0.3.2 默认折叠）
-│   │       └── RemotePanel.tsx     # remote 列表 + add / remove
+│   │       ├── RemotePanel.tsx     # remote 列表 + add / remove
+│   │       ├── CreateReleaseForm.tsx   # ★ v0.6+ Release 创建表单（多附件上传）
+│   │       ├── ReleaseCard.tsx     # ★ v0.6+ Release 列表项（草稿/预发布徽标 + 详情入口）
+│   │       ├── ReleaseDetailDrawer.tsx # ★ v0.6+ 640px 右侧抽屉（Markdown 渲染 + 附件管理 + 编辑 + 发布）
+│   │       └── MarkdownBody.tsx    # ★ v0.6+ Markdown 渲染（基于 marked，信任发布者不 sanitize）
 │   ├── hooks/
 │   │   ├── useUpdateCheck.ts       # ★ 启动 1.5s 后静默检查更新
 │   │   ├── useTheme.ts             # ★ v0.2.5：主题管理（data-theme + Monaco 跟随）
@@ -390,7 +398,7 @@ KunyaoGit/
 
 ### Release
 
-`release:list` / `release:create` / `release:delete` / `release:get` / `release:publish` / `changelog:generate`
+`release:list` / `release:create` / `release:delete` / `release:get` / `release:publish` / **`release:upload-asset`（★ v0.6+ 附件上传）** / **`release:delete-asset`（★ v0.6+ 附件删除）** / **`release:update`（★ v0.6+ 编辑 release）** / `changelog:generate`
 
 ### GitHub（`github.*`）
 
@@ -639,7 +647,8 @@ git push github master
 | `replace-installer.cjs` | `build/` | 替换已有 GitHub asset | `release/KunyaoGit-Setup-X.Y.Z-x64.exe` | 删旧 + 上传新 |
 | `calc-cache-dir.cjs` / `check-expected-hash.cjs` | `build/` | 历史调试，已用不到 | - | - |
 | `upload-installer.cjs` | `publish/` | 发版 | `release/KunyaoGit-Setup-X.Y.Z-x64.exe` | GitHub Release 上的 asset |
-| `publish-v020.cjs` / `v021.cjs` / `v022.cjs` / `v023.cjs` | `publish/` | 首次发新 release（一次性） | 同上 | 创建 GitHub Release + 流式上传 asset + 日志写入 publish-log.txt |
+| `publish-v020.cjs` / `v021.cjs` / `v022.cjs` / `v023.cjs` | `publish/` | 历史发版（一次性） | 同上 | 创建 GitHub Release + 流式上传 asset + 日志写入 publish-log.txt |
+| `publish-v060.cjs` | `publish/` | ★ v0.6+ 专用模板（基于 v026） | 同上 | v0.6 Release Body + 流式上传 asset + 日志 |
 | `update-gitee-body.cjs` | `publish/` | 发版后 | 无 | 同步 Gitee Release body + 流式上传安装包 attach file + 日志 |
 | `list-assets.cjs` | `publish/` | 查 GitHub Release | `env GH_VERSION` | 打印 asset 列表 |
 | `release-github.cjs` | `publish/` | 早期版本（已基本被 publish-* 替代） | - | - |
