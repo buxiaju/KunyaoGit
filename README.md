@@ -8,6 +8,26 @@
 
 ![Electron](https://img.shields.io/badge/Electron-33-9feaf9) ![React](https://img.shields.io/badge/React-18-61dafb) ![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178c6) ![License](https://img.shields.io/badge/license-MIT-green) ![Version](https://img.shields.io/badge/version-v0.5.0-22c55e)
 
+---
+
+## 🎉 v0.5.0 已发布 — Ctrl+P 跳转文件 + 文件历史/Blame
+
+> **下载**：[GitHub Releases](https://github.com/buxiaju/KunyaoGit/releases/tag/v0.5.0) · [Gitee Releases](https://gitee.com/buxiaju/KunyaoGit/releases/tag/v0.5.0)
+>
+> - 🪟 **NSIS 安装包**（86 MB）— 主流下载，桌面/开始菜单快捷方式 + 卸载入口
+> - 📦 **便携版 zip**（3.5 MB）— 绿色版，解压即用
+>
+> **v0.5.0 主要更新**：
+> - ⌨️ **Ctrl+P 跳转文件** — 复用命令面板组件，VS Code 式模糊搜索（5 千文件 < 200ms）
+> - 📜 **文件历史 + Blame** — 编辑器顶部「历史」按钮打开 FileHistoryPanel 侧边抽屉；点击 Monaco 行号 gutter 触发 blame 浮窗
+> - 🧪 **自动化测试** — 从 218 例扩展到 268 例（12 文件，3 秒跑完）
+>
+> 详细 changelog：见 [GitHub Release Notes](https://github.com/buxiaju/KunyaoGit/releases/tag/v0.5.0) 或 `docs/v0.5-roadmap.md`。
+>
+> **升级方式**：启动旧版会**自动检查更新**并弹窗，点"立即下载并安装"即可一键升级到 v0.5.0；也可下载安装包覆盖安装。
+
+---
+
 ## 特性
 
 ### 🛠 基础 Git 操作
