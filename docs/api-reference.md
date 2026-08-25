@@ -317,7 +317,20 @@ Stash 队列条目，描述一次 stash 暂存的元信息。
 | `path` | `string` | 相对仓库根的路径 |
 | `status?` | `FileStatus['status']` | 仅当 `listFiles` 传 `withStatus: true` 时附带：表示该文件当前暂存/工作区状态；纯 clean tracked 文件为 `undefined` |
 
-### 2.21 `Result<T>`
+### 2.21 `BlameLine`（★ v0.5+）
+
+`git.blame` 返回的单行 blame 记录。每一行对应一个文件行号，包含引入该行的 commit 元信息。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `line` | `number` | 1-based 行号 |
+| `hash` | `string` | 引入该行的 commit 完整 SHA |
+| `author` | `string` | 作者名 |
+| `email` | `string` | 作者邮箱 |
+| `date` | `string` | ISO 时间（从 `author-time` unix 时间戳换算） |
+| `message` | `string` | commit message 第一行（`summary` 字段） |
+
+### 2.22 `Result<T>`
 
 统一返回包装类型。
 
@@ -452,6 +465,9 @@ export type DownloadPhase = 'preparing' | 'downloading' | 'done' | 'error' | 'ca
 | `remoteAdd` | `git:remote-add` | `(repoPath: string, name: string, url: string) => Promise<Result<void>>` | 添加远程 |
 | `remoteRemove` | `git:remote-remove` | `(repoPath: string, name: string) => Promise<Result<void>>` | 移除远程 |
 | `listFiles` ★ v0.5+ | `git:ls-files` | `(repoPath: string, opts?: { maxCount?: number; withStatus?: boolean }) => Promise<Result<GitFile[]>>` | 列出仓库所有工作区文件（tracked + untracked，`.gitignore` 已应用）。`maxCount` 默认 5000；`withStatus: true` 时附带 `status` 字段（从 `git status` 拼装）。用于 Ctrl+P 跳转文件 |
+| `blame` ★ v0.5+ | `git:blame` | `(repoPath: string, file: string) => Promise<Result<BlameLine[]>>` | git blame，使用 `--line-porcelain` 解析为 `BlameLine[]`。用于编辑器行号 gutter 点击查询 |
+| `fileLog` ★ v0.5+ | `git:file-log` | `(repoPath: string, file: string, opts?: { maxCount?: number; follow?: boolean }) => Promise<Result<CommitInfo[]>>` | 文件历史（默认 `--follow` 跟踪重命名；`maxCount` 默认 50）。用于 FileHistoryPanel commit 列表 |
+| `fileDiff` ★ v0.5+ | `git:file-diff` | `(repoPath: string, file: string, opts?: { fromHash?: string; toHash?: string }) => Promise<Result<FileDiff \| null>>` | 文件某次 commit 与上一版的 diff（`fromHash^..toHash`）。用于 FileHistoryPanel 点开 commit 查看详情 |
 
 ---
 
@@ -749,6 +765,9 @@ nativeTheme.themeSource = 'dark';
 | `GIT_REMOTE_ADD` | `git:remote-add` |
 | `GIT_REMOTE_REMOVE` | `git:remote-remove` |
 | `GIT_LS_FILES` | **★ v0.5+ 列出仓库工作区文件**（tracked + untracked，NUL 分隔；用于 Ctrl+P 跳转） |
+| `GIT_BLAME` | **★ v0.5+ git blame**（--line-porcelain 解析为 BlameLine[]） |
+| `GIT_FILE_LOG` | **★ v0.5+ 文件历史**（--follow 跟踪重命名） |
+| `GIT_FILE_DIFF` | **★ v0.5+ 文件某次 commit 的 diff**（fromHash^..toHash） |
 
 ### 5.3 文件系统 / 编辑器（`fs`）
 

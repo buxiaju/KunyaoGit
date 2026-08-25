@@ -254,7 +254,8 @@ KunyaoGit/
 │       ├── CommandPalette.test.tsx  #   36 例：命令面板（v0.4+ + v0.5+ file 模式）
 │       ├── useShortcuts.test.tsx    #   20 例：全局快捷键（v0.4+ + v0.5+ Ctrl+P）
 │       ├── StashList.test.tsx       #   18 例：Stash 队列
-│       └── CreatePRDialog.test.tsx  #   22 例：PR/MR 创建
+│       ├── CreatePRDialog.test.tsx  #   22 例：PR/MR 创建
+│       └── FileHistoryPanel.test.tsx #  ★ v0.5+ 13 例：文件历史面板
 │
 ├── docs/                           # ★ 项目文档（v0.2.2 新增）
 │   ├── api-reference.md            # window.gitgui API 完整参考
@@ -375,6 +376,9 @@ KunyaoGit/
 | `git:resolve-conflict` / `git:read-conflict` | 冲突文件 ours / theirs |
 | `git:remote-list` / `git:remote-add` / `git:remote-remove` | remote 管理 |
 | `git:ls-files` | **★ v0.5+ 列出仓库工作区文件**（tracked + untracked，--exclude-standard；用于 Ctrl+P 跳转） |
+| `git:blame` | **★ v0.5+ git blame**（`--line-porcelain` 解析为 `BlameLine[]`；编辑器 gutter 用） |
+| `git:file-log` | **★ v0.5+ 文件历史**（`--follow` 跟踪重命名；FileHistoryPanel 用） |
+| `git:file-diff` | **★ v0.5+ 文件某次 commit 的 diff**（`fromHash^..toHash`；FileHistoryPanel 详情用） |
 
 ### 文件系统
 

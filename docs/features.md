@@ -27,6 +27,7 @@
 18. [命令面板与快捷键（v0.4）](#18-命令面板与快捷键v04)
 19. [底部状态栏（v0.4）](#19-底部状态栏v04)
 20. [Ctrl+P 跳转文件（v0.5）](#20-ctrlp-跳转文件v05)
+21. [文件历史 + Blame（v0.5）](#21-文件历史--blamev05)
 
 ---
 
@@ -913,6 +914,112 @@ export function fuzzySearch<T>(query: string, items: T[], getKey: (x: T) => stri
 - 暂不支持 `:` 行号跳转（VS Code 的 `file.ts:42` 语法；v0.6 候选）
 - 不支持 `git grep`（全文内容搜索；v0.5 候选）
 - 大仓库（> 50k 文件）当前会全量加载到内存（5000 上限只是默认）；未来考虑流式 / 增量
+
+---
+
+## 21. 文件历史 + Blame（v0.5）
+
+v0.5 起，编辑器的文件上下文增强——你能直接看到"这一行谁改的 / 这个文件经历过什么"。
+
+### 21.1 Blame（行号 gutter 点击查询）
+
+#### 触发
+
+编辑器打开文件后，**点击 Monaco 行号 gutter**（行号左侧 16px 区域）→ 屏幕右下角弹出浮窗，显示：
+- commit hash（短 7 位 + 绿色）
+- 作者 + 日期（YYYY-MM-DD）
+- 当前行号
+- commit message 第一行
+
+再点击任意处关闭。
+
+#### 后端
+
+新增 IPC `git:blame`，主进程用 `git blame --line-porcelain -- <file>`，按 porcelain 格式解析为 `BlameLine[]`：
+
+```
+<sha> <原始行号> <最终行号>
+author <name>
+author-mail <<email>>
+author-time <unix-timestamp>
+author-tz <tz>
+summary <message 第一行>
+<空行>
+<上一行继续>
+```
+
+解析器逐行扫描，遇到头部行（`<sha> <orig> <final>`）开始新块，遇到空行结束块。处理边界行缺失字段（无 author-time / 无 summary）→ 填空字符串而非抛错。
+
+#### 性能
+
+- 全量 blame 一次性拉取（不按需懒加载）→ 切文件后立即可用
+- 解析后存 `Map<line, info>` 内存索引，gutter 点击 O(1) 查询
+- 大文件（> 3000 行）v0.5 不加阈值，由用户自行评估——实测 5000 行 < 100ms
+
+#### BlameLine 类型
+
+```ts
+// shared/types.ts
+export interface BlameLine {
+  line: number;      // 1-based
+  hash: string;      // 完整 SHA
+  author: string;
+  email: string;
+  date: string;      // ISO（从 author-time unix 秒换算）
+  message: string;   // summary 第一行
+}
+```
+
+### 21.2 文件历史（FileHistoryPanel 侧边抽屉）
+
+#### 触发
+
+编辑器顶部工具栏新增「历史」图标按钮（History icon）→ 打开 560px 宽的侧边抽屉。
+
+#### 抽屉内容
+
+- 头部：文件路径 + 关闭 X
+- 中部：commit 列表（最多 50 条）
+  - 每条：message 第一行 + 短 hash + 作者 + 相对时间（"3 天前"）
+  - 点击展开 diff（懒加载，第一次展开时调 `fileDiff` API）
+- 展开后：自实现 diff 渲染（add/del 绿/红色块，简化版 DiffViewer）
+
+#### 后端
+
+两个 IPC：
+
+| 通道 | 实现 |
+|---|---|
+| `git:file-log` | `git log --follow --max-count=50 --format=%H\|%h\|%an\|%ae\|%cI\|%s -- <file>` |
+| `git:file-diff` | `git diff --no-color <fromHash>^..<toHash> -- <file>`（复用 `parseUnifiedDiff`） |
+
+`--follow` 让 git 自动跟踪重命名（v0.4 PR dialog 复用，行为一致）。
+
+#### 交互细节
+
+- **打开抽屉** → 调 `fileLog` 拉列表；之前的展开项清空
+- **点击 commit** → 调 `fileDiff` 拉 diff（懒加载 + 缓存到 React state）
+- **再次点同一行** → 折叠
+- **Abortable**：用 `cancelled` flag 替代 AbortController（v0.5 简化：渲染层无需要 abort 真实请求，仅过滤 setState）
+
+### 21.3 相关文件
+
+| 文件 | 职责 |
+|---|---|
+| `shared/types.ts` | + `BlameLine` 类型 |
+| `shared/ipc-channels.ts` | + `GIT_BLAME` / `GIT_FILE_LOG` / `GIT_FILE_DIFF` |
+| `electron/services/git.ts` | + `blame(file)` / `fileLog(file, opts)` / `fileDiff(file, opts)` 三个方法 |
+| `electron/ipc/git.ts` | 注册 3 个 handler |
+| `electron/preload.ts` | 暴露 3 个 API（`gitgui.git.blame` / `fileLog` / `fileDiff`） |
+| `src/components/repo/FileHistoryPanel.tsx` | ★ 侧边抽屉组件 |
+| `src/components/repo/EditorPane.tsx` | + 「历史」按钮 + 拉 blame + gutter 点击 + 浮窗 |
+| `src/i18n/{zh,en}.ts` | + `fileHistory.*` 段（7 条 key） |
+
+### 21.4 已知限制
+
+- Blame 不支持点击 commit hash 直接跳到历史 tab（v0.5 仅显示信息；v0.6 候选）
+- 文件历史 diff 不支持跨文件 / 多文件 commit（v0.5 仅显示当前文件变化）
+- 二进制文件 Blame 不可用（git blame 默认行为）
 
 ---
 
