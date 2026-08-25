@@ -89,6 +89,12 @@ const api = {
     rename: (oldPath: string, newPath: string) => ipcRenderer.invoke(IPC.FS_RENAME, { oldPath, newPath }),
   },
 
+  // 系统对话框（v0.6+ 给 release 附件选用）
+  dialog: {
+    showOpen: (opts: { title?: string; properties?: string[]; filters?: { name: string; extensions: string[] }[] }) =>
+      ipcRenderer.invoke(IPC.DIALOG_SHOW_OPEN, opts) as Promise<{ canceled: boolean; filePaths: string[] }>,
+  },
+
   // Release
   release: {
     list: (repoPath: string, platform?: 'github' | 'gitee') => ipcRenderer.invoke(IPC.RELEASE_LIST, { repoPath, platform }),
@@ -97,6 +103,13 @@ const api = {
     delete: (repoPath: string, tag: string, platform?: 'github' | 'gitee') => ipcRenderer.invoke(IPC.RELEASE_DELETE, { repoPath, tag, platform }),
     get: (repoPath: string, tag: string, platform?: 'github' | 'gitee') => ipcRenderer.invoke(IPC.RELEASE_GET, { repoPath, tag, platform }),
     publish: (repoPath: string, tag: string, platform?: 'github' | 'gitee') => ipcRenderer.invoke(IPC.RELEASE_PUBLISH, { repoPath, tag, platform }),
+    // v0.6+ 附件 + 编辑
+    uploadAsset: (params: { repoPath: string; tag: string; filePath: string; label?: string; platform?: 'github' | 'gitee' }) =>
+      ipcRenderer.invoke(IPC.RELEASE_UPLOAD_ASSET, params),
+    deleteAsset: (params: { repoPath: string; tag: string; assetId: number; platform?: 'github' | 'gitee' }) =>
+      ipcRenderer.invoke(IPC.RELEASE_DELETE_ASSET, params),
+    update: (params: { repoPath: string; tag: string; name?: string; body?: string; prerelease?: boolean; draft?: boolean; platform?: 'github' | 'gitee' }) =>
+      ipcRenderer.invoke(IPC.RELEASE_UPDATE, params),
     changelog: (params: { repoPath: string; from?: string; to?: string }) =>
       ipcRenderer.invoke(IPC.CHANGELOG_GENERATE, params),
   },

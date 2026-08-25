@@ -218,14 +218,30 @@ Release 信息（适配 GitHub 与 Gitee）。
 
 ### 2.13 `ReleaseAsset`
 
-Release 附件资源。
+Release 附件资源（v0.6+ 扩展字段）。
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
+| `id` | `number` | ★ v0.6+ 平台侧 asset id（删除 / 后续操作依赖） |
 | `name` | `string` | 资源名 |
 | `size` | `number` | 字节数 |
 | `downloadCount` | `number` | 下载次数 |
 | `downloadUrl` | `string` | 下载地址 |
+| `state?` | `string` | ★ v0.6+ GitHub：`'uploaded' \| 'open' \| 'new'`；Gitee 不返回 |
+| `contentType?` | `string` | ★ v0.6+ MIME 类型 |
+| `uploadedAt?` | `string` | ★ v0.6+ 上传时间 ISO |
+| `htmlUrl?` | `string` | ★ v0.6+ GitHub 页面地址 |
+
+#### `ReleaseUpdateParams`（★ v0.6+）
+
+`release.update` 入参。GitHub 全支持；Gitee 仅 `name` / `body` / `prerelease`，`draft` 被忽略。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `name?` | `string` | Release 标题 |
+| `body?` | `string` | Release 正文（Markdown） |
+| `prerelease?` | `boolean` | 是否为预发布 |
+| `draft?` | `boolean` | 是否为草稿（仅 GitHub 生效） |
 
 ### 2.14 `PullRequestInfo`
 
@@ -497,15 +513,27 @@ export type DownloadPhase = 'preparing' | 'downloading' | 'done' | 'error' | 'ca
 | `delete` | `release:delete` | `(repoPath: string, tag: string, platform?: 'github' \| 'gitee') => Promise<Result<void>>` | 删除指定 tag 的 Release |
 | `get` | `release:get` | `(repoPath: string, tag: string, platform?: 'github' \| 'gitee') => Promise<Result<ReleaseInfo>>` | 获取指定 tag 的 Release 详情 |
 | `publish` | `release:publish` | `(repoPath: string, tag: string, platform?: 'github' \| 'gitee') => Promise<Result<ReleaseInfo>>` | 将草稿 Release 正式发布 |
+| `update` ★ v0.6+ | `release:update` | `(params: { repoPath: string; tag: string; name?: string; body?: string; prerelease?: boolean; draft?: boolean; platform?: 'github' \| 'gitee' }) => Promise<Result<ReleaseInfo>>` | 编辑已发布 Release 的 name / body / prerelease（GitHub 全支持；Gitee 不支持 draft 切换） |
+| `uploadAsset` ★ v0.6+ | `release:upload-asset` | `(params: { repoPath: string; tag: string; filePath: string; label?: string; platform?: 'github' \| 'gitee' }) => Promise<Result<ReleaseAsset>>` | 上传本地文件为 Release 附件 |
+| `deleteAsset` ★ v0.6+ | `release:delete-asset` | `(params: { repoPath: string; tag: string; assetId: number; platform?: 'github' \| 'gitee' }) => Promise<Result<void>>` | 删除指定 id 的附件 |
 | `changelog` | `changelog:generate` | `(params: { repoPath: string; from?: string; to?: string }) => Promise<Result<ChangelogGroup[]>>` | 基于 conventional-commits 生成 Changelog 分组 |
 
 `create` 参数说明：
 - `tag`：必填，标签名。
 - `name`：必填，Release 标题。
 - `body`：必填，Release 正文。
-- `draft`：可选，是否为草稿。
+- `draft`：可选，是否为草稿（Gitee 不支持，自动忽略）。
 - `prerelease`：可选，是否为预发布。
 - `platform`：可选，目标平台，缺省时由仓库远程推断。
+
+`update` 参数说明：
+- 至少传一个可编辑字段（`name` / `body` / `prerelease` / `draft`）。
+- Gitee：`draft` 字段被忽略（Gitee 不支持 draft 切换）。
+
+`uploadAsset` 参数说明：
+- `filePath`：本地文件绝对路径（主进程会自己读 Buffer，不需要渲染层上传）。
+- `label`：可选，附件显示名；缺省时用文件 basename。
+- 大小限制：GitHub 软限 2GB；Gitee 实际约 100MB。
 
 `changelog` 参数说明：
 - `from` / `to`：可选，比较范围（引用或 SHA）；缺省时按默认范围生成。

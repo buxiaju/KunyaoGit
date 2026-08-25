@@ -206,13 +206,27 @@ export interface DiffLine {
 
 | 功能 | IPC 通道 | 说明 |
 | --- | --- | --- |
-| 列 Release | `release:list` | 返回 `ReleaseInfo[]` |
+| 列 Release | `release:list` | 返回 `ReleaseInfo[]`（含附件完整字段） |
 | 创建 Release | `release:create` | 含 Tag / Name / Body / draft / prerelease |
 | 删除 Release | `release:delete` | - |
 | 获取详情 | `release:get` | - |
-| 发布 | `release:publish` | - |
+| 发布草稿 | `release:publish` | draft → 正式发布（GitHub）；Gitee 创建即发布 |
+| **★ v0.6+ 编辑** | `release:update` | 改 name / body / prerelease / draft |
+| **★ v0.6+ 上传附件** | `release:upload-asset` | GitHub：Octokit `uploadReleaseAsset`；Gitee：`POST .../attach_files` multipart |
+| **★ v0.6+ 删除附件** | `release:delete-asset` | GitHub：Octokit `deleteReleaseAsset`；Gitee：`DELETE .../attach_files/{id}` |
 
 主进程 `electron/ipc/release.ts`，GitHub 与 Gitee 双平台同步管理。界面入口 `src/pages/ReleasesPage.tsx`，针对当前本地仓库的 Release。
+
+**附件大小限制**：
+- GitHub：单文件软限 2GB（实际可用更大）
+- Gitee：单文件 ≤ 100MB；超过建议改用 GitHub（UI 会给提示）
+
+**v0.6+ UI 完善**：
+- 列表顶部搜索框（按 tag / name 过滤）
+- 每条 release 卡片：「详情」入口开右侧 640px 抽屉
+- 详情抽屉：Markdown 渲染 body + 附件完整列表（下载/删除/上传新）+ 编辑模式（改 name/body/prerelease）+ 发布草稿
+- 创建表单：可同时选择多个附件，先创建 release 再逐个上传
+- Release body 通过 `marked` 渲染（v0.6+），源码来自仓库所有者，可信任，暂不做 sanitize
 
 ### 6.2 CHANGELOG 自动生成
 

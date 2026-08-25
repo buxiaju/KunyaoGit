@@ -9,14 +9,17 @@ const GT_TOKEN = process.env.GT_TOKEN || 'a0d56558c30d9a083fe33282b946cf95';
 const GT_OWNER = 'buxiaju';
 const REPO = 'KunyaoGit';
 
-const DESCRIPTION = `🚀 KunyaoGit v0.5.0 已发布！一个基于 Electron + React + TypeScript 的 Git 桌面客户端，深度集成 GitHub 和 Gitee。
+const DESCRIPTION = `🚀 KunyaoGit v0.6.0 已发布！一个基于 Electron + React + TypeScript 的 Git 桌面客户端，深度集成 GitHub 和 Gitee。
 
-⭐ v0.5.0 核心特性：
-• Ctrl+P 跳转文件 — VS Code 式模糊搜索（5 千文件 < 200ms）
-• 文件历史 + Blame — 编辑器内一键查看 commit 列表 / diff / 单行 blame
-• 268 例自动化测试（3 秒跑完）
+⭐ v0.6.0 核心特性：
+• Release 附件上传 / 下载 / 删除 — 创建 release 时多选本地附件上传，详情抽屉可继续管理
+• Release 编辑（name / body / prerelease）+ Markdown 渲染
+• Release 列表搜索 + 详情抽屉（640px）+ 发布草稿按钮
+• 281 例自动化测试（v0.5 268 + v0.6 13）
 
 🎁 历史特性：
+• Ctrl+P 跳转文件（VS Code 式模糊搜索，5 千文件 < 200ms）
+• 文件历史 + Blame（编辑器内 commit 列表 / diff / 单行 blame）
 • 基础 Git 操作：本地仓库、提交、推送、分支、合并、冲突解决
 • Stash 队列 / Cherry-pick / Revert / 创建 PR·MR
 • 双平台集成：云端仓库搜索、Contents API 在线浏览 / 编辑
@@ -27,16 +30,16 @@ const DESCRIPTION = `🚀 KunyaoGit v0.5.0 已发布！一个基于 Electron + R
 • 应用内自动更新
 
 📦 跨平台支持：Windows 10/11 (x64)
-📝 完整中文文档：docs/ 目录 6 个 markdown
-🧪 测试覆盖：268 例（v0.4 218 + v0.5 50），Vitest 4 + happy-dom + Testing Library 16
+📝 完整中文文档：docs/ 目录 11 个 markdown
+🧪 测试覆盖：281 例（v0.4 218 + v0.5 50 + v0.6 13），Vitest 4 + happy-dom + Testing Library 16
 
 💻 仓库：
 • GitHub: https://github.com/buxiaju/KunyaoGit
 • Gitee:  https://gitee.com/buxiaju/KunyaoGit
 
-📥 v0.5.0 下载：
-• GitHub: https://github.com/buxiaju/KunyaoGit/releases/tag/v0.5.0
-• Gitee:  https://gitee.com/buxiaju/KunyaoGit/releases/tag/v0.5.0`;
+📥 v0.6.0 下载：
+• GitHub: https://github.com/buxiaju/KunyaoGit/releases/tag/v0.6.0
+• Gitee:  https://gitee.com/buxiaju/KunyaoGit/releases/tag/v0.6.0`;
 
 function req(opts, body, contentType) {
   return new Promise((resolve, reject) => {

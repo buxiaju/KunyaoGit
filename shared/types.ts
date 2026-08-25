@@ -104,10 +104,24 @@ export interface ReleaseInfo {
 }
 
 export interface ReleaseAsset {
+  id: number;                 // 平台侧 asset id（删除 / 后续操作依赖）
   name: string;
   size: number;
   downloadCount: number;
   downloadUrl: string;
+  state?: string;             // GitHub: 'uploaded' | 'open' | 'new'；Gitee 暂不返回
+  contentType?: string;       // MIME
+  uploadedAt?: string;        // ISO
+  htmlUrl?: string;           // GitHub 页面地址
+}
+
+// v0.6+ Release 编辑参数（name / body / prerelease / draft）
+// GitHub 全支持；Gitee 支持 name / body / prerelease_flag，draft 由创建时决定
+export interface ReleaseUpdateParams {
+  name?: string;
+  body?: string;
+  prerelease?: boolean;
+  draft?: boolean;
 }
 
 export interface PullRequestInfo {

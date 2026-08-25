@@ -1,30 +1,35 @@
-import { useEffect, useState } from 'react';
+// v0.6+ Release 列表页
+// 顶部：title + 平台切换 + 搜索 + 新建按钮
+// 主区：ReleaseCard 列表 + 创建表单（展开）
+// 侧拉：ReleaseDetailDrawer（详情 + 编辑 + 附件管理 + 发布草稿）
+
+import { useEffect, useMemo, useState } from 'react';
 import { useRepoStore } from '../stores/repo';
-import { Tag, Plus, Trash2, ExternalLink, Edit2, FileText, Loader2, Github, Globe } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
-import { zhCN } from 'date-fns/locale';
-import { toast } from '../components/common/Toast';
 import { useSettingsStore } from '../stores/settings';
 import { useI18n } from '../i18n';
+import { toast } from '../components/common/Toast';
+import CreateReleaseForm from '../components/repo/CreateReleaseForm';
+import ReleaseCard from '../components/repo/ReleaseCard';
+import ReleaseDetailDrawer from '../components/repo/ReleaseDetailDrawer';
+import type { ReleaseInfo } from '../../shared/types';
+import { Plus, Github, Globe, Search, RefreshCw, Loader2 } from 'lucide-react';
 
 export default function ReleasesPage() {
   const { t } = useI18n();
   const { current } = useRepoStore();
   const { settings } = useSettingsStore();
   const [platform, setPlatform] = useState<'github' | 'gitee'>('github');
-  const [releases, setReleases] = useState<any[]>([]);
+  const [releases, setReleases] = useState<ReleaseInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
-  const [tag, setTag] = useState('');
-  const [name, setName] = useState('');
-  const [body, setBody] = useState('');
-  const [draft, setDraft] = useState(false);
-  const [prerelease, setPrerelease] = useState(false);
-  const [generating, setGenerating] = useState(false);
+  const [search, setSearch] = useState('');
+  const [busyTag, setBusyTag] = useState<string | null>(null);
+  const [detail, setDetail] = useState<ReleaseInfo | null>(null);
 
   useEffect(() => {
     if (current) load();
-  }, [current, platform]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current?.path, platform]);
 
   const load = async () => {
     if (!current) return;
@@ -43,60 +48,37 @@ export default function ReleasesPage() {
     }
   };
 
-  const generateChangelog = async () => {
-    if (!current) return;
-    setGenerating(true);
-    try {
-      const r = await window.gitgui.release.changelog({ repoPath: current.path });
-      if (r.ok) {
-        setBody(r.data);
-        toast.success(t('releases.changelogGenerated'));
-      } else {
-        toast.error(t('releases.changelogFailed', { error: r.error }));
-      }
-    } finally {
-      setGenerating(false);
-    }
-  };
+  const filtered = useMemo(() => {
+    if (!search.trim()) return releases;
+    const q = search.trim().toLowerCase();
+    return releases.filter(
+      (r) => r.name.toLowerCase().includes(q) || r.tag.toLowerCase().includes(q)
+    );
+  }, [releases, search]);
 
-  const create = async () => {
+  const handleDelete = async (r: ReleaseInfo) => {
     if (!current) return;
-    if (!tag.trim() || !name.trim()) {
-      toast.warn(t('releases.tagAndNameRequired'));
-      return;
-    }
-    const r = await window.gitgui.release.create({
-      repoPath: current.path,
-      tag: tag.trim(),
-      name: name.trim(),
-      body: body,
-      draft,
-      prerelease,
-      platform,
-    });
-    if (r.ok) {
-      toast.success(t('releases.createSuccess'));
-      setShowCreate(false);
-      setTag('');
-      setName('');
-      setBody('');
-      setDraft(false);
-      setPrerelease(false);
-      await load();
-    } else {
-      toast.error(t('releases.createFailed', { error: r.error }));
-    }
-  };
-
-  const remove = async (tagName: string) => {
-    if (!current) return;
-    if (!confirm(t('releases.deleteConfirm', { name: tagName }))) return;
-    const r = await window.gitgui.release.delete(current.path, tagName, platform);
-    if (r.ok) {
+    if (!confirm(t('releases.deleteConfirm', { name: r.tag }))) return;
+    const ok = await window.gitgui.release.delete(current.path, r.tag, platform);
+    if (ok.ok) {
       toast.success(t('releases.deleteSuccess'));
+      if (detail?.tag === r.tag && detail?.platform === r.platform) setDetail(null);
       await load();
     } else {
-      toast.error(t('releases.deleteFailed', { error: r.error }));
+      toast.error(t('releases.deleteFailed', { error: ok.error }));
+    }
+  };
+
+  const handlePublish = async (r: ReleaseInfo) => {
+    if (!current) return;
+    setBusyTag(`${r.platform}-${r.tag}`);
+    const res = await window.gitgui.release.publish(current.path, r.tag, platform);
+    setBusyTag(null);
+    if (res.ok) {
+      toast.success(t('releases.publishSuccess'));
+      await load();
+    } else {
+      toast.error(t('releases.publishFailed', { error: res.error }));
     }
   };
 
@@ -112,12 +94,33 @@ export default function ReleasesPage() {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
-        <div>
+      {/* 顶部工具栏 */}
+      <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between gap-2 flex-shrink-0">
+        <div className="min-w-0">
           <h2 className="text-lg font-semibold">{t('releases.title')}</h2>
-          <p className="text-xs text-gray-500 mt-0.5">{current.name}</p>
+          <p className="text-xs text-gray-500 mt-0.5 truncate">{current.name}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {/* 搜索 */}
+          <div className="relative">
+            <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500" />
+            <input
+              className="input text-xs pl-7 w-48"
+              placeholder={t('releases.searchPlaceholder')}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          {/* 刷新 */}
+          <button
+            onClick={load}
+            disabled={loading || !currentAuth}
+            className="btn-ghost p-1.5"
+            title={t('common.loading')}
+          >
+            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
+          </button>
+          {/* 平台切换 */}
           <div className="flex items-center gap-0.5 panel p-0.5">
             <button
               onClick={() => setPlatform('github')}
@@ -137,7 +140,7 @@ export default function ReleasesPage() {
             </button>
           </div>
           <button
-            onClick={() => setShowCreate(true)}
+            onClick={() => setShowCreate(!showCreate)}
             disabled={!currentAuth}
             className="btn-primary disabled:opacity-50"
           >
@@ -146,81 +149,56 @@ export default function ReleasesPage() {
         </div>
       </div>
 
+      {/* 创建表单 */}
       {showCreate && (
-        <div className="border-b border-gray-800 bg-gray-900/50 p-4 space-y-2">
-          <div className="grid grid-cols-2 gap-2">
-            <input className="input" placeholder={t('releases.tagInputPlaceholder')} value={tag} onChange={(e) => setTag(e.target.value)} />
-            <input className="input" placeholder={t('releases.nameInputPlaceholder')} value={name} onChange={(e) => setName(e.target.value)} />
-          </div>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3 text-sm">
-              <label className="flex items-center gap-1.5">
-                <input type="checkbox" checked={draft} onChange={(e) => setDraft(e.target.checked)} disabled={platform === 'gitee'} /> {t('releases.isDraft')}
-              </label>
-              <label className="flex items-center gap-1.5">
-                <input type="checkbox" checked={prerelease} onChange={(e) => setPrerelease(e.target.checked)} /> {t('releases.isPrerelease')}
-              </label>
-            </div>
-            <button onClick={generateChangelog} disabled={generating} className="btn-ghost text-xs">
-              {generating ? <Loader2 size={12} className="animate-spin" /> : <FileText size={12} />}
-              {t('releases.generateChangelog')}
-            </button>
-          </div>
-          <textarea
-            className="input min-h-[140px] font-mono text-xs"
-            placeholder={t('releases.bodyInputPlaceholder')}
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-          />
-          <div className="flex gap-2">
-            <button onClick={create} className="btn-primary">{t('releases.create')}</button>
-            <button onClick={() => setShowCreate(false)} className="btn-ghost">{t('releases.cancel')}</button>
-          </div>
-        </div>
+        <CreateReleaseForm
+          platform={platform}
+          onCancel={() => setShowCreate(false)}
+          onCreated={async () => {
+            setShowCreate(false);
+            await load();
+          }}
+        />
       )}
 
+      {/* 列表区 */}
       <div className="flex-1 overflow-auto p-4">
         {!currentAuth ? (
-          <div className="text-center text-gray-500 text-sm py-10">{t('releases.notConfigured', { platform: platform === 'github' ? 'GitHub' : 'Gitee' })}</div>
+          <div className="text-center text-gray-500 text-sm py-10">
+            {t('releases.notConfigured', { platform: platform === 'github' ? 'GitHub' : 'Gitee' })}
+          </div>
         ) : loading ? (
           <div className="text-center py-10 text-gray-500 text-sm">
-            <Loader2 size={16} className="animate-spin inline mr-2" />{t('releases.loading')}
+            <Loader2 size={16} className="animate-spin inline mr-2" />
+            {t('releases.loading')}
           </div>
-        ) : releases.length === 0 ? (
-          <div className="text-center text-gray-500 text-sm py-10">{t('releases.empty')}</div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center text-gray-500 text-sm py-10">
+            {search.trim() ? t('releases.searchEmpty') : t('releases.empty')}
+          </div>
         ) : (
-          <div className="max-w-3xl mx-auto space-y-3">
-            {releases.map((r) => (
-              <div key={`${r.platform}-${r.tag}`} className="panel p-3">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <Tag size={14} className="text-primary-400" />
-                      <span className="font-medium">{r.name}</span>
-                      <span className="text-xs text-gray-500 font-mono">{r.tag}</span>
-                      {r.draft && <span className="text-xs px-1.5 rounded bg-gray-700 text-gray-300">{t('releases.draft')}</span>}
-                      {r.prerelease && <span className="text-xs px-1.5 rounded bg-amber-900/50 text-amber-300">{t('releases.prerelease')}</span>}
-                      <span className="text-xs px-1.5 rounded bg-gray-800 text-gray-400">{r.platform}</span>
-                    </div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      {t('releases.publishedAt', { date: r.publishedAt && formatDistanceToNow(new Date(r.publishedAt), { locale: zhCN, addSuffix: true }) })}
-                      {r.assets.length > 0 && t('releases.assetsCount', { count: r.assets.length })}
-                    </div>
-                    {r.body && (
-                      <pre className="mt-2 text-xs text-gray-300 bg-gray-900/60 rounded p-2 whitespace-pre-wrap max-h-40 overflow-auto">
-                        {r.body}
-                      </pre>
-                    )}
-                  </div>
-                  <button onClick={() => remove(r.tag)} className="btn-ghost p-1 hover:text-red-400">
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-              </div>
+          <div className="max-w-3xl mx-auto space-y-2">
+            {filtered.map((r) => (
+              <ReleaseCard
+                key={`${r.platform}-${r.tag}`}
+                release={r}
+                busy={busyTag === `${r.platform}-${r.tag}`}
+                onOpenDetail={() => setDetail(r)}
+                onPublish={() => handlePublish(r)}
+                onDelete={() => handleDelete(r)}
+              />
             ))}
           </div>
         )}
       </div>
+
+      {/* 详情抽屉 */}
+      <ReleaseDetailDrawer
+        release={detail}
+        open={!!detail}
+        onClose={() => setDetail(null)}
+        onChanged={load}
+      />
     </div>
   );
 }

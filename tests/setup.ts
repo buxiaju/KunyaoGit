@@ -128,6 +128,11 @@ export function createGitguiMock() {
       listReleases: vi.fn().mockResolvedValue(ok([])),
       createRelease: vi.fn().mockResolvedValue(ok(null)),
       deleteRelease: vi.fn().mockResolvedValue(ok(undefined)),
+      // v0.6+
+      uploadAsset: vi.fn().mockResolvedValue(ok({ id: 1, name: 'f.zip', size: 100, downloadCount: 0, downloadUrl: 'https://x' })),
+      deleteAsset: vi.fn().mockResolvedValue(ok(undefined)),
+      update: vi.fn().mockResolvedValue(ok(null)),
+      publish: vi.fn().mockResolvedValue(ok(undefined)),
     },
     update: {
       check: vi.fn().mockResolvedValue(ok(null)),
@@ -135,6 +140,9 @@ export function createGitguiMock() {
       install: vi.fn().mockResolvedValue(ok(undefined)),
       onProgress: vi.fn().mockReturnValue(() => {}),
       cancel: vi.fn().mockResolvedValue(ok(undefined)),
+    },
+    dialog: {
+      showOpen: vi.fn().mockResolvedValue({ canceled: true, filePaths: [] }),
     },
   };
 }

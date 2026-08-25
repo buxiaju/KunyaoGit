@@ -64,6 +64,10 @@ export const IPC = {
   RELEASE_DELETE: 'release:delete',
   RELEASE_GET: 'release:get',
   RELEASE_PUBLISH: 'release:publish',
+  // v0.6+ 附件 + 编辑
+  RELEASE_UPLOAD_ASSET: 'release:upload-asset',
+  RELEASE_DELETE_ASSET: 'release:delete-asset',
+  RELEASE_UPDATE: 'release:update',
   CHANGELOG_GENERATE: 'changelog:generate',
 
   // GitHub

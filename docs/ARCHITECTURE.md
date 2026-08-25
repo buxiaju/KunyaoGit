@@ -29,11 +29,11 @@
 
 | 维度 | 数值 |
 | --- | --- |
-| 当前版本 | `0.5.0`（见 `package.json`） |
+| 当前版本 | `0.6.0`（见 `package.json`） |
 | 维护者 | `buxiaju`（GitHub + Gitee 同名） |
 | 主仓库 | https://github.com/buxiaju/KunyaoGit |
 | 镜像 | https://gitee.com/buxiaju/KunyaoGit |
-| Release | GitHub 与 Gitee 双平台同步发布（v0.1.0 ~ v0.3.8） |
+| Release | GitHub 与 Gitee 双平台同步发布（v0.1.0 ~ v0.5.0） |
 | 平台目标 | Windows 10/11 x64（macOS / Linux 暂未验证） |
 | 包大小 | NSIS 安装包 ~86 MB，便携版 ~3.5 MB |
 | License | MIT |
@@ -48,6 +48,10 @@
 - **★ v0.5+ 文件历史 + Blame**（编辑器顶部「历史」按钮打开 FileHistoryPanel 侧边抽屉，commit 列表 + 点开展开 diff；点击 Monaco 行号 gutter 触发 blame 提示浮窗，git blame --line-porcelain 解析为 BlameLine[]）
 - **★ v0.4+ 全局快捷键**（Ctrl+R 刷新、? 速查表、1-5 切 tab、输入框内自动让位）
 - **★ v0.4+ 底部状态栏**（仓库 / 分支 / 同步状态 / 暂存计数 / 应用版本，三段式 VS Code / GitKraken 风格）
+- **★ v0.6+ Release 附件管理**（GitHub：oct.repos.uploadReleaseAsset / deleteReleaseAsset；Gitee：POST .../attach_files multipart + DELETE；GitHub 单文件软限 2GB，Gitee ≤ 100MB；ReleaseAsset 扩展 5 字段含 id / state / contentType / uploadedAt / htmlUrl）
+- **★ v0.6+ Release 编辑**（name / body / prerelease；GitHub 支持 draft 切换，Gitee 部分支持）
+- **★ v0.6+ Release 详情抽屉**（640px 右侧抽屉，body 用 `marked` 渲染 Markdown，附件完整列表 + 「发布草稿」按钮）
+- **★ v0.6+ Release 列表搜索**（顶部搜索框按 tag / name 实时过滤）
 - **本地文件管理**（文件树：新建文件 / 新建文件夹 / 重命名 / 删除，右键菜单 + 工具栏；操作后自动刷新 git status）
 - **多 remote 推送**（Push 下拉可选择推送到指定 remote，如 GitHub / Gitee；「提交并推送」同样支持选择 remote）
 - GitHub + Gitee 双平台 REST API（Octokit + axios）

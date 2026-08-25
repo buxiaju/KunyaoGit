@@ -1,6 +1,6 @@
 {
   "name": "kunyaogit",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
   "description": "KunyaoGit - A cross-platform Git GUI client for GitHub and Gitee",
   "main": "dist-electron/main.js",
@@ -25,7 +25,9 @@
     "date-fns": "^4.1.0",
     "diff2html": "^3.4.51",
     "electron-store": "^8.2.0",
+    "form-data": "^4.0.6",
     "lucide-react": "^0.469.0",
+    "marked": "^18.0.11",
     "nanoid": "^5.0.9",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

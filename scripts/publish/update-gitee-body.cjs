@@ -28,6 +28,17 @@ function log(msg) {
 
 const RELEASE_BODY = `# KunyaoGit v${VERSION}
 
+## v0.6.0 特性
+- 📎 **Release 附件上传 / 下载 / 删除（GitHub + Gitee 双平台）** — 创建 release 时可同时选择多个本地附件，已发布 release 可在详情抽屉继续上传 / 下载 / 删除
+  - **GitHub**：\`oct.repos.uploadReleaseAsset\` + \`deleteReleaseAsset\`，单文件软限 2GB
+  - **Gitee**：\`POST .../releases/{id}/attach_files\` multipart + \`DELETE .../attach_files/{id}\`，单文件 ≤ 100MB
+  - **ReleaseAsset** 扩展：新增 \`id\` / \`state\` / \`contentType\` / \`uploadedAt\` / \`htmlUrl\` 字段
+- ✏️ **Release 编辑** — 详情抽屉可改 name / body / prerelease；GitHub 支持 draft ↔ release 切换
+- 🎨 **Release 详情抽屉** — 640px 右侧抽屉，body 用 \`marked\` 渲染 Markdown，附件完整列表 + 「发布草稿」按钮
+- 🔍 **Release 列表搜索** — 顶部搜索框按 tag / name 实时过滤
+- 📚 **依赖新增**：\`marked@^15\`（Markdown 渲染）、\`form-data@^4\`（Gitee multipart）
+- 🧪 **自动化测试** — 268 → 281 例（+13）：MarkdownBody 6 例 + ReleaseCard 7 例
+
 ## v0.5.0 特性
 - ⌨️ **Ctrl+P 跳转文件** — 复用命令面板组件，VS Code 式模糊搜索（连续字符加分 + 路径分隔符后字符加分）；git ls-files --cached --others --exclude-standard 上限 5000 文件
 - 📜 **文件历史 + Blame** — 编辑器顶部「历史」按钮打开 FileHistoryPanel 侧边抽屉，commit 列表（git log --follow 跟踪重命名）+ 点开展开 diff；点击 Monaco 行号 gutter 触发 blame 浮窗（git blame --line-porcelain 解析为 BlameLine[]）
@@ -161,9 +172,9 @@ const RELEASE_BODY = `# KunyaoGit v${VERSION}
 
 ## NSIS 安装包下载
 由于 Gitee Release 附件配额 1 GB 已用完且 Gitee raw 路径对 .exe 返回 403，NSIS 安装包（86 MB）请从 GitHub 下载：
-- https://github.com/buxiaju/KunyaoGit/releases/download/v0.5.0/KunyaoGit-Setup-0.5.0-x64.exe
+- https://github.com/buxiaju/KunyaoGit/releases/download/v0.6.0/KunyaoGit-Setup-0.6.0-x64.exe
 
-Gitee 用户也可 \`git clone\` 本仓库后在 \`.release-assets/KunyaoGit-Setup-0.5.0-x64.exe\` 路径获取。
+Gitee 用户也可 \`git clone\` 本仓库后在 \`.release-assets/KunyaoGit-Setup-0.6.0-x64.exe\` 路径获取。
 校验：sha256 校验和见 \`scripts/build/check-expected-hash.cjs\`。
 `;
 

@@ -10,21 +10,23 @@
 
 ---
 
-## 🎉 v0.5.0 已发布 — Ctrl+P 跳转文件 + 文件历史/Blame
+## 🎉 v0.6.0 已发布 — Release 附件 + 详情抽屉 + Markdown 渲染
 
-> **下载**：[GitHub Releases](https://github.com/buxiaju/KunyaoGit/releases/tag/v0.5.0) · [Gitee Releases](https://gitee.com/buxiaju/KunyaoGit/releases/tag/v0.5.0)
+> **下载**：[GitHub Releases](https://github.com/buxiaju/KunyaoGit/releases/tag/v0.6.0) · [Gitee Releases](https://gitee.com/buxiaju/KunyaoGit/releases/tag/v0.6.0)
 >
 > - 🪟 **NSIS 安装包**（86 MB）— 主流下载，桌面/开始菜单快捷方式 + 卸载入口
 > - 📦 **便携版 zip**（3.5 MB）— 绿色版，解压即用
 >
-> **v0.5.0 主要更新**：
-> - ⌨️ **Ctrl+P 跳转文件** — 复用命令面板组件，VS Code 式模糊搜索（5 千文件 < 200ms）
-> - 📜 **文件历史 + Blame** — 编辑器顶部「历史」按钮打开 FileHistoryPanel 侧边抽屉；点击 Monaco 行号 gutter 触发 blame 浮窗
-> - 🧪 **自动化测试** — 从 218 例扩展到 268 例（12 文件，3 秒跑完）
+> **v0.6.0 主要更新**：
+> - 📎 **Release 附件上传 / 下载 / 删除**（GitHub + Gitee 双平台）— 创建 release 时多选本地附件；已发布 release 可在详情抽屉继续管理
+> - ✏️ **Release 编辑** — 详情抽屉可改 name / body / prerelease；GitHub 支持 draft ↔ release 切换
+> - 🎨 **Release 详情抽屉** — 640px 右侧抽屉，body 用 `marked` 渲染 Markdown，附件完整列表 + 「发布草稿」按钮
+> - 🔍 **Release 列表搜索** — 顶部搜索框按 tag / name 实时过滤
+> - 🧪 **自动化测试** — 从 268 例扩展到 **281 例**（+13：MarkdownBody 6 例 + ReleaseCard 7 例）
 >
-> 详细 changelog：见 [GitHub Release Notes](https://github.com/buxiaju/KunyaoGit/releases/tag/v0.5.0) 或 `docs/v0.5-roadmap.md`。
+> 详细 changelog：见 [GitHub Release Notes](https://github.com/buxiaju/KunyaoGit/releases/tag/v0.6.0) 或 `CHANGELOG.md`。
 >
-> **升级方式**：启动旧版会**自动检查更新**并弹窗，点"立即下载并安装"即可一键升级到 v0.5.0；也可下载安装包覆盖安装。
+> **升级方式**：启动旧版会**自动检查更新**并弹窗，点"立即下载并安装"即可一键升级到 v0.6.0；也可下载安装包覆盖安装。
 
 ---
 
@@ -66,8 +68,11 @@
 ### 🏷 发布版本管理
 - 创建 Tag + GitHub / Gitee Release（支持草稿、预发布）
 - **自动从 commits 生成 CHANGELOG**（遵循 Conventional Commits）
+- **★ v0.6+ 附件管理**（双平台）— 创建 release 时多选本地附件上传；详情抽屉可继续上传 / 下载 / 删除
+- **★ v0.6+ Release 编辑** — 详情抽屉可改 name / body / prerelease，body 用 `marked` 渲染 Markdown
+- **★ v0.6+ 列表搜索 + 详情抽屉** — 顶部按 tag / name 过滤；点击 release 卡片的「详情」按钮开 640px 抽屉
+- **★ v0.6+ 发布草稿** — GitHub draft 可一键正式发布
 - 查看 / 删除历史 Release
-- 附件管理
 
 ### 🔄 自动更新检查
 - 启动后 1.5 秒静默检查 GitHub + Gitee 最新 release
@@ -205,6 +210,7 @@ KunyaoGit/
 - [x] 云端仓库搜索（v0.3.4）
 - [ ] 全局代码搜索
 - [ ] macOS / Linux 打包
+- [x] Release 附件管理 + 编辑 + Markdown 渲染（v0.6+）
 - [x] 多语言切换（中文 / English，v0.2.3）
 - [x] 三主题切换（暗色 / 深蓝 / 亮色，v0.2.5）
 
@@ -219,7 +225,7 @@ KunyaoGit/
 - ✨ [功能详解](docs/features.md) — 全部 21 个功能模块的设计与使用
 - 🔌 [API 参考](docs/api-reference.md) — `window.gitgui` 全量 API + 共享类型
 - 🛠 [开发指南](docs/development-guide.md) — 开发 / 打包 / 发布 / 测试 / 实战
-- 📋 [v0.4 自测清单](docs/v0.4-self-test-checklist.md) · [v0.5 自测清单](docs/v0.5-self-test-checklist.md)
+- 📋 [v0.4 自测清单](docs/v0.4-self-test-checklist.md) · [v0.5 自测清单](docs/v0.5-self-test-checklist.md) · [v0.6 自测清单](docs/v0.6-self-test-checklist.md)
 - 🗺 [v0.5 路线图](docs/v0.5-roadmap.md) — Ctrl+P / Blame / Worktree 等候选详细规格
 - 📜 [CHANGELOG](CHANGELOG.md) — 全部版本变更记录
 

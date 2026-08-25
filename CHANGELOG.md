@@ -6,6 +6,42 @@
 
 ---
 
+## [0.6.0] - 2026-08-26
+
+### Added
+- 📎 **Release 附件上传 / 下载 / 删除**（GitHub + Gitee 双平台）
+  - 创建 release 时可同时选择多个本地附件（`dialog.showOpen` 多选），提交后逐个上传
+  - 已发布 release 可在详情抽屉继续上传 / 下载 / 删除附件
+  - **GitHub**：`oct.repos.uploadReleaseAsset` + `deleteReleaseAsset`，单文件软限 2GB
+  - **Gitee**：`POST .../releases/{id}/attach_files` multipart + `DELETE .../attach_files/{id}`，单文件 ≤ 100MB
+  - **ReleaseAsset** 扩展：新增 `id` / `state` / `contentType` / `uploadedAt` / `htmlUrl` 字段（删除 / 后续操作依赖 `id`）
+- ✏️ **Release 编辑** — 详情抽屉可改 `name` / `body` / `prerelease`；GitHub 支持 `draft` ↔ release 切换，Gitee 部分支持（不支持 `draft` 切换）
+- 🎨 **Release 详情抽屉** — 640px 右侧抽屉，body 用 `marked` 渲染 Markdown（标题 / 列表 / 代码块 / 链接高亮），附件完整列表（大小 / 下载次数 / 下载 / 删除）+ 顶部「发布草稿」按钮（仅 GitHub draft）
+- 🔍 **Release 列表搜索** — 顶部搜索框按 `tag` / `name` 实时过滤
+- 🆕 **新建 IPC 通道** 3 个：`release:upload-asset` / `release:delete-asset` / `release:update`
+- 🆕 **新建共享类型**：`ReleaseUpdateParams`（name? / body? / prerelease? / draft?）
+- 🆕 **新对话框**：`release.detailDrawer` + `release.card` + `createReleaseForm` 三个组件（拆分自原 `ReleasesPage.tsx`）
+- 🆕 **marked 依赖**（`marked@^15`，30KB 左右，替代引入 react-markdown 等重型方案）
+
+### Changed
+- `ReleasesPage.tsx` 重写：拆为 4 个组件（`ReleaseCard` / `ReleaseDetailDrawer` / `CreateReleaseForm` / `MarkdownBody`）
+- `release.ts` 主进程实现：删内联 `parseRemoteUrl`，复用 `electron/lib/parseRemote.ts`（与 `src/lib/parseRemote.ts` 镜像实现）
+- `ReleaseInfo.assets` 字段解析补全 `id` / `state` / `contentType` / `uploadedAt` / `htmlUrl`
+
+### Tech
+- `electron/lib/parseRemote.ts` **新增** — 与 `src/lib/parseRemote.ts` 镜像实现（主进程无法跨层 import 渲染层）
+- `form-data@^4` 加入 dependencies（Gitee multipart 上传）
+- `marked@^15` 加入 dependencies（Markdown 渲染）
+- 自动化测试从 268 例扩到 **281 例**（+13：MarkdownBody 6 例 + ReleaseCard 7 例）
+- 文档更新：`README.md` banner + 路线图 + 链接 / `CHANGELOG.md` v0.6 段 / `docs/features.md` §6 扩 / `docs/api-reference.md` §3.4 加 3 方法 + §2.13 扩字段 + `ReleaseUpdateParams` 子节
+
+### Known Limitations
+- **Gitee 单附件 ≤ 100MB**（平台限制；UI 在 Gitee 平台 + 大文件时给 amber 提示，建议改用 GitHub）
+- **Release body Markdown 未 sanitize**（来源是仓库所有者自己编写，信任源；未来允许非 owner 编辑时应加 DOMPurify）
+- **附件上传无进度条**（v0.6 不做；等真有大文件场景再加 progress event）
+
+---
+
 ## [0.5.0] - 2026-08-25
 
 ### Added
