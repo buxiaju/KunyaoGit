@@ -45,6 +45,7 @@
 - **★ v0.4+ PR / MR 创建**（GitHub + Gitee 双平台；自动解析 remote URL 推断 owner/repo；自动拉默认分支作为 base；当前分支 ahead>0 时一键创建）
 - **★ v0.4+ 命令面板**（Ctrl/Cmd+Shift+P 全局命令入口，15+ 命令分类覆盖 Git / 导航 / 视图 / 设置）
 - **★ v0.5+ Ctrl+P 跳转文件**（复用命令面板组件，VS Code 式模糊搜索 + 匹配高亮，git ls-files --others --exclude-standard 上限 5000 文件）
+- **★ v0.5+ 文件历史 + Blame**（编辑器顶部「历史」按钮打开 FileHistoryPanel 侧边抽屉，commit 列表 + 点开展开 diff；点击 Monaco 行号 gutter 触发 blame 提示浮窗，git blame --line-porcelain 解析为 BlameLine[]）
 - **★ v0.4+ 全局快捷键**（Ctrl+R 刷新、? 速查表、1-5 切 tab、输入框内自动让位）
 - **★ v0.4+ 底部状态栏**（仓库 / 分支 / 同步状态 / 暂存计数 / 应用版本，三段式 VS Code / GitKraken 风格）
 - **本地文件管理**（文件树：新建文件 / 新建文件夹 / 重命名 / 删除，右键菜单 + 工具栏；操作后自动刷新 git status）
@@ -159,11 +160,13 @@ KunyaoGit/
 │   │   │   ├── UpdateDialog.tsx    # ★ 应用内更新对话框（询问/下载进度/完成/错误）
 │   │   │   ├── StatusBar.tsx       # ★ v0.4+ 底部状态栏（仓库/分支/同步/暂存/版本）
 │   │   │   ├── CommandPalette.tsx  # ★ v0.4+ Ctrl+Shift+P 命令面板（VS Code 式模态；v0.5+ 加 Ctrl+P 跳转文件）
-│   │   │   └── Cheatsheet.tsx      # ★ v0.4+ ? 快捷键速查表
+│   │   │   ├── Cheatsheet.tsx      # ★ v0.4+ ? 快捷键速查表
+│   │   │   └── FileHistoryPanel.tsx # ★ v0.5+ 文件历史侧边抽屉（commit 列表 + 展开 diff）
 │   │   └── repo/
 │   │       ├── BranchPanel.tsx     # 分支列表 + checkout / new / delete / merge + ★ v0.4 创建 PR
 │   │       ├── ChangesPanel.tsx    # 工作区文件状态 + stage / unstage / discard + ★ v0.4 Stash 队列
 │   │       ├── CommitHistory.tsx   # git log 时间线（含 Tag / 分支引用） + ★ v0.4 hover 工具条（cherry-pick/revert/copy）
+│       ├── EditorPane.tsx      # Monaco 包装 + ★ v0.5+ 「历史」按钮 + Blame 点击行号 gutter
 │   │       ├── CommitActionsModal.tsx # ★ v0.4+ 通用确认弹窗（cherry-pick / revert 复用）
 │   │       ├── CreatePRDialog.tsx  # ★ v0.4+ 创建 PR / MR（双平台 owner/repo 推断）
 │   │       ├── StashList.tsx       # ★ v0.4+ Stash 队列（list / apply / pop / drop / show diff）
