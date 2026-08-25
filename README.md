@@ -94,12 +94,12 @@
 ## 安装
 
 ### Windows（推荐）
-从 [Releases](https://github.com/buxiaju/KunyaoGit/releases) 下载最新版 `KunyaoGit-Setup-0.3.4-x64.exe` 双击安装（NSIS 安装包，~86 MB，含完整 Electron 运行时 + 专属图标，创建桌面和开始菜单快捷方式）。
+从 [Releases](https://github.com/buxiaju/KunyaoGit/releases) 下载最新版 `KunyaoGit-Setup-0.5.0-x64.exe` 双击安装（NSIS 安装包，~86 MB，含完整 Electron 运行时 + 专属图标，创建桌面和开始菜单快捷方式）。
 
-- GitHub: https://github.com/buxiaju/KunyaoGit/releases/download/v0.3.4/KunyaoGit-Setup-0.3.4-x64.exe
-- Gitee:  https://gitee.com/buxiaju/KunyaoGit/releases/download/v0.3.4/KunyaoGit-Setup-0.3.4-x64.exe
+- GitHub: <https://github.com/buxiaju/KunyaoGit/releases/download/v0.5.0/KunyaoGit-Setup-0.5.0-x64.exe>
+- Gitee:  <https://gitee.com/buxiaju/KunyaoGit/releases/tag/v0.5.0>（附件仅含 portable；NSIS 走 GitHub 下载，详见 [Release Notes](https://gitee.com/buxiaju/KunyaoGit/releases/tag/v0.5.0)）
 
-便携版（不需安装）见同 Release 的 `KunyaoGit-portable-v0.3.4.zip`（~3.5 MB，解压后运行 `kunyaogit.exe`，需本机已安装 Node.js）。
+便携版（不需安装）见同 Release 的 `KunyaoGit-portable-v0.5.0.zip`（~3.5 MB，解压后运行 `KunyaoGit.exe`）。
 
 ### 自动更新
 安装后启动时会自动检查新版本，发现新版本后弹窗提示，可在弹窗内直接「立即下载并安装」（多源下载带进度条，下载完成自动启动安装包）。也可选择「打开下载页 / 忽略此版本」。如关闭了自动检查，可在 设置 → 关于 中手动「检查更新」。
@@ -120,8 +120,10 @@ npm run dev     # 开发模式（带热更新）
 
 ### 自己打包
 ```bash
-npm run build:win   # 产出 release/KunyaoGit-Setup-0.3.6-x64.exe
+npm run build:win   # 产出 release/KunyaoGit-Setup-X.Y.Z-x64.exe
 ```
+
+详细打包 / 发布流程见 [`docs/development-guide.md` §7-§8 + §11 v0.5 case study](docs/development-guide.md#8-发布流程)。
 
 ## 配置 GitHub / Gitee Token
 
@@ -142,13 +144,15 @@ npm run build:win   # 产出 release/KunyaoGit-Setup-0.3.6-x64.exe
 
 - **运行时**：Electron 33
 - **UI**：React 18 + TypeScript 5 + Vite 6
-- **样式**：Tailwind CSS 3
+- **样式**：Tailwind CSS 3 + CSS 变量主题系统（v0.2.5+ 三主题：暗色 / 深蓝 / 亮色）
 - **状态**：Zustand
 - **Git**：[simple-git](https://github.com/steveukx/git-js) 封装本地 Git CLI
 - **GitHub API**：[@octokit/rest](https://github.com/octokit/rest.js)
 - **Gitee API**：axios 直连官方 REST API v5
 - **编辑器**：[Monaco Editor](https://github.com/microsoft/monaco-editor)（VS Code 同款）
 - **Diff**：自实现 unified diff 解析 + 并排 / 统一渲染
+- **模糊匹配**（v0.5+）：自实现（顺序子序列 + 多种加权），无外部依赖
+- **测试**（v0.4+）：[Vitest 4](https://vitest.dev/) + [happy-dom](https://github.com/capricorn86/happy-dom) + [@testing-library/react 16](https://testing-library.com/docs/react-testing-library/intro/)，268 例单元 + 组件测试
 - **打包**：[electron-builder](https://www.electron.build/)（NSIS 安装包）
 
 ## 项目结构
@@ -208,6 +212,29 @@ KunyaoGit/
 
 欢迎提 Issue / PR，贡献流程与规范见 [`CONTRIBUTING.md`](./CONTRIBUTING.md)。
 
+## 文档
+
+- 📖 [用户操作指南](docs/user-guide.md) — 从首次启动到高级用法的完整操作流程
+- 🏗 [架构说明](docs/ARCHITECTURE.md) — 进程划分、IPC 通道、状态管理、关键决策
+- ✨ [功能详解](docs/features.md) — 全部 21 个功能模块的设计与使用
+- 🔌 [API 参考](docs/api-reference.md) — `window.gitgui` 全量 API + 共享类型
+- 🛠 [开发指南](docs/development-guide.md) — 开发 / 打包 / 发布 / 测试 / 实战
+- 📋 [v0.4 自测清单](docs/v0.4-self-test-checklist.md) · [v0.5 自测清单](docs/v0.5-self-test-checklist.md)
+- 🗺 [v0.5 路线图](docs/v0.5-roadmap.md) — Ctrl+P / Blame / Worktree 等候选详细规格
+- 📜 [CHANGELOG](CHANGELOG.md) — 全部版本变更记录
+
+## 链接
+
+- 🐙 GitHub: <https://github.com/buxiaju/KunyaoGit>
+- 🅖 Gitee:  <https://gitee.com/buxiaju/KunyaoGit>
+- 🐛 Issue: <https://github.com/buxiaju/KunyaoGit/issues>
+- 📦 Releases: <https://github.com/buxiaju/KunyaoGit/releases>
+
+## 致谢
+
+- [Electron](https://www.electronjs.org/) · [React](https://react.dev/) · [Vite](https://vitejs.dev/) · [Tailwind CSS](https://tailwindcss.com/) · [Zustand](https://github.com/pmndrs/zustand) · [simple-git](https://github.com/steveukx/git-js) · [@octokit/rest](https://github.com/octokit/rest.js) · [Monaco Editor](https://github.com/microsoft/monaco-editor) · [electron-builder](https://www.electron.build/) · [Vitest](https://vitest.dev/) · [date-fns](https://date-fns.org/) · [lucide-react](https://lucide.dev/) — 感谢这些优秀的开源项目
+- [VS Code](https://code.visualstudio.com/) — UI 灵感来源（命令面板、状态栏、Blame 浮窗等交互都参考其设计）
+
 ## 许可
 
-MIT
+[MIT](./LICENSE) © 2026 KunyaoGit Contributors

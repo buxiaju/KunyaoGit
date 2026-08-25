@@ -17,6 +17,7 @@
 8. [发布流程](#8-发布流程)
 9. [常见陷阱](#9-常见陷阱)
 10. [★ v0.4+ 自动化测试](#10-v04-自动化测试)
+11. [★ v0.5 发布实战：v0.5.0 case study](#11-v05-发布实战v050-case-study)
 
 ---
 
@@ -485,89 +486,183 @@ npm run build
 
 ## 8. 发布流程
 
-> 完整发版九步：改版本号 → 构建 → 复制到 `.release-assets/` → `publish-v023.cjs` → `update-gitee-body.cjs` → `git push`。
-> 发布脚本统一复用模板，**不再另存为 `publish-vXXX.cjs`**：`scripts/publish/publish-v023.cjs`（创建/更新 GitHub Release + 上传安装包）与 `scripts/publish/update-gitee-body.cjs`（创建/更新 Gitee Release + 上传附件），每次发版只需更新两个脚本顶部的 `RELEASE_BODY`。
+> 完整发版十步：改版本号 → 构建 → 复制到 `.release-assets/` + `release/` → **更新 5 个 publish 脚本的 RELEASE_BODY** → `publish-v026.cjs` → `update-gitee-body.cjs` → **公告（README banner + CHANGELOG + Gitee 仓库简介）** → commit → push → 端到端验证。
+> v0.4 起：**所有 publish 脚本（v023-v026 + update-gitee-body）的 RELEASE_BODY 都同步更新**——这样从任何历史脚本看 body 都是最新的，便于追溯。
 
 ### 8.1 改版本号
 
 编辑 `package.json`：
 
 ```jsonc
-{ "version": "0.3.4" }   // ← 改这里
+{ "version": "0.5.0" }   // ← 改这里
 ```
 
 ### 8.2 构建
 
-```bash
+```powershell
 cd C:\A\03Projects\MiniMax\GitGUI
-npx tsc -b
-npx vite build
 $env:ELECTRON_BUILDER_NSIS_DIR = "C:\A\03Projects\MiniMax\GitGUI\tools\nsis\nsis-3.11"
-npm run build:win
-node scripts/build/package-portable.cjs
+$env:CSC_IDENTITY_AUTO_DISCOVERY = "false"
+npm.cmd run build:win
 ```
 
-> 每次发版把构建输出目录临时指到新的 `release-vNNN`（如 v0.3.4 → `release-v031`，改法见 §7.2.1），并把 `release-vNNN/` 加进 `.gitignore`，发完清理删除。
+NSIS 输出 `release-v050/KunyaoGit-Setup-0.5.0-x64.exe`（86 MB）。
 
-产出：
-- `release-v031/KunyaoGit-Setup-0.3.4-x64.exe`
-- `release-v031/KunyaoGit-portable-v0.3.4.zip`
+> **v0.4+ 起**：把构建输出目录临时指到 `release-vNNN`（如 v0.5.0 → `release-v050`），`package.json` 的 `build.directories.output` 改 `release-v050`，发完恢复 `release`。`.gitignore` 已放行 `release-v*` 目录无需额外操作。
 
-### 8.3 复制到 `.release-assets/`（Gitee 走 git 分发）
+打包 portable zip（手动，绕过 `package-portable.cjs` 里的 `uploadToGitee`）：
 
 ```powershell
-copy /Y release-v031\KunyaoGit-Setup-0.3.4-x64.exe .release-assets\
-copy /Y release-v031\KunyaoGit-portable-v0.3.4.zip .release-assets\
+$version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+Compress-Archive -Path 'dist','dist-electron','package.json' -DestinationPath .release-assets/KunyaoGit-portable-v$version.zip -Force
 ```
 
-> `.release-assets/` 入库（`.gitignore` 已放行 `!.release-assets/*.exe` / `*.zip`），应用内自动更新的 Gitee 源就是 `https://gitee.com/buxiaju/KunyaoGit/raw/master/.release-assets/KunyaoGit-Setup-X.Y.Z-x64.exe`。
+### 8.3 复制产物到 `.release-assets/` + `release/`
 
-### 8.4 上传 GitHub Release
+`publish-v026.cjs` 期望从 `release/` 读；`update-gitee-body.cjs` 也读 `release/`；`scripts/publish/upload-installer.cjs` 读 `.release-assets/`。两处都放。
 
-```bash
-# 准备 token（优先环境变量；未设时脚本会从 git remote 'github' URL 提取 PAT）
-set GH_TOKEN=github_pat_XXX
+```powershell
+Copy-Item -Path release-v050/KunyaoGit-Setup-0.5.0-x64.exe -Destination .release-assets/ -Force
+Copy-Item -Path release-v050/KunyaoGit-Setup-0.5.0-x64.exe -Destination release/ -Force
+```
 
-# 直接复用模板脚本，不要另存为 publish-vXXX.cjs：
-# 只需更新脚本顶部的 RELEASE_BODY（本次发版说明）后运行
+v0.5 起的便携 zip 在 .release-assets/ 即可（publish 脚本读 .release-assets/ 找 portable，详见各脚本头部注释）。
+
+> **v0.4+ 重要修复**：`.gitignore` 已放行 `!.release-assets/*.exe` / `*.zip`（之前 `*.exe` 规则覆盖了 NSIS 安装包）。**如果 v0.4 前用户发现 86MB exe 没在 git 跟踪里，先检查 `.gitignore` 是否有这两条放行规则**。
+
+### 8.4 同步 5 个 publish 脚本的 RELEASE_BODY
+
+v0.4+ 起每次发版都要更新这些脚本顶部的 `RELEASE_BODY`（保持历史脚本里也带最新版本说明）：
+
+| 脚本 | 用途 |
+| --- | --- |
+| `scripts/publish/publish-v023.cjs` | 旧版模板（仍可独立跑） |
+| `scripts/publish/publish-v024.cjs` | 旧版模板（v0.2.4 速发版） |
+| `scripts/publish/publish-v025.cjs` | 旧版模板（v0.2.5 速发版） |
+| `scripts/publish/publish-v026.cjs` | **当前模板**，实际跑它 |
+| `scripts/publish/update-gitee-body.cjs` | Gitee Release + 底部 NSIS 链接（v0.4+ 保留） |
+
+每个脚本顶部加 v0.5.0 描述段（约 4-6 行），commit message 里说明「diff 含较多行尾标准化，-w 模式真实新增仅 10-16 行」。
+
+> **v0.4+ 教训**：v0.3.x 发版只改了最新脚本，事后想从 v0.2.6 脚本看 body 找不到。v0.4 起同步改 5 个避免「历史断层」。
+
+### 8.5 上传 GitHub Release
+
+```powershell
+# 优先环境变量；未设时脚本会从 git remote 'github' URL 提取 PAT
+$env:GH_TOKEN = "github_pat_XXX"
 node scripts/publish/publish-v026.cjs
 ```
 
-`publish-v026.cjs` 逻辑（模板，直接复用）：
-1. `GET /repos/{owner}/{repo}/releases/tags/vX.Y.Z`：已存在则复用，404 则创建
+`publish-v026.cjs` 流程：
+1. `GET /repos/{owner}/{repo}/releases/tags/vX.Y.Z`：已存在则复用（200），404 则创建（POST）
 2. `PATCH` 更新 release body
-3. **流式上传** `KunyaoGit-Setup-X.Y.Z-x64.exe` 与 `KunyaoGit-portable-vX.Y.Z.zip`（`fs.createReadStream().pipe()`，避免大文件一次性读入内存；已存在则跳过）
+3. **流式上传**两个 asset（`fs.createReadStream().pipe()`，避免大文件一次性读入内存；已存在则跳过）
 4. 全程日志写入 `logs/publish/publish-log.txt`（带 ISO 时间戳）
 
-已有 release 仅替换安装包：
+### 8.6 更新 Gitee Release + NSIS 链接
 
-```bash
-node scripts/build/replace-installer.cjs    # 删旧 + 上传新
-node scripts/publish/upload-installer.cjs     # 更新 body + 跳过已存在 asset
+```powershell
+node scripts/publish/update-gitee-body.cjs
 ```
 
-### 8.5 更新 Gitee Release 描述 + 上传安装包
+**Gitee 配额限制**（v0.4+ 沿用）：
+- Gitee Release 附件单文件大小限制 + 仓库附件总配额 1 GB
+- v0.4 前 NSIS 86MB × 多次 release 已用满 1 GB 配额
+- Gitee raw 路径对 `.exe` 返回 403（不只 401，还直接拒绝二进制下载）
 
-```bash
-node scripts/publish/update-gitee-body.cjs    # 同步 Gitee Release body + 流式上传安装包 attach file
+**对策**：
+- `update-gitee-body.cjs` 底部固定保留「NSIS 安装包下载」段：
+  ```
+  由于 Gitee Release 附件配额 1 GB 已用完且 Gitee raw 路径对 .exe 返回 403，NSIS 安装包（86 MB）请从 GitHub 下载：
+  - https://github.com/buxiaju/KunyaoGit/releases/download/v0.5.0/KunyaoGit-Setup-0.5.0-x64.exe
+  Gitee 用户也可 `git clone` 本仓库后在 `.release-assets/KunyaoGit-Setup-0.5.0-x64.exe` 路径获取。
+  ```
+- 每次发版**记得更新该段里的 vX.Y.Z + 文件名**（之前 v0.4 改过 v0.4.0 → v0.5.0，commit `74a6106`）
+- portable zip 小（3.5 MB）能直接传 Gitee 附件；NSIS 86 MB 永远只能走 GitHub
+
+### 8.7 公告（v0.5+ 新增）
+
+完整公告包含三处：
+
+#### 8.7.1 README.md banner
+
+版本 badge 下方加醒目公告区（橙色或醒目背景）：
+
+```markdown
+## 🎉 v0.5.0 已发布 — Ctrl+P 跳转文件 + 文件历史/Blame
+
+> **下载**：[GitHub Releases](https://github.com/buxiaju/KunyaoGit/releases/tag/v0.5.0) · [Gitee Releases](https://gitee.com/buxiaju/KunyaoGit/releases/tag/v0.5.0)
+> - 🪟 **NSIS 安装包**（86 MB）...
+> - 📦 **便携版 zip**（3.5 MB）...
+> **升级方式**：启动旧版会自动检查更新...
 ```
 
-> v0.2.3 起 `update-gitee-body.cjs` 集成了安装包上传（multipart 流式），并优先读 `process.env.GT_TOKEN`，fallback 为脚本内硬编码值。全程日志写入 `logs/publish/publish-log.txt`。
+#### 8.7.2 CHANGELOG.md（独立 changelog 文件）
 
-### 8.6 提交 + push
+`CHANGELOG.md` 在仓库根目录，每版本 `### Added / Changed / Fixed / Tech` 分段，遵循 [Keep a Changelog](https://keepachangelog.com/) 格式。
 
-```bash
-git add package.json
-git commit -m "release: v0.3.8"
-git push gitee master
-git push github master
+#### 8.7.3 Gitee 仓库简介（v0.5+ 新增）
+
+用新增的 `scripts/publish/update-gitee-repo-desc.cjs` 调 Gitee API PATCH `https://gitee.com/api/v5/repos/{owner}/{repo}` 更新仓库 description：
+
+```powershell
+node scripts/publish/update-gitee-repo-desc.cjs
 ```
 
-### 8.7 端到端测试
+description 覆盖当前 v0.5.0 全部特性 + 下载链接（871 字符左右）。
+
+> **API 注意点**：Gitee PATCH 仓库元数据时即使不修改 `name` 也要传 `name` 字段，否则返 400 `name is missing`——脚本里已经处理。
+
+### 8.8 提交 + push
+
+```powershell
+git add package.json scripts/publish/ .release-assets/
+git commit -m "release: v0.5.0 — 发版产物 + publish 脚本更新 + 版本号"
+git push gitee master --follow-tags
+git push github master --follow-tags
+```
+
+发版 commit 模板（沿用 v0.3.x）：
+
+```
+release: vX.Y.Z — 发版产物 + publish 脚本更新 + 版本号
+
+GitHub Release: https://github.com/buxiaju/KunyaoGit/releases/tag/vX.Y.Z
+- KunyaoGit-Setup-X.Y.Z-x64.exe (XX MB) — NSIS 安装包
+- KunyaoGit-portable-vX.Y.Z.zip (X.X MB) — 便携版
+
+Gitee Release: ...
+- KunyaoGit-portable-vX.Y.Z.zip (X.X MB) — 附件
+- NSIS 安装包走 GitHub 下载（1 GB 配额已用完 + raw 路径 403）
+
+变更：
+- package.json: version X.Y.Z -> X.Y.Z
+- scripts/publish/{...}.cjs: RELEASE_BODY 头部插入 vX.Y.Z 描述段
+- update-gitee-body.cjs 额外：底部 NSIS 链接 vX.Y-1.Z -> vX.Y.Z
+- .release-assets/... — vX.Y.Z 产物
+- 旧 vX.Y-1.Z 产物保留为历史 tag（不删除）
+```
+
+### 8.9 端到端验证
+
+```powershell
+# GitHub Release
+$r = Invoke-WebRequest "https://api.github.com/repos/buxiaju/KunyaoGit/releases/tags/v0.5.0" -UseBasicParsing
+$j = $r.Content | ConvertFrom-Json
+$j.assets | ForEach-Object { Write-Host "  - $($_.name) ($([math]::Round($_.size/1MB, 2)) MB)" }
+
+# Gitee Release attach_files
+$r = Invoke-WebRequest "https://gitee.com/api/v5/repos/buxiaju/KunyaoGit/releases/{id}/attach_files?access_token=..." -UseBasicParsing
+```
+
+返回的 `assets` / `attach_files` 数组应该包含 NSIS（GitHub）+ portable（双平台）。
+
+### 8.10 静默安装 / 卸载（v0.3.x 沿用）
 
 ```powershell
 # 静默安装
-start /wait release-v031\KunyaoGit-Setup-0.3.4-x64.exe /S /D=C:\A\test\kg
+start /wait release-v050\KunyaoGit-Setup-0.5.0-x64.exe /S /D=C:\A\test\kg
 
 # 启动 5s 后 kill
 & "C:\A\test\kg\KunyaoGit.exe"
@@ -885,6 +980,237 @@ describe('StatusBar', () => {
 | 主题切换时的 CSS 变量切换 | 需要 visual regression（如 Percy / Chromatic），成本高 |
 | 国际化文案语义正确性 | 只能靠人工 review |
 | ESLint 集成 | `npm run lint` 依赖未装（v0.4 不阻塞，详见 §9） |
+
+---
+
+## 11. ★ v0.5 发布实战：v0.5.0 case study
+
+> 本节按 v0.5.0 实际发布步骤逐条记录，可作为后续发版的复制模板。
+> 时间：2026-08-25，单人实操约 1.5 小时。
+
+### 11.1 前置准备
+
+- 工作分支：`master`，已合并 v0.5 全部 commit（10 个 commit）
+- `package.json` version 仍是 0.4.0
+- `release-v050/` 目录不存在
+- `.release-assets/` 留有 v0.4 的 setup + portable（待替换）
+
+### 11.2 Step-by-step
+
+#### Step 1：临时改 output 目录（避免文件锁）
+
+```powershell
+# 编辑 package.json build.directories.output
+"output": "release-v050"   # 从 "release" 改
+```
+
+#### Step 2：构建
+
+```powershell
+$env:ELECTRON_BUILDER_NSIS_DIR = "C:\A\03Projects\MiniMax\GitGUI\tools\nsis\nsis-3.11"
+$env:CSC_IDENTITY_AUTO_DISCOVERY = "false"
+npm.cmd run build:win
+# 产物：release-v050/KunyaoGit-Setup-0.4.0-x64.exe  ← 注意 filename 还是 0.4.0！
+```
+
+#### Step 3：改 version + 重新 build
+
+第一次 build 出来的 setup 文件名是 `0.4.0`（因为 `package.json` version 还没改）。`electron-builder` 用 `package.json` version 命名产物。修正：
+
+```powershell
+# 把 version 0.4.0 改成 0.5.0
+Move-Item release-v050 .trash2/release-v050_old_$(Get-Date -Format yyyyMMdd_HHmmss) -Force
+# 编辑 package.json: "version": "0.5.0"
+npm.cmd run build:win
+# 产物：release-v050/KunyaoGit-Setup-0.5.0-x64.exe ✓
+```
+
+#### Step 4：打 portable zip
+
+```powershell
+$version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+Compress-Archive -Path 'dist','dist-electron','package.json' -DestinationPath .release-assets/KunyaoGit-portable-v$version.zip -Force
+```
+
+> **不要**用 `scripts/build/package-portable.cjs`——它会顺便调 Gitee API 上传，我们用专用脚本 `update-gitee-body.cjs` 更可控。
+
+#### Step 5：复制产物到 `.release-assets/` + `release/`
+
+```powershell
+Copy-Item release-v050/KunyaoGit-Setup-0.5.0-x64.exe .release-assets/ -Force
+Copy-Item release-v050/KunyaoGit-Setup-0.5.0-x64.exe release/ -Force
+# portable 已在 .release-assets/，但 publish-v026.cjs 读 release/ 找 portable
+Copy-Item .release-assets/KunyaoGit-portable-v0.5.0.zip release/ -Force
+```
+
+#### Step 6：同步更新 5 个 publish 脚本的 RELEASE_BODY
+
+每个脚本顶部加 v0.5.0 描述段：
+
+```javascript
+const RELEASE_BODY = `# KunyaoGit v${VERSION}
+
+## v0.5.0 特性
+- ⌨️ **Ctrl+P 跳转文件** — ...
+- 📜 **文件历史 + Blame** — ...
+- 🧪 **v0.4 自动化测试** — 218 例（10 文件）扩展到 268 例（12 文件）...
+
+## v0.4.0 特性
+- 📊 **底部状态栏** — ...
+...
+`;
+```
+
+`update-gitee-body.cjs` 额外改底部 NSIS 链接（v0.4.0 → v0.5.0）：
+
+```javascript
+## NSIS 安装包下载
+由于 Gitee Release 附件配额 1 GB 已用完...
+- https://github.com/buxiaju/KunyaoGit/releases/download/v0.5.0/KunyaoGit-Setup-0.5.0-x64.exe
+Gitee 用户也可 \`git clone\` 本仓库后在 \`.release-assets/KunyaoGit-Setup-0.5.0-x64.exe\` 路径获取。
+```
+
+#### Step 7：发 GitHub Release
+
+```powershell
+node scripts/publish/publish-v026.cjs
+```
+
+```
+[12:21:09.949Z] ✅ Release 创建 https://github.com/buxiaju/KunyaoGit/releases/tag/v0.5.0
+[12:21:11.015Z] ✅ body 已更新
+[12:21:41.014Z] ✅ 上传成功: KunyaoGit-Setup-0.5.0-x64.exe (86.14 MB)
+```
+
+**第一次只传了 NSIS**（portable 不在 `release/`），再跑一次：
+
+```powershell
+Copy-Item .release-assets/KunyaoGit-portable-v0.5.0.zip release/ -Force
+node scripts/publish/publish-v026.cjs
+# 已有 assets: KunyaoGit-Setup-0.5.0-x64.exe → 跳过
+# 上传 KunyaoGit-portable-v0.5.0.zip (3.48 MB) ✓
+```
+
+#### Step 8：发 Gitee Release
+
+```powershell
+node scripts/publish/update-gitee-body.cjs
+```
+
+```
+[12:22:07.880Z] ✅ Release 创建 (id:892424)
+[12:22:08.391Z] ✅ body 已更新
+[12:22:21.043Z] ✅ 上传成功: KunyaoGit-portable-v0.5.0.zip
+[12:22:19.401Z] ⚠️ 上传失败: 400 文件大小已超出仓库附件配额：1 GB  ← NSIS
+```
+
+**预期**：NSIS 86 MB 永远会被 Gitee 配额挡住，靠 NSIS 下载指引段引导用户去 GitHub。
+
+#### Step 9：公告
+
+```powershell
+node scripts/publish/update-gitee-repo-desc.cjs
+# ✅ Gitee 仓库简介已更新（871 字符）
+```
+
+**手工**改 `README.md`（顶部 banner）+ 创建 `CHANGELOG.md`。
+
+#### Step 10：commit + push
+
+```powershell
+# 恢复 output 目录
+git diff package.json
+# 编辑回 "output": "release"
+
+git add package.json scripts/publish/ .release-assets/
+git commit -m "release: v0.5.0 — 发版产物 + publish 脚本更新 + 版本号"
+git push gitee master --follow-tags
+git push github master --follow-tags
+```
+
+#### Step 11：清理 + 端到端验证
+
+```powershell
+Move-Item release-v050 .trash2/release-v050_final_$(Get-Date -Format yyyyMMdd_HHmmss) -Force
+Move-Item .trash2 ../_trash2_final_$(Get-Date -Format yyyyMMdd_HHmmss) -Force
+
+# 验证 GitHub
+$r = Invoke-WebRequest "https://api.github.com/repos/buxiaju/KunyaoGit/releases/tags/v0.5.0" -UseBasicParsing
+$j = $r.Content | ConvertFrom-Json
+$j.assets | ForEach-Object { Write-Host "$($_.name) ($([math]::Round($_.size/1MB, 2)) MB)" }
+# 期望输出：2 个 asset（NSIS + portable）
+
+# 验证 Gitee
+$r = Invoke-WebRequest "https://gitee.com/api/v5/repos/buxiaju/KunyaoGit/releases/892424/attach_files?access_token=..." -UseBasicParsing
+# 期望输出：1 个 attach_file（portable only）
+```
+
+### 11.3 时间预算
+
+| Step | 实际耗时 |
+| --- | --- |
+| 1-5（改版本 + 构建 + 复制） | 5 min |
+| 6（更新 publish 脚本 5 个） | 10 min |
+| 7-8（GitHub + Gitee 发布） | 5 min（脚本秒发，但 NSIS 上传 30s） |
+| 9（公告：README + CHANGELOG + Gitee desc） | 30 min |
+| 10-11（commit + push + 清理 + 验证） | 10 min |
+| **合计** | **~1 小时** |
+
+后续 v0.5.1 / v0.5.2 等小版本可以压缩到 30 分钟（不必每次都改 5 个 publish 脚本——只在跨大版本时同步）。
+
+### 11.4 踩过的坑（v0.5.0 实际遇到）
+
+1. **第一次 build 文件名是 0.4.0**：`package.json` version 没改 → `electron-builder` 用旧 version 命名 → 重新 build 浪费时间。**v0.5.1+ 先改 version 再 build**。
+2. **portable 不在 `release/`**：第一次跑 publish-v026.cjs 只看到 NSIS 上传成功。**提前把 portable 复制到 `release/`**。
+3. **Gitee raw 403**：`https://gitee.com/buxiaju/KunyaoGit/raw/master/.release-assets/KunyaoGit-Setup-0.5.0-x64.exe` 返回 403 Forbidden（Gitee 对仓库内 .exe 强制拒绝下载）。NSIS 只能走 GitHub。
+4. **publish 脚本行尾污染**：`edit` 工具写入时把整文件 CRLF 化，commit diff 显示几十行变更但 `-w` 后真实只有 10 行新增。**v0.5.1+ 用 `git add -p` 精准选 hunk**。
+5. **`.gitignore` 之前漏 `!.release-assets/*.exe`**：v0.4 之前的发版 86MB exe 没在 git 跟踪里。**v0.4 修复后所有发版都入库**。
+
+### 11.5 完整命令清单（复制即用）
+
+```powershell
+# 准备
+cd C:\A\03Projects\MiniMax\GitGUI
+# 1. 改 package.json: version + build.directories.output (临时 release-vNNN)
+# 2. 构建
+$env:ELECTRON_BUILDER_NSIS_DIR = "C:\A\03Projects\MiniMax\GitGUI\tools\nsis\nsis-3.11"
+$env:CSC_IDENTITY_AUTO_DISCOVERY = "false"
+npm.cmd run build:win
+
+# 3. 复制
+Copy-Item release-v050/KunyaoGit-Setup-0.5.0-x64.exe .release-assets/ -Force
+Copy-Item release-v050/KunyaoGit-Setup-0.5.0-x64.exe release/ -Force
+$version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+Compress-Archive -Path 'dist','dist-electron','package.json' -DestinationPath .release-assets/KunyaoGit-portable-v$version.zip -Force
+Copy-Item .release-assets/KunyaoGit-portable-v$version.zip release/ -Force
+
+# 4. 编辑 5 个 publish 脚本的 RELEASE_BODY（手工）
+
+# 5. 发 GitHub
+node scripts/publish/publish-v026.cjs
+
+# 6. 发 Gitee
+node scripts/publish/update-gitee-body.cjs
+
+# 7. 公告
+node scripts/publish/update-gitee-repo-desc.cjs
+# + 手工改 README.md + 创建/更新 CHANGELOG.md
+
+# 8. 恢复 package.json output 字段
+
+# 9. commit + push
+git add package.json scripts/publish/ .release-assets/
+git commit -m "release: v0.5.0 — ..."
+git push gitee master --follow-tags
+git push github master --follow-tags
+
+# 10. 清理
+Move-Item release-v050 .trash2/ -Force
+Move-Item .trash2 ../_trash2_$(Get-Date -Format yyyyMMdd_HHmmss) -Force
+
+# 11. 端到端验证
+# 见 §8.9
+```
 
 ---
 
