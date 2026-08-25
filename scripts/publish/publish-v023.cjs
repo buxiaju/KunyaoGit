@@ -40,6 +40,11 @@ if (!fs.existsSync(INSTALLER)) { log('❌ missing ' + INSTALLER); process.exit(1
 
 const RELEASE_BODY = `# KunyaoGit v${VERSION}
 
+## v0.5.0 特性
+- ⌨️ **Ctrl+P 跳转文件** — 复用命令面板组件，VS Code 式模糊搜索（连续字符加分 + 路径分隔符后字符加分）；git ls-files --cached --others --exclude-standard 上限 5000 文件
+- 📜 **文件历史 + Blame** — 编辑器顶部「历史」按钮打开 FileHistoryPanel 侧边抽屉，commit 列表（git log --follow 跟踪重命名）+ 点开展开 diff；点击 Monaco 行号 gutter 触发 blame 浮窗（git blame --line-porcelain 解析为 BlameLine[]）
+- 🧪 **v0.4 自动化测试** — 218 例（10 文件）扩展到 268 例（12 文件）：新增 FileHistoryPanel 13 例 + useShortcuts Ctrl+P 6 例 + fuzzyMatch 14 例 + gitService.listFiles 9 例
+
 ## v0.4.0 特性
 - 📊 **底部状态栏** — 三段式布局实时显示：左（仓库名/分支/↑N↓M 同步）、中（已暂存/未暂存/冲突 计数）、右（应用版本号）
 - ⌨️ **全局快捷键** — Ctrl/Cmd+Shift+P 打开命令面板、Ctrl/Cmd+R 刷新、Shift+? 显示速查表（输入框内自动让位）
