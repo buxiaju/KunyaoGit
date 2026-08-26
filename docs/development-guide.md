@@ -847,27 +847,41 @@ tests/
 ├── stubs/
 │   └── electron-store.ts    # electron-store 的内存版 stub（路径别名替换）
 └── unit/                    # 所有测试文件
-    ├── parseRemote.test.ts        # 远程 URL 解析（22 例）
-    ├── parseUnifiedDiff.test.ts   # diff 解析（11 例）
-    ├── gitService.test.ts         # GitService mock（35 例）
-    ├── i18n.test.ts               # i18n 完整性 + t() 插值（27 例）
-    ├── commands.test.ts           # 命令面板注册表 + 过滤（20 例）
-    ├── StatusBar.test.tsx         # 底部状态栏组件（21 例）
-    ├── CommandPalette.test.tsx    # 命令面板交互（28 例）
-    ├── useShortcuts.test.tsx      # 全局快捷键 hook（14 例 + ★ v0.5 Ctrl+P 6 例）
-    ├── StashList.test.tsx         # Stash 队列面板（18 例）
-    ├── CreatePRDialog.test.tsx    # PR/MR 创建弹窗（22 例）
-    ├── fuzzyMatch.test.ts         # ★ v0.5 模糊搜索算法（14 例）
-    ├── FileHistoryPanel.test.tsx  # ★ v0.5 文件历史面板（13 例）
-    ├── MarkdownBody.test.tsx      # ★ v0.6 Markdown 渲染（6 例）
-    └── ReleaseCard.test.tsx       # ★ v0.6 Release 列表项（7 例）
+    ├── parseRemote.test.ts         # ★ v0.6.1 远程 URL 解析 + 互转（30 例含 src/electron 镜像一致性）
+    ├── parseUnifiedDiff.test.ts    # diff 解析（11 例）
+    ├── gitService.test.ts          # GitService mock（53 例，★ v0.6.1 加 GIT_SSH_COMMAND + setRemoteUrl 12 例）
+    ├── i18n.test.ts                # i18n 完整性 + t() 插值（27 例）
+    ├── commands.test.ts            # 命令面板注册表 + 过滤（20 例）
+    ├── StatusBar.test.tsx          # 底部状态栏组件（21 例）
+    ├── CommandPalette.test.tsx     # 命令面板交互（28 例）
+    ├── useShortcuts.test.tsx       # 全局快捷键 hook（14 例 + ★ v0.5 Ctrl+P 6 例）
+    ├── StashList.test.tsx          # Stash 队列面板（18 例）
+    ├── CreatePRDialog.test.tsx     # PR/MR 创建弹窗（22 例）
+    ├── fuzzyMatch.test.ts          # ★ v0.5 模糊搜索算法（14 例）
+    ├── FileHistoryPanel.test.tsx   # ★ v0.5 文件历史面板（13 例）
+    ├── MarkdownBody.test.tsx       # ★ v0.6 Markdown 渲染 + 反转漏洞断言（6+ 例）
+    ├── ReleaseCard.test.tsx        # ★ v0.6 Release 列表项（7 例）
+    ├── safePath.test.ts            # ★ v0.6 仓库根白名单 + assertInsideRepo + redactPath（19 例）
+    ├── safeUrl.test.ts             # ★ v0.6 协议白名单（11 例）
+    ├── crashGuard.test.ts          # ★ v0.6 主进程异常落盘（8 例）
+    ├── sanitizeHtml.test.ts        # ★ v0.6 DOMPurify sanitize + 启动自检（10 例）
+    ├── sanitizeHtmlFallback.test.ts# ★ v0.6 happy-dom 失效降级（6 例）
+    ├── ErrorBoundary.test.tsx      # ★ v0.6 两层错误边界（4 例）
+    ├── globalErrorHandler.test.ts  # ★ v0.6 渲染层 unhandledrejection / error（4 例）
+    ├── fileTree.test.ts            # ★ v0.6 文件树构建 + symlink 环保护（14 例）
+    ├── ipcGitHandlers.test.ts      # ★ v0.6 32 个 git handler 路径校验（8 例）
+    ├── settingsStore.test.ts       # ★ v0.6 写串行化（22 例，4 例 + 写队列 18 例）
+    ├── gitTimeout.test.ts          # ★ v0.6 Git 60s 超时 + 错误本地化（4 例）
+    ├── appLogError.test.ts         # ★ v0.6 渲染层错误落盘（9 例）
+    ├── pushErrorHint.test.ts       # ★ v0.6.1 isNetworkError + switchOriginToSsh（15 例）
+    └── sshConnection.test.ts       # ★ v0.6.1 parseSshResult + testSshConnection（15 例）
 ```
 
-合计 **281 例**，14 个测试文件，跑完约 4 秒。
+合计 **572 例**，28 个测试文件，跑完约 5 秒。
 
-演进：v0.4 218 例（10 文件）→ v0.5 268 例（12 文件，+fuzzyMatch/+FileHistoryPanel/+gitService.listFiles/+useShortcuts Ctrl+P）→ **v0.6 281 例**（14 文件，+MarkdownBody 6 / +ReleaseCard 7）。
+演进：v0.4 218 例（10 文件）→ v0.5 268 例（12 文件，+fuzzyMatch/+FileHistoryPanel/+gitService.listFiles/+useShortcuts Ctrl+P）→ v0.6 281 例（14 文件，+MarkdownBody 6 / +ReleaseCard 7）→ **v0.6.1 572 例**（28 文件，4 轮健壮性加固 + SSH 推送支持共 14 个新文件 +491 例；详细见各文件注释的 ★ v0.6 / ★ v0.6.1 标记）。
 
-> PowerShell 下 `npm test` 退出码可能是 1（`MODULE_TYPELESS_PACKAGE_JSON` 警告被算进 stderr），看输出里的 `Tests 281 passed` 行判断真实结果。
+> PowerShell 下 `npm test` 退出码可能是 1（`MODULE_TYPELESS_PACKAGE_JSON` 警告被算进 stderr），看输出里的 `Tests 572 passed` 行判断真实结果。
 
 ### 10.3 跑测试
 
@@ -1235,6 +1249,7 @@ Move-Item .trash2 ../_trash2_$(Get-Date -Format yyyyMMdd_HHmmss) -Force
 - 工作分支：`master`，HEAD 在 `cd8f88c`（docs: 完善 v0.5 文档）
 - v0.6 功能已开发完（Release 附件 / 编辑 / 详情抽屉 / 搜索），`tsc` 0 错，`vitest` 281 例全过
 - 目标：发 GitHub + Gitee 双平台，同步 Gitee 仓库简介
+- **v0.6.1 增量**（本次发版）：4 轮健壮性加固 + SSH 推送支持，HEAD 在 `403c1d6`（docs: ...），`tsc` 0 错，`vitest` 572 例全过
 
 ### 12.2 实际步骤（用时约 25 分钟）
 

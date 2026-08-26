@@ -6,6 +6,76 @@
 
 ---
 
+## [0.6.1] - 2026-08-27
+
+v0.6.0 稳定后一轮「非功能加固 + SSH 推送支持」双发版本。代码 / 测试 / 文档 / 同步都在前面 3 个 commit 落定：fix(robustness) / feat(ssh-push) / docs。
+
+### Added
+- 🔐 **SSH 推送支持**（解决 github.com:443 受限场景）
+  - **设置项**：`AppSettings.sshKeyPath`（自定义私钥路径）+ `preferredProtocol`（`auto` / `https` / `ssh` 三选一）
+  - **GitService 构造时**按 `settings.sshKeyPath` 注入 `GIT_SSH_COMMAND=ssh -i <key> -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o BatchMode=yes`，后续 `git push / fetch / pull` 自动走指定 key
+  - **URL 互转**：`parseRemote`（electron + src 两镜像）新增 `detectProtocol` / `toSshUrl` / `toHttpsUrl`
+  - **新 IPC 通道**：`git:set-remote-url`（一键把 origin 从 HTTPS 切到 SSH）+ `settings:test-ssh`（探测 `git@github.com`）
+  - **设置页新增「SSH 推送」区**：私钥路径输入 + 协议偏好三选一 + 测试连接 + 保存
+  - **push 失败增强**：`ChangesPanel` 检测 `Failed to connect to ... port 443` 类网络错误，`window.confirm` 弹窗"是否切换到 SSH？"，确认后调 `switchOriginToSsh` 自动改 remote URL
+  - **典型流程**：HTTPS push 失败 → 弹窗 → 确认 → origin 自动从 `https://github.com/...` 改成 `git@github.com:...` → 重试 push 走 22 端口
+- 📋 **`parseSshResult` 纯函数**（testSshConnection 错误分类 9 例测试覆盖）：解析 ssh -T 输出，区分 `successfully authenticated` / `Permission denied` / `Could not resolve hostname` / `Connection timed out` / `No such file or directory` / 未知
+- 🛡️ **错误消息路径脱敏**（`electron/lib/safePath.ts` 的 `redactPath`）
+  - Windows 盘符路径 `C:\Users\kunyao\Documents\xxx\file.txt` → `~\xxx\file.txt`（保留最后两段：文件名 + 直接父目录）
+  - POSIX 用户路径 `/Users/bob/proj/foo.ts` → `~/proj/foo.ts`
+  - UNC 长路径前缀 `\\?\C:\...` → `<long-path>\...`
+  - WSL 路径 `\\wsl$\Ubuntu\...` → `<wsl>\...`
+  - `GitService.describeError` + `globalErrorHandler.describeReason` 双层脱敏，toast / 日志 / 远程 API 错误回显统一处理
+- 🛡️ **渲染层错误落盘**（新增 IPC `app:log-error`）
+  - 路径：`userData/logs/renderer-error.log`（与 `main-error.log` 独立，1MB 轮转）
+  - 16KB 单条上限 + 失败静默（日志落盘不能反过来影响主进程稳定性）
+  - 形态校验：`kind` 必须 `unhandledrejection | error | manual`，`message` 必填
+
+### Fixed
+- 🔒 **P0 全局异常兜底**（主进程 + 渲染进程 + 渲染进程崩溃/无响应）
+  - 主进程 `uncaughtException` / `unhandledRejection` 落 `userData/logs/main-error.log` + 30s 节流（防弹窗风暴）
+  - 渲染进程 `unhandledrejection` / `error` 监听 + 5s 节流 + toast
+  - 渲染进程崩溃 / 无响应监听（`render-process-gone` / `unresponsive` / `did-fail-load`），过滤 `ERR_ABORTED`
+- 🔒 **P0 协议白名单扩 4 入口**（用 WHATWG `URL` 解析挡 `java\nscript:` / 大小写混写）：`update:open` / `app:shell-open` / `app:open-path`（含 `@userData` 哨兵）/ 渲染层内联 URL
+- 🔒 **P0 仓库根路径白名单 + 系统目录黑名单**（8 个 fs handler + repo:open + git:status 等 32 个 handler）
+  - `path.relative` 而非 `startsWith`（防 `C:\repo-evil` 命中 `C:\repo`）
+  - 系统目录黑名单（`C:\Windows` / `C:\Program Files` / `System32` / `node_modules`）优先级**高于**白名单
+- 🔒 **P0 配置文件 JSON 损坏自愈**：备份为 `.corrupt-<时间戳>.json` 后重建；目录不可写 → 降级内存 store（当前会话能用，重启丢失，弹 toast 告知）
+- 🔒 **P0 Markdown / 富文本 sanitize**（`src/lib/sanitizeHtml.ts`）：DOMPurify 白名单 + 启动自检探针（实测 3.4.14 在 happy-dom 下会静默失效，自检+失效降级为纯文本）+ 16KB 输出侧强特征复查
+- 🔒 **P0.5 补漏**：`ipc/git.ts` 32 个 handler 收口走 `getGitSafe`（含 `Map<repoPath, GitService>` 实例缓存 + simple-git 启动异常 `try/catch` 兜成 Result）
+- 🔒 **P0.6 补漏**：`git:blame` / `git:file-log` / `git:file-diff` / `git:diff-file` / `git:read-conflict` 5 个 handler 的 `file` 仓库内路径校验（`assertInsideRepo`，防 `../../../etc/passwd` 类输入）
+- 🛡️ **P1 单实例锁**：`app.requestSingleInstanceLock()` + `second-instance` 唤起 + 聚焦（根因：单实例锁之前，并发写 `gitgui-settings.json` 会产生半截 JSON 触发 P0 损坏自愈）
+- 🛡️ **P1 Git 命令 60s 超时**（`simple-git` 的 `timeout: { block: 60_000 }`）+ `Block timeout reached` 翻译为中文
+- 🛡️ **P1 settings store 加载/保存容错**（`src/stores/settings.ts` 的 `load` / `save` `try/catch`，失败也置 `loaded: true` 不卡 loading）+ 写串行化（`writeQueue: Promise chain`，单进程内并发不再丢更新）
+- 🛡️ **P1 二进制文件读取 10MB 上限**（`MAX_BINARY_BYTES`，超过直接拒）
+- 🛡️ **P1 `REPO_LIST_RECENT` 并行化**（10 个仓库 `Promise.all` 而非串行 `fs.access`）+ 移除时同步 `unregisterAllowedRoot` + 不可达条目**跳过**而非删除（移动硬盘未插时不让用户记录莫名消失）
+- 🛡️ **P1 文件树 symlink 环保护**（`electron/lib/fileTree.ts` 的 `buildFileTree` 走 realpath 去重）
+
+### Security
+- 依赖：`+ dompurify@^3.4.14`（生产），`+ jsdom@^`（dev，仅测试用）
+
+### Tests
+- 自动化测试 526 → **572 例全绿**（28 文件，约 5 秒）
+- 新增：safePath（19） / safeUrl（11） / crashGuard（8） / sanitizeHtml（10 + happy-dom fallback 6） / ErrorBoundary（4） / globalErrorHandler（4） / fileTree（14） / ipcGitHandlers（8） / settingsStore 写串行（4） / gitTimeout（4） / appLogError（9） / parseRemote 30（含 16 个 src/electron 镜像一致性断言） / pushErrorHint 15 / sshConnection 15
+- MarkdownBody.test.tsx 反转了锁定漏洞的断言
+- tests/setup.ts 修复了 `fs` mock 错名 `fsLocal`、`dialog` 键重复等历史问题
+
+### Tech
+- `electron/lib/safePath.ts` / `safeUrl.ts` / `crashGuard.ts` / `fileTree.ts` / `parseRemote.ts` 新增
+- `electron/ipc/app.ts` 新增（`app:log-error` handler）
+- `src/lib/sanitizeHtml.ts` / `globalErrorHandler.ts` / `pushErrorHint.ts` 新增
+- `src/components/common/ErrorBoundary.tsx` 新增（两层错误边界，刻意不依赖 i18n）
+- 错误消息翻译：`src/lib/sanitizeHtml.ts` 启动自检（DOMPurify 在 happy-dom 静默失效的发现）
+
+### Known Limitations
+- **Gitee 单附件 ≤ 100MB**（平台限制；UI 在 Gitee 平台 + 大文件时给 amber 提示）
+- **Release body Markdown sanitize 启动自检**在 `happy-dom` 等非完整 DOM 环境会判定为「不可信」并降级为纯文本渲染（详见 `docs/features.md` §22.2.8）
+- **错误消息路径脱敏**在某些边角场景下可能过度（保留最后两段是 90% 场景的最优解，但纯路径无文件名的报错会丢失上下文；详见 `docs/features.md` §22.9）
+- **设置页"选择 SSH 私钥"**用 `prompt` 而不是文件选择对话框（项目里 `fs:*` 通道都是目录接口，"选单个文件"的 IPC 还没有；详见 `docs/features.md` §23.5）
+- **`preferredProtocol: 'ssh'`**模式当前不做"自动改 remote + push + 还原"的临时切换（v0.7 候选）
+
+---
+
 ## [0.6.0] - 2026-08-26
 
 ### Added
