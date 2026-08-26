@@ -28,8 +28,10 @@
 19. [底部状态栏（v0.4）](#19-底部状态栏v04)
 20. [Ctrl+P 跳转文件（v0.5）](#20-ctrlp-跳转文件v05)
 21. [文件历史 + Blame（v0.5）](#21-文件历史--blamev05)
+22. [健壮性加固（v0.6+）](#22-健壮性加固v06)
+23. [SSH 推送支持（v0.6+）](#23-ssh-推送支持v06)
 
-> **v0.6 增量**在 [§6 Release 管理](#6-release-管理--changelog-自动生成) 内就地扩写（附件上传/下载/删除、Release 编辑、Markdown 渲染详情抽屉、列表搜索、发布草稿），未单列新章节。
+> **v0.6 增量**分两块：[§6 Release 管理](#6-release-管理--changelog-自动生成) 内就地扩写（附件 / 编辑 / 详情抽屉 / 搜索 / 草稿）；[§22 健壮性加固](#22-健壮性加固v06) 新增 P0 7 项 + P1 5 项，含路径边界、协议白名单、异常兜底、配置损坏自愈、Markdown sanitize、符号链接环保护等。
 
 ---
 
@@ -228,7 +230,7 @@ export interface DiffLine {
 - 每条 release 卡片：「详情」入口开右侧 640px 抽屉
 - 详情抽屉：Markdown 渲染 body + 附件完整列表（下载/删除/上传新）+ 编辑模式（改 name/body/prerelease）+ 发布草稿
 - 创建表单：可同时选择多个附件，先创建 release 再逐个上传
-- Release body 通过 `marked` 渲染（v0.6+），源码来自仓库所有者，可信任，暂不做 sanitize
+- Release body 通过 `marked` 渲染（v0.6+），源码来自仓库所有者，可信任，**已接入 sanitize**（`src/lib/sanitizeHtml.ts`，详见 [§22 健壮性加固](#22-健壮性加固v06)）
 
 ### 6.2 CHANGELOG 自动生成
 
@@ -555,9 +557,52 @@ v0.2.5 引入 3 套 UI 主题：**暗色（默认）** / **深蓝** / **亮色**
 - 所有通道名集中定义在 `shared/ipc-channels.ts` 的 `IPC` 常量对象
 - 渲染层与主进程共用同一份字符串常量，杜绝手写通道名拼错
 
-### 11.5 openExternal 白名单
+### 11.5 外部跳转白名单（协议 + 路径）
 
-- `update:open` 等 `shell.openExternal` 调用会校验 URL 协议（`/^https?:\/\//`），避免任意协议跳转
+`shell.openExternal` / `shell.openPath` 覆盖 4 个调用点，统一收口在 `electron/lib/safeUrl.ts`：
+
+| 调用点 | 来源 | 校验 |
+| --- | --- | --- |
+| `update:open` | 「检查更新」/「关于」跳 GitHub / Gitee release 页 | URL 协议（`http`/`https`） |
+| `app:shell-open` | 设置页 / 关于页 / 命令面板的外部链接 | 同上 + WHATWG URL 解析（挡住 `java\nscript:` / 大小写混写等正则盲区） |
+| `app:open-path` | 「打开数据目录」「在文件管理器中打开仓库」 | `@userData` 哨兵解析为 `app.getPath('userData')`，其他路径走 [§11.6](#116-文件路径边界校验) |
+| Markdown / 命令面板内联 URL | 渲染层 `external` 跳转 | 同 `app:shell-open` |
+
+实现要点：
+- 用 WHATWG `URL` 构造函数 + `protocol === 'http:' || 'https:'`，**不**用正则（`/^https?:\/\//` 挡不住 `java\nscript:`、大小写混写等）
+- 协议不匹配直接 `return { ok: false, error: '拒绝的协议: xxx' }`，调用方弹 toast 不开浏览器
+
+### 11.6 文件路径边界校验
+
+所有渲染层发来的绝对路径都过 `electron/lib/safePath.ts` 的 `assertSafePath()`，**不**通过就拒绝执行，**不**抛原始异常到渲染层。
+
+| 维度 | 规则 |
+| --- | --- |
+| 仓库根白名单 | 已注册仓库的 `realpath` 集合（开仓库时注册，关闭时移除） |
+| 边界判定 | `path.relative(root, target)` 不以 `..` 开头、不是绝对路径（**不**用 `startsWith` —— 挡不住 `C:\repo-evil` 命中 `C:\repo`） |
+| 系统目录黑名单 | `C:\Windows` / `C:\Program Files` / `System32` / `node_modules` 等，**优先级高于白名单**（即使用户配的"白名单"里包含也拒） |
+| 错误返回 | `{ ok: false, error: '路径越界' }`，不暴露内部路径细节 |
+
+覆盖 IPC handler：`fs:file-tree` / `fs:read-file` / `fs:write-file` / `fs:mkdir-p` / `fs:delete` / `fs:rename` / `repo:open` / `repo:list-recent` 等 8+ 个。
+
+### 11.7 全局异常兜底
+
+主进程与渲染进程**分别**兜底，互不影响：
+
+- **主进程** (`electron/lib/crashGuard.ts`)：注册 `uncaughtException` / `unhandledRejection`，未捕获错误落盘到 `userData/logs/main-error.log`（1MB 轮转）；同错误签名 30s 节流，避免弹窗风暴
+- **渲染进程** (`src/lib/globalErrorHandler.ts` + `src/components/common/ErrorBoundary.tsx`)：
+  - 全局 `unhandledrejection` / `error` 监听 → toast + 5s 节流
+  - 两层 `ErrorBoundary`：外层包 `Router` / `I18nProvider`（i18n / router 崩了仍能渲染兜底 UI），内层在 Layout `<Outlet>` 位置（具体页崩了保住侧边栏 + 状态栏）
+  - **ErrorBoundary 刻意不依赖 i18n**（`useI18n()` 无 Provider 时会 throw，兜底组件再依赖它就二次崩溃），内联中英双语文案
+
+### 11.8 单实例锁
+
+主进程启动时 `app.requestSingleInstanceLock()`：
+
+- 拿到锁：正常启动主窗口
+- 拿不到锁：旧实例收到 `second-instance` 事件 → 唤起 + 聚焦已有窗口 → 当前进程直接退出
+
+不引入单实例锁的副作用：用户双击 exe / 多次执行「检查更新」会并发写 `gitgui-settings.json`，半截 JSON 是 P0 配置损坏的成因之一。
 
 ---
 
@@ -582,12 +627,144 @@ v0.3.0 在仓库「文件」页引入本地文件树，可在应用内直接管�
 
 | IPC 通道 | 说明 |
 | --- | --- |
-| `fs:file-tree` | 读取仓库文件树 |
-| `fs:read-file` | 读取文件内容 |
+| `fs:file-tree` | 读取仓库文件树（symlink 走 realpath 去重防成环，详见 [§22.5](#225-文件树-symbolink-环保护)） |
+| `fs:read-file` | 读取文件内容（≤ 10MB 二进制保护，超限直接拒） |
 | `fs:write-file` | 写入 / 新建文件 |
 | `fs:mkdir-p` | 递归创建文件夹 |
 | `fs:delete` | 删除文件 / 文件夹 |
 | `fs:rename` | 重命名文件 / 文件夹 |
+
+> v0.6+ 起，**所有 `fs:*` 通道在主进程都先过 `assertSafePath()`**（仓库根白名单 + 系统目录黑名单），越界统一返回 `{ ok: false, error: '路径越界' }`，详见 [§11.6](#116-文件路径边界校验)。
+
+## 23. SSH 推送支持（v0.6+）
+
+### 23.1 背景
+
+GitHub（gitee.com 类似）在部分地区访问 `https://github.com:443` 受网络限制，常规 HTTPS 推送会报：
+
+```
+fatal: unable to access 'https://github.com/xxx/xxx.git/':
+Failed to connect to github.com port 443 after 21060 ms: Could not connect to server
+```
+
+SSH 走 22 端口（多数情况未被限制），是事实上的"国内推送"标配。本章覆盖 v0.6 新增的 SSH 推送支持，让用户：
+
+1. **设置私钥路径** —— 让 `git push` 走指定 key
+2. **一键切换 origin URL** —— 把 `https://...` 改成 `git@...:...`
+3. **push 失败时主动提示** —— 网络错误时一键切到 SSH 重试
+
+### 23.2 设置项
+
+`AppSettings` 新增 2 个字段：
+
+| 字段 | 类型 | 默认 | 说明 |
+| --- | --- | --- | --- |
+| `sshKeyPath` | `string?` | `''` | SSH 私钥绝对路径；留空用 `ssh-agent` / `~/.ssh/id_ed25519` 约定 |
+| `preferredProtocol` | `'auto' \| 'https' \| 'ssh'` | `'auto'` | 推送协议偏好；`'auto'` 用仓库现配的 remote URL（不自动改） |
+
+### 23.3 主进程层加固
+
+#### 23.3.1 `GIT_SSH_COMMAND` 注入
+
+`GitService` 构造时，如果 `settings.sshKeyPath` 非空，把 `ssh` 进程的环境变量设成：
+
+```bash
+ssh -i "<keyPath>" \
+    -o IdentitiesOnly=yes \
+    -o StrictHostKeyChecking=accept-new \
+    -o BatchMode=yes
+```
+
+- `IdentitiesOnly=yes`：只尝试指定 key，避免误用 ssh-agent 里其他 key（防 key 串台）
+- `StrictHostKeyChecking=accept-new`：自动接受**新** host key（首次连接 GitHub 时不会卡），但**拒绝**已变更的 key（防 MITM）
+- `BatchMode=yes`：禁止交互式密码输入（GitHub 必填项，否则会卡死）
+
+#### 23.3.2 远程 URL 互转
+
+`parseRemote.ts`（`electron/lib/` + `src/lib/` 两镜像）新增：
+
+| 函数 | 输入 | 输出 |
+| --- | --- | --- |
+| `detectProtocol(url)` | 任意 URL | `'ssh' \| 'https' \| 'git' \| 'unknown'` |
+| `toSshUrl(url)` | 任意 URL | `git@github.com:owner/repo.git`（识别失败返回 null） |
+| `toHttpsUrl(url)` | 任意 URL | `https://github.com/owner/repo.git` |
+
+**两份实现必须严格一致**（仓库里有用例 `parseRemote.test.ts > src/electron 镜像一致` 强制约束）。
+
+#### 23.3.3 修改 origin URL
+
+新增 IPC 通道 `git:set-remote-url`（`GitService.setRemoteUrl`）：
+- 读现配 origin URL → 调 `toSshUrl` 转 SSH 形式 → `git remote set-url origin <new>`
+- 返回 `{ oldUrl, newUrl }`，失败走 `Result<...>` 形态
+- **自动接入** §22.8.1 的 `getGitSafe` 仓库根白名单校验，**不**是白名单内仓库直接拒
+
+### 23.4 渲染层 UX
+
+#### 23.4.1 设置页「SSH 推送」区
+
+放在「Gitee Token 区」之后、「关于」之前：
+
+- **SSH 私钥路径** —— 文本输入 + 「选择」按钮（调 `prompt`，因为现成的 `fs:read-dir` 是目录接口，没有"选文件"接口；用户可手贴路径）
+- **推送协议偏好** —— `auto` / `强制 HTTPS` / `强制 SSH` 三选一按钮组
+- **测试 SSH 连接** —— 调 `ssh -T -o BatchMode=yes git@github.com`，10s 超时，stdout 解析"已认证为 <user>"，区分 Permission denied / DNS / 超时 / 命令不存在四种错误给精准提示
+- **保存** —— 写回 settings（实时生效，后续 push 用新 key）
+
+#### 23.4.2 push 失败增强
+
+`ChangesPanel` 的 commit-and-push 流程：push 失败时 `isNetworkError(err)` 检测：
+- 命中 → `window.confirm` 弹窗"推送失败：网络不可达（...）是否切换到 SSH 协议推送？"
+- 确认 → 调 `switchOriginToSsh(repo, 'origin')`：读现配 URL → 转 SSH → `git remote set-url`
+- 成功 → toast 提示 `已切换 origin: <old> → <new>`，**不**自动重试 push（避免再次失败时用户体验混乱）
+- 取消 / 失败 → 走原 toast.error
+
+**触发模式清单**（`isNetworkError` 内）：
+
+- `Failed to connect to ... port 443/22 after N ms`
+- `Could not connect to server`
+- `Connection timed out` / `Connection refused`
+- `Could not resolve hostname`
+- `A connection attempt failed` (Windows)
+- `kex_exchange_identification` / `no matching host key type` (ssh 握手问题)
+
+非网络错误（如 `Permission denied`、`Repository not found`）走普通 toast，不弹切换。
+
+### 23.5 取舍
+
+1. **不**默认把用户仓库的 remote 从 HTTPS 改成 SSH —— 这种侵入操作必须显式确认（confirm 弹窗）。
+2. **`preferredProtocol: 'ssh'` 模式**当前**未**做"自动改 remote + push + 还原"的临时切换（会增加复杂度，留待 v0.7 候选）。
+3. **设置页"选择文件"** 用 `prompt` 而非文件选择对话框 —— 项目里 `fs:read-dir` 是目录接口，"选单个文件"的 IPC 还没有；为这一个场景加一个不划算，让用户手贴路径更轻量。
+4. **测试 SSH 连接**固定连 `git@github.com` —— 不连 Gitee 是因为 Gitee SSH 响应格式不同，加参数会让"测试"变复杂；Gitee 用户配好 key 后直接 push 验证即可。
+5. **错误分类精度**：`parseSshResult` 抽出来做纯函数（9 个用例覆盖），`testSshConnection` 只测"key 不存在" / "是目录" / "抛出但有 stdout" / "Permission denied" 4 个集成路径，**不**测"成功认证"（vitest mock `util.promisify(execFile)` 的 custom impl 跨度过大，性价比低；parseSshResult 9 个用例已覆盖成功路径）。
+
+### 23.6 验证
+
+| 检查 | 命令 | 期望 |
+| --- | --- | --- |
+| TypeScript | `npm run typecheck` | 0 错 |
+| 单元测试 | `npm test` | **572 例全绿**（28 文件，约 5 秒；v0.6 基线 281 / 14 → 526 / 26 → **572 / 28**） |
+| 构建 | `npx vite build` | 0 错 |
+| 产物加固特征 | 字符串搜 | `GIT_SSH_COMMAND` / `sshKeyPath` / `setRemoteUrl` / `git:set-remote-url` / `settings:test-ssh` / `testSshConnection` 在 `dist-electron` 命中 |
+| 设置页 | UI | 「设置 → SSH 推送」区可见，路径输入 + 三选一协议偏好 + 「测试连接」+「保存」 |
+| 真实 SSH 推送 | 本地 | 配置好 SSH key 后，把 origin 切到 SSH 形式，`git push` 走 22 端口成功 |
+
+### 23.7 SSH 相关新增 / 修改文件
+
+| 文件 | 性质 | 用途 |
+| --- | --- | --- |
+| `shared/types.ts` | 修改 | + `sshKeyPath` / `preferredProtocol` 字段 |
+| `shared/ipc-channels.ts` | 修改 | + `GIT_SET_REMOTE_URL` / `SETTINGS_TEST_SSH` |
+| `electron/lib/parseRemote.ts` | 修改 | + `detectProtocol` / `toSshUrl` / `toHttpsUrl` |
+| `src/lib/parseRemote.ts` | 修改 | 同上（必须镜像一致） |
+| `electron/services/git.ts` | 修改 | 构造时 `GIT_SSH_COMMAND` env 注入；+ `setRemoteUrl` 方法 |
+| `electron/services/settings.ts` | 修改 | + `parseSshResult` 纯函数；+ `testSshConnection` |
+| `electron/ipc/settings.ts` | 修改 | 注册 `SETTINGS_TEST_SSH` |
+| `electron/ipc/git.ts` | 修改 | 注册 `GIT_SET_REMOTE_URL` |
+| `electron/preload.ts` | 修改 | 暴露 `git.setRemoteUrl` + `settings.testSsh` |
+| `src/lib/pushErrorHint.ts` | 新增 | `isNetworkError` + `buildSwitchToSshHint` + `switchOriginToSsh` |
+| `src/stores/settings.ts` | 修改 | `DEFAULTS` 加 `sshKeyPath` / `preferredProtocol` |
+| `src/pages/SettingsPage.tsx` | 修改 | 加「SSH 推送」区 |
+| `src/components/repo/ChangesPanel.tsx` | 修改 | push 失败时主动提示切换 SSH |
+| `src/i18n/zh.ts` / `en.ts` | 修改 | + `settings.ssh*` / `settings.pushFailed*` / `settings.switchToSsh` 8 个 key |
 
 ---
 
@@ -1036,6 +1213,273 @@ export interface BlameLine {
 - Blame 不支持点击 commit hash 直接跳到历史 tab（v0.5 仅显示信息；v0.6 候选）
 - 文件历史 diff 不支持跨文件 / 多文件 commit（v0.5 仅显示当前文件变化）
 - 二进制文件 Blame 不可用（git blame 默认行为）
+
+---
+
+## 22. 健壮性加固（v0.6+）
+
+v0.6 在功能稳定后补一轮**非功能加固**，集中在「让应用在不期而至的输入下不崩、不漏、不被劫持」。共 12 项，分 P0（崩溃兜底 + 安全）和 P1（稳定性 + 用户体验）两批落地。
+
+> 详细安全/兜底机制在 [§11](#11-安全特性) 各小节；本章聚焦**问题 → 加固 → 位置 → 验证**的清单视图。
+
+### 22.1 修复总览
+
+| 优先级 | 类别 | 项 | 简述 |
+| --- | --- | --- | --- |
+| P0 | 崩溃兜底 | 22.2.1 | 主进程全局异常落盘 + 节流 |
+| P0 | 崩溃兜底 | 22.2.2 | 渲染进程 `error` / `unhandledrejection` 监听 + toast |
+| P0 | 崩溃兜底 | 22.2.3 | 渲染进程崩溃 / 无响应监听（`render-process-gone` / `unresponsive` / `did-fail-load`） |
+| P0 | 崩溃兜底 | 22.2.4 | 两层 `ErrorBoundary`（外层包 i18n/router，内层保住侧边栏） |
+| P0 | 安全加固 | 22.2.5 | `shell.openExternal` 协议白名单扩 4 入口 |
+| P0 | 安全加固 | 22.2.6 | 仓库根路径边界校验 + 系统目录黑名单（覆盖 `fs:*` 8 个 handler） |
+| P0 | 安全加固 | 22.2.7 | 配置文件 JSON 损坏备份重建 + 目录不可写降级内存 store |
+| P0 | 内容安全 | 22.2.8 | Markdown / 富文本 DOMPurify sanitize + 启动自检 + 失效降级 |
+| P0.5 | 安全盲区 | 22.2.9 | **`ipc/git.ts` 32 个 handler 仓库根校验**（补 P0 漏装的 `git:*`）+ `GitService` 实例缓存 |
+| P0.6 | 安全盲区 | 22.2.10 | **`git:blame` / `file-log` / `file-diff` / `diff-file` / `read-conflict` 仓库内 file 路径校验** |
+| P1 | 稳定性 | 22.3.1 | 主进程单实例锁 + second-instance 唤起 |
+| P1 | 稳定性 | 22.3.2 | Git 命令 60s 超时 + 错误消息本地化 |
+| P1 | 稳定性 | 22.3.3 | 设置 store 加载/保存容错，失败不卡 loading |
+| P1 | 用户体验 | 22.3.4 | 二进制文件读取 10MB 上限 |
+| P1 | 用户体验 | 22.3.5 | `REPO_LIST_RECENT` 并行化 + 移除同步落库 |
+| P1 | 体验细节 | 22.3.6 | **错误消息路径脱敏**（`C:\Users\kunyao\...` → `~\...\file.txt`） |
+| P1 | 体验细节 | 22.3.7 | **settings 写串行化**（electron-store 单进程内并发不再丢更新） |
+| P1 | 可观测性 | 22.3.8 | **渲染层错误落盘**（`renderer-error.log`，1MB 轮转） |
+
+### 22.2 P0 详解
+
+#### 22.2.1 主进程全局异常兜底
+
+- **问题**：未捕获异常 / unhandled rejection 直接导致主进程退出，用户看到「应用闪退」无任何上下文
+- **加固**：`electron/lib/crashGuard.ts` 监听 `uncaughtException` / `unhandledRejection`，落盘 `userData/logs/main-error.log`（1MB 轮转），同错误签名 30s 节流避免弹窗风暴
+- **位置**：`electron/main.ts` 启动时挂载
+
+#### 22.2.2 渲染进程全局异常监听
+
+- **问题**：渲染层 promise reject / window error 没有统一出口，UI 静默卡死
+- **加固**：`src/lib/globalErrorHandler.ts` 监听 `unhandledrejection` / `error`，toast 通知用户 + 5s 节流
+- **位置**：`src/main.tsx` 启动时挂载
+
+#### 22.2.3 渲染进程崩溃 / 无响应监听
+
+- **问题**：渲染进程 OOM / GPU 进程崩 / 加载失败时主进程无感知
+- **加固**：`electron/main.ts` 监听 `render-process-gone` / `unresponsive` / `did-fail-load`（过滤 `errorCode === -3` 的 `ERR_ABORTED`，这是正常取消而非崩溃）
+- **行为**：崩溃时弹错误对话框 + 引导用户重开；加载失败时回退到空白页 + 重试按钮
+
+#### 22.2.4 两层 ErrorBoundary
+
+- **问题**：单个组件抛异常会让整棵 React 树卸载，用户连侧边栏都看不到
+- **加固**：
+  - **外层** `ErrorBoundary` 包 `Router` + `I18nProvider`（i18n / router 崩了仍能渲染兜底 UI）
+  - **内层** `ErrorBoundary` 在 `Layout` 的 `<Outlet>` 位置（具体页崩了保住侧边栏 + 状态栏 + 顶部导航）
+- **关键设计**：ErrorBoundary **刻意不依赖 i18n**，内联中英双语文案。`useI18n()` 无 Provider 时会 throw，兜底组件再依赖它就是二次崩溃
+- **位置**：`src/components/common/ErrorBoundary.tsx`
+
+#### 22.2.5 openExternal 协议白名单
+
+- **问题**：仅 `update:open` 一处有 `/^https?:\/\//` 校验，`app:shell-open` / `app:open-path` / 渲染层内联 URL 三个入口未覆盖，`javascript:` / 自定义协议可直接拉起外部程序
+- **加固**：`electron/lib/safeUrl.ts` 用 WHATWG `URL` 解析 + `protocol === 'http:' || 'https:'` 统一校验；正则挡不住的 `java\nscript:`、大小写混写在解析阶段就被拒
+- **位置**：`electron/main.ts` 4 个调用点全部改走 `safeUrl.assertSafeHttpUrl()`
+
+#### 22.2.6 路径边界校验
+
+- **问题**：渲染层发来的绝对路径无校验，`fs:read-file('../../etc/passwd')` 可读仓库外任意文件
+- **加固**：`electron/lib/safePath.ts` 提供 `assertSafePath()`，所有 fs handler 强制接入
+  - 仓库根白名单（开仓库时 `realpath` 注册，关闭时移除）
+  - 边界用 `path.relative(root, target)` 不以 `..` 开头判断（**不**用 `startsWith` —— 挡不住 `C:\repo-evil` 命中 `C:\repo`）
+  - 系统目录黑名单（`C:\Windows` / `C:\Program Files` / `System32` / `node_modules` 等），**优先级高于白名单**
+- **位置**：`electron/ipc/fs.ts` 8 个 handler + `electron/ipc/repo.ts` 注册/移除
+
+#### 22.2.7 配置文件损坏自愈
+
+- **问题**：`gitgui-settings.json` 因断电 / 并发写损坏时，下次启动 electron-store 抛 `SyntaxError`，应用直接打不开
+- **加固**：`electron/services/settings.ts` 启动预检，JSON 损坏 → 备份为 `.corrupt-<时间戳>.json` → 重建空 store；目录不可写 → 降级为内存 store（当前会话能用，重启丢失，弹 toast 告知）
+- **根因链**：单实例锁（[§22.3.1](#2231-单实例锁)）的引入是同一根因链的一环 —— 不加锁，并发写产生半截 JSON 的成因就一直在
+
+#### 22.2.8 Markdown / 富文本 sanitize
+
+- **问题**：Release body 用 `marked` 渲染 Markdown 直接 `dangerouslySetInnerHTML`，理论上发布者可写 `<script>` / `onerror=` 触发 XSS
+- **加固**：`src/lib/sanitizeHtml.ts` 三层保障
+  1. **白名单** — DOMPurify 默认配置 + 显式禁用 `<script>` / `<iframe>` / `on*` 事件 / `javascript:` 协议
+  2. **启动自检** — 进程启动时跑探针，断言 DOMPurify 能正确过滤危险输入；失败则**输出侧**再过一道特征复查
+  3. **失效降级** — 自检或复查失败时，整体降级为纯文本 + `escapeHtml`，宁可丢失格式也不漏放危险内容
+- **位置**：`src/components/repo/MarkdownBody.tsx` 渲染前调用
+- **关键发现**：开发期实测 DOMPurify 3.4.14 在 happy-dom 下会静默失效（`isSupported` 仍为 `true`），表现是合法标签被剥离、`<script>` 反被保留。故自检**不**只检 `isSupported`，必须真跑一遍探针
+
+### 22.3 P1 详解
+
+#### 22.3.1 单实例锁
+
+- **问题**：用户双击 exe / 多次点「检查更新」会启动多个实例，并发写 `gitgui-settings.json` 产生半截 JSON（见 [§22.2.7](#2227-配置文件损坏自愈)）
+- **加固**：`app.requestSingleInstanceLock()`；拿不到锁时当前进程直接退出，旧实例 `second-instance` 事件唤起 + 聚焦已有窗口
+- **位置**：`electron/main.ts` 启动期
+
+#### 22.3.2 Git 命令超时
+
+- **问题**：simple-git 的 fetch / clone 在网络异常时**不**返回（pending forever），UI 永远转圈
+- **加固**：`electron/services/git.ts` 所有 `simpleGit()` 调用加 `timeout: { block: 60_000 }`；超时后通过 `GitService.describeError()` 把 `Block timeout` 翻译成中文「操作超时，请检查网络后重试」
+- **范围**：覆盖 `gitService` 全部 34 处（批量替换 `return { ok: false, error: (e as Error).message }` → `return this.fail(e)`，集中翻译）
+
+#### 22.3.3 设置 store 加载容错
+
+- **问题**：渲染层 `useSettingsStore.load()` 失败时只 `console.error`，`loaded` 仍为 `false` → 所有依赖 `settings` 的组件永远处于 loading 态，UI 看似卡死
+- **加固**：`src/stores/settings.ts` 的 `load` / `save` 包 try/catch，失败也置 `loaded: true`（fallback 到默认 settings）；并防御 `settings` 本身被 set 成 `undefined`（调用方都按 `settings.xxx` 解构，没值就全空）
+
+#### 22.3.4 二进制文件读取上限
+
+- **问题**：`fs:read-file` 无大小限制，误读 2GB ISO 文件直接 OOM
+- **加固**：`MAX_BINARY_BYTES = 10MB`；超过直接返回 `{ ok: false, error: '文件过大（>10MB）' }`
+- **取舍**：低于 10MB 的二进制仍可能让 Monaco 卡顿，但 10MB 是「显著超过普通文本」的拐点，更低会误伤 .log / .sql
+
+#### 22.3.5 最近仓库并行化 + 同步落库
+
+- **问题**：
+  - `REPO_LIST_RECENT` 串行 `fs.access` 校验，10 个仓库 ≈ 10× 单次延迟
+  - `REPO_REMOVE_RECENT` 只删 electron-store 记录但**不**调 `unregisterAllowedRoot`，下次启动会留下野指针
+- **加固**：
+  - 串行 `fs.access` → `Promise.all` 并行（10× 提速）
+  - 移除时同步调 `allowedRoots.delete(path)`
+- **额外**：不可达条目（移动硬盘未插 / 网络盘未连）选择**跳过**而非**删除**，避免用户记录莫名消失
+
+### 22.4 IPC handler 接入清单
+
+v0.6+ 起，所有 `fs:*` 与 `repo:*` 通道在主进程都过 `assertSafePath()`：
+
+| 通道 | 接入位置 | 备注 |
+| --- | --- | --- |
+| `fs:file-tree` | `electron/ipc/fs.ts` | 含 [§22.5](#225-文件树-symbolink-环保护) |
+| `fs:read-file` | 同上 | 含 10MB 上限 |
+| `fs:write-file` | 同上 | |
+| `fs:mkdir-p` | 同上 | |
+| `fs:delete` | 同上 | |
+| `fs:rename` | 同上 | |
+| `repo:open` | `electron/ipc/repo.ts` | 注册 allowedRoot |
+| `repo:list-recent` | 同上 | 并行化 |
+| `repo:remove-recent` | 同上 | 同步 unregister |
+| `app:open-path` | `electron/main.ts` | `@userData` 哨兵 |
+| `app:shell-open` | `electron/main.ts` | safeUrl |
+| `update:open` | `electron/main.ts` | safeUrl |
+
+### 22.5 文件树 symbolink 环保护
+
+- **问题**：仓库里一个 `loop → 父目录` 的 symlink 形成环；加固前只靠 `depth ≤ 5` 兜底，**不**会真的无限递归，但环内每层都被重复展开，目录数随深度指数放大
+- **加固**：`electron/lib/fileTree.ts` 的 `buildFileTree` 对**符号链接**做 realpath 去重 —— 第一次进某个真实目录时记入 `visited` Set，第二次访问直接跳过子树
+- **关键取舍**：
+  - **只对 symlink 去重**，普通目录始终完整展开
+  - 否则一旦某个链接先于真实目录被 readdir 返回，真实目录就会显示为空 —— 用户看到「我的文件夹里的东西不见了」比多列一次糟糕得多
+  - 防环目标（不指数爆炸）由去重保证，2 次是有界的
+- **平台兼容**：Windows 上用 junction（不需要管理员 / 开发者模式），POSIX 用普通 symlink，测试两路都覆盖
+
+### 22.6 验证
+
+| 检查 | 命令 | 期望 |
+| --- | --- | --- |
+| TypeScript | `npm run typecheck` | 0 错 |
+| 单元测试 | `npm test` | **490 例全绿**（24 文件，约 5 秒；v0.6 基线 281 / 14） |
+| 构建 | `npx vite build` | 0 错 |
+| 产物加固特征 | 字符串搜 | `requestSingleInstanceLock` / `MAX_BINARY_BYTES` / `realpath` / `block: 60` / `describeError` 在 `dist-electron` 命中 |
+
+> PowerShell 下 `npm test` 退出码可能是 1（`MODULE_TYPELESS_PACKAGE_JSON` 警告被记入 stderr），以输出里的 `Tests 490 passed` 为准。
+
+### 22.7 加固新增 / 修改文件
+
+| 文件 | 性质 | 用途 |
+| --- | --- | --- |
+| `electron/lib/safePath.ts` | 新增 | 仓库根白名单 + 系统目录黑名单 + `assertInsideRepo` + `redactPath` |
+| `electron/lib/safeUrl.ts` | 新增 | WHATWG URL 协议白名单 |
+| `electron/lib/crashGuard.ts` | 新增 | 主进程异常落盘 + 节流 |
+| `electron/lib/fileTree.ts` | 新增 | 文件树构建 + symlink 环保护 |
+| `electron/ipc/app.ts` | 新增 | `app:log-error` handler（渲染层错误落盘） |
+| `src/lib/sanitizeHtml.ts` | 新增 | DOMPurify + 自检 + 失效降级 |
+| `src/lib/globalErrorHandler.ts` | 新增 | 渲染层全局 error / rejection + 调 `logError` 落盘 |
+| `src/components/common/ErrorBoundary.tsx` | 新增 | 两层错误边界 |
+| `electron/main.ts` | 修改 | 挂兜底 + 4 处 URL 校验 + 单实例锁 + 注册 `app` handler |
+| `electron/services/settings.ts` | 修改 | JSON 损坏自愈 + 降级内存 store + 写串行队列 |
+| `electron/services/git.ts` | 修改 | 60s 超时 + 错误本地化（经 `redactPath` 脱敏）+ 5 个 file 路径校验 |
+| `electron/ipc/git.ts` | 修改 | **32 个 handler 走 `getGitSafe` + `Map<repoPath, GitService>` 缓存** |
+| `electron/ipc/fs.ts` | 修改 | 8 个 handler 路径校验 + 10MB 上限 |
+| `electron/ipc/repo.ts` | 修改 | allowedRoot 注册 / 注销 + 并行化 + 关仓库时 `invalidateGitCache` |
+| `src/stores/settings.ts` | 修改 | 加载 / 保存容错 |
+| `src/main.tsx` | 修改 | 挂 globalErrorHandler + 外层 ErrorBoundary |
+| `src/components/Layout/Layout.tsx` | 修改 | 加内层 ErrorBoundary |
+| `src/components/repo/MarkdownBody.tsx` | 修改 | 接入 sanitize |
+| `src/config/commands.ts` | 修改 | `openDataDir` 改用 `@userData` 哨兵 |
+| `electron/preload.ts` | 修改 | 暴露 `gitgui.app.logError` |
+| `shared/ipc-channels.ts` | 修改 | + `APP_LOG_ERROR` |
+| `package.json` / `package-lock.json` | 修改 | + `dompurify`（生产）、+ `jsdom`（dev 仅测试） |
+
+### 22.8 P0.5 / P0.6 — `ipc/git.ts` 路径校验盲区补全
+
+#### 22.8.1 仓库根路径校验（健壮性加固 A）
+
+- **问题**：P0 阶段只给 `fs:*` 和 `repo:open` 装了 `assertSafePath`，`ipc/git.ts` 32 个 handler 全部缺失。被 XSS 注入或 prefs 持久化数据被劫持后，能对**任意路径**执行 `git status` / `log` / `diff`。
+- **加固**：`electron/ipc/git.ts` 收口为 `getGitSafe(repoPath)` wrapper：
+  1. 从 payload 提取 `path`（兼容 `string` 和 `{ path, ... }` 两种入参形态）
+  2. `assertSafePath(repoPath)` —— 不在白名单直接返回 `{ ok: false, error: '...' }`
+  3. 命中缓存的 `GitService` 实例直接返回；否则 `new GitService(safePath, gitPath)` 并缓存
+  4. simple-git 启动异常（目录不存在等）也走 `try/catch` 兜成 `Result`，**不**抛回渲染层
+- **范围**：32 个 handler 全部走 wrapper，**逐个不漏**
+
+#### 22.8.2 `GitService` 实例缓存（健壮性加固 P2 顺手做）
+
+- **问题**：原本每个 handler 都 `new GitService(repoPath, settings.gitPath)`：每次都重读 settings.gitPath；用户改 gitPath 后**老实例**仍持旧 binary。
+- **加固**：`Map<repoPath, GitService>` 缓存（Windows 下用小写 key 避免 `C:/repo` 和 `C:\repo` 被当成不同仓库）。
+- **失效**：`ipc/repo.ts` 关仓库时调 `invalidateGitCache(repoPath)` 主动清理。
+
+#### 22.8.3 仓库内 file 路径校验（健壮性加固 B）
+
+- **问题**：`git:blame` / `git:file-log` / `git:file-diff` / `git:diff-file` / `git:read-conflict` 这 5 个 handler 接收仓库内**相对**文件路径，**不**校验。`file = '../../../etc/passwd'` 类输入在某些 simple-git 版本能跳出仓库根；`readConflictFile` 直接 `fs.readFile` 拼路径，**最危险**。
+- **加固**：`electron/lib/safePath.ts` 提供 `assertInsideRepo(repoPath, file)`：
+  - 绝对路径直接用，相对路径按 `repoRoot` 解析
+  - NUL 字节拒绝
+  - 命中系统目录黑名单拒绝
+  - `path.relative` 判断是否在仓库内（**不**跟符号链接 —— 让 simple-git 自己处理）
+- **位置**：`GitService` 5 个方法第一行都加 `assertInsideRepo`，service 层挡住，不进 simple-git / fs
+
+### 22.9 错误消息路径脱敏（健壮性加固 C）
+
+- **问题**：simple-git / Node fs 错误常带完整绝对路径（如 `ENOENT: ... 'C:\\Users\\kunyao\\Documents\\xxx'`），会让：
+  1. toast 出现用户完整路径
+  2. 远程 API（GitHub / Gitee）错误回显里同样泄露
+  3. 日志（`main-error.log` / `renderer-error.log`）落盘泄露
+- **加固**：`electron/lib/safePath.ts` 的 `redactPath(msg)`：
+  - **Windows 盘符路径**：`C:\Users\kunyao\Documents\xxx\file.txt` → `~\xxx\file.txt`（去掉盘符 + 用户目录段，保留文件名 + 直接父目录）
+  - **POSIX 用户路径**：`/Users/bob/proj/foo.ts` → `~/proj/foo.ts`（去掉 `Users/bob`，保留最后两段）
+  - **UNC 长路径前缀**：`\\?\C:\Users\...\file.txt` → `<long-path>\file.txt`
+  - **WSL 路径**：`\\wsl$\Ubuntu\...` → `<wsl>\...`
+  - 总段数 < 2 时降级为只保留文件名
+- **位置**：
+  - `GitService.describeError` —— 主进程所有 git / fs 错误统一脱敏
+  - `globalErrorHandler.describeReason` —— 渲染层兜底再脱敏一次（主进程漏掉的路径也兜得住）
+- **取舍**：
+  - 保留最后两段（文件名 + 直接父目录）能在 90% 场景定位问题，又不暴露用户目录结构
+  - 完整保留（`~\Documents\xxx\file.txt`）会暴露项目结构，反而泄漏更具体的项目名
+
+### 22.10 settings 写串行化（健壮性加固 D）
+
+- **问题**：electron-store 底层是 conf@10 的「读改写整个文件」模式。单实例锁挡住了**多进程**并发，但**单进程内**仍有竞态：
+  - 渲染层同时触发多个 `settings.set`
+  - 每次走「读 store → 改内存 → 写整个文件」
+  - 后启动的写可能基于更早的读，写完后前面的写就被覆盖（**最后写赢**）
+- **加固**：`electron/services/settings.ts` 引入 `writeQueue: Promise<unknown>`：
+  - 所有写操作（`setSettings` / `addRecentRepo` / `removeRecentRepo`）通过 `enqueueWrite` 接进 chain
+  - `queue = queue.then(write)` 保证读改写按调用顺序串行
+  - 单个 task reject 不让整个 chain 卡住（catch 后 chain 继续）
+- **API 变化**：`setSettings` / `addRecentRepo` / `removeRecentRepo` 改返回 `Promise`（IPC handler 透明 `await`，渲染层 `useSettingsStore.save` 本来就 `await`，无破坏）
+
+### 22.11 渲染层错误落盘（健壮性加固 E）
+
+- **问题**：主进程有 `crashGuard` 把 `uncaughtException` / `unhandledRejection` 落盘，但渲染层错误（`window.onerror` / `unhandledrejection`）**只**走 toast 提示，**没**落盘。复现困难的崩溃现场拿不到 stack，用户报 issue 只能口述。
+- **加固**：
+  - 新增 IPC 通道 `app:log-error`（`shared/ipc-channels.ts` + `electron/ipc/app.ts`）
+  - `preload.ts` 暴露 `gitgui.app.logError(entry)`
+  - `globalErrorHandler` 在 `console.error` / toast 之外，**额外**调 `logError` 把 stack 落盘
+- **日志**：
+  - 路径：`userData/logs/renderer-error.log`（与 `main-error.log` 独立，方便用户/开发者区分）
+  - 轮转：1MB 切 `.1.log`
+  - 消息体走 `redactPath` 二次脱敏
+  - 单条上限 16KB（防恶意/异常情况下撑爆日志）
+  - 写盘失败静默 —— 日志落盘不能反过来影响主进程稳定性
+- **形态校验**：`kind` 必须在 `unhandledrejection | error | manual` 之一；`message` 必填；非合法值返回 `{ ok: false }`，不写盘
 
 ---
 
