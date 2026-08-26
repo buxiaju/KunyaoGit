@@ -218,11 +218,28 @@ PR 合并前需满足以下标准（由维护者或资深贡献者审查）：
 
 ### 4.4 测试
 
-- 当前项目无单元测试框架；改动需通过手工验证：
-  - 启动应用 `npm run dev`
-  - 触发相关功能（Git 操作 / 远程 API / 自动更新等）
-  - 必要时跑发版端到端脚本（见 `scripts/debug/test-launch.ps1`）
-- 涉及打包 / 发布流程的改动，需在本地走一遍 `npm run build` 验证
+**自动化测试**（v0.4 起引入，v0.6 已 281 例 / 14 文件）：
+
+```bash
+npm test              # 全量跑一遍（约 4 秒）
+npm run test:watch    # 开发时监听模式
+npm run typecheck     # tsc -b --noEmit
+```
+
+- 技术栈：**Vitest 4 + happy-dom + @testing-library/react 16**
+- 测试目录：`tests/unit/`，mock 在 `tests/setup.ts`（每次自动重置 `window.gitgui`）
+- 新增功能应**同 PR 内补测试**：纯函数放 `*.test.ts`，React 组件放 `*.test.tsx`
+- 断言风格：本项目**未引入 `@testing-library/jest-dom`**，请用 `expect(x).toBeTruthy()` / `toBeNull()`，不要用 `toBeInTheDocument()`
+
+> PowerShell 下 `npm test` 退出码可能是 1（`MODULE_TYPELESS_PACKAGE_JSON` 警告进了 stderr），以输出中的 `Tests NNN passed` 为准。
+
+**手工验证**（自动化覆盖不到的部分）：
+
+- 启动应用 `npm run dev`
+- 触发相关功能（Git 操作 / 远程 API / 自动更新 / Release 附件上传等）
+- 参考对应版本的自测清单：[`v0.6-self-test-checklist.md`](./v0.6-self-test-checklist.md) / [`v0.5`](./v0.5-self-test-checklist.md) / [`v0.4`](./v0.4-self-test-checklist.md)
+- 必要时跑发版端到端脚本（见 `scripts/debug/test-launch.ps1`）
+- 涉及打包 / 发布流程的改动，需在本地走一遍 `npm run build:win` 验证
 
 ### 4.5 文档同步
 

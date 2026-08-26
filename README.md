@@ -157,7 +157,7 @@ npm run build:win   # 产出 release/KunyaoGit-Setup-X.Y.Z-x64.exe
 - **编辑器**：[Monaco Editor](https://github.com/microsoft/monaco-editor)（VS Code 同款）
 - **Diff**：自实现 unified diff 解析 + 并排 / 统一渲染
 - **模糊匹配**（v0.5+）：自实现（顺序子序列 + 多种加权），无外部依赖
-- **测试**（v0.4+）：[Vitest 4](https://vitest.dev/) + [happy-dom](https://github.com/capricorn86/happy-dom) + [@testing-library/react 16](https://testing-library.com/docs/react-testing-library/intro/)，268 例单元 + 组件测试
+- **测试**（v0.4+）：[Vitest 4](https://vitest.dev/) + [happy-dom](https://github.com/capricorn86/happy-dom) + [@testing-library/react 16](https://testing-library.com/docs/react-testing-library/intro/)，281 例单元 + 组件测试（14 文件）
 - **打包**：[electron-builder](https://www.electron.build/)（NSIS 安装包）
 
 ## 项目结构

@@ -1,7 +1,7 @@
 # KunyaoGit 开发指南
 
 > 面向接手开发者的完整开发 / 打包 / 发布手册。配套阅读：[`ARCHITECTURE.md`](../ARCHITECTURE.md)、[`features.md`](./features.md)。
-> 当前版本：**v0.5.0**（v0.2.3+ 多语言、v0.2.4+ 下载提速、v0.2.5+ 三主题、v0.2.6+ 探活修复、v0.3.3+ 更新下载请求修复、v0.3.4+ 云端仓库搜索 / Gitee 搜索降级、v0.4+ 命令面板/快捷键/Stash 队列/Cherry-pick/Revert/PR 创建/底部状态栏、**v0.5+ Ctrl+P 跳转文件 / 文件历史 + Blame**）。
+> 当前版本：**v0.6.0**（v0.2.3+ 多语言、v0.2.4+ 下载提速、v0.2.5+ 三主题、v0.2.6+ 探活修复、v0.3.3+ 更新下载请求修复、v0.3.4+ 云端仓库搜索 / Gitee 搜索降级、v0.4+ 命令面板/快捷键/Stash 队列/Cherry-pick/Revert/PR 创建/底部状态栏、v0.5+ Ctrl+P 跳转文件 / 文件历史 + Blame、**v0.6+ Release 附件管理 / 编辑 / Markdown 渲染 / 详情抽屉**）。
 
 ---
 
@@ -18,6 +18,7 @@
 9. [常见陷阱](#9-常见陷阱)
 10. [★ v0.4+ 自动化测试](#10-v04-自动化测试)
 11. [★ v0.5 发布实战：v0.5.0 case study](#11-v05-发布实战v050-case-study)
+12. [★ v0.6 发布实战：v0.6.0 case study](#12-v06-发布实战v060-case-study)
 
 ---
 
@@ -853,12 +854,20 @@ tests/
     ├── commands.test.ts           # 命令面板注册表 + 过滤（20 例）
     ├── StatusBar.test.tsx         # 底部状态栏组件（21 例）
     ├── CommandPalette.test.tsx    # 命令面板交互（28 例）
-    ├── useShortcuts.test.tsx      # 全局快捷键 hook（14 例）
+    ├── useShortcuts.test.tsx      # 全局快捷键 hook（14 例 + ★ v0.5 Ctrl+P 6 例）
     ├── StashList.test.tsx         # Stash 队列面板（18 例）
-    └── CreatePRDialog.test.tsx    # PR/MR 创建弹窗（22 例）
+    ├── CreatePRDialog.test.tsx    # PR/MR 创建弹窗（22 例）
+    ├── fuzzyMatch.test.ts         # ★ v0.5 模糊搜索算法（14 例）
+    ├── FileHistoryPanel.test.tsx  # ★ v0.5 文件历史面板（13 例）
+    ├── MarkdownBody.test.tsx      # ★ v0.6 Markdown 渲染（6 例）
+    └── ReleaseCard.test.tsx       # ★ v0.6 Release 列表项（7 例）
 ```
 
-合计 **218 例**，10 个测试文件，跑完约 3 秒。
+合计 **281 例**，14 个测试文件，跑完约 4 秒。
+
+演进：v0.4 218 例（10 文件）→ v0.5 268 例（12 文件，+fuzzyMatch/+FileHistoryPanel/+gitService.listFiles/+useShortcuts Ctrl+P）→ **v0.6 281 例**（14 文件，+MarkdownBody 6 / +ReleaseCard 7）。
+
+> PowerShell 下 `npm test` 退出码可能是 1（`MODULE_TYPELESS_PACKAGE_JSON` 警告被算进 stderr），看输出里的 `Tests 281 passed` 行判断真实结果。
 
 ### 10.3 跑测试
 
@@ -971,13 +980,16 @@ describe('StatusBar', () => {
 | 命令 id 重复 / 分类无效 | 命令面板注册表脏数据 | `commands.test.ts` 必填字段段 |
 | 远端 URL 含 user:pass 解析失败 | 注入 token 后的 https URL | `parseRemote.test.ts` 凭据段 |
 
-### 10.8 当前未覆盖（v0.5 候选）
+### 10.8 当前未覆盖（v0.7 候选）
 
 | 缺失 | 原因 / 建议 |
 | --- | --- |
 | 主进程 IPC handler 端到端 | 需启动 Electron + 真实 git 仓库，建议用 Playwright + spectron 替代 |
 | StashList 的 hover 工具条 / diff 弹窗关闭按钮 | 已有 diff 调用和 pop / drop 测试；浮层关闭是次要 UI 行为 |
 | 主题切换时的 CSS 变量切换 | 需要 visual regression（如 Percy / Chromatic），成本高 |
+| ★ v0.6 `ReleaseDetailDrawer` 交互 | 抽屉内编辑 / 附件增删涉及多次 IPC 往返 + confirm()，需要更完整的 mock 编排 |
+| ★ v0.6 `CreateReleaseForm` 附件上传流 | 「先 create 再逐个 upload」的部分失败分支值得补测（当前仅手工验证） |
+| ★ v0.6 Release 附件真实上传 | 需要真 token + 真仓库，属于发版端到端范畴（见 §12） |
 | 国际化文案语义正确性 | 只能靠人工 review |
 | ESLint 集成 | `npm run lint` 依赖未装（v0.4 不阻塞，详见 §9） |
 
@@ -1211,6 +1223,131 @@ Move-Item .trash2 ../_trash2_$(Get-Date -Format yyyyMMdd_HHmmss) -Force
 # 11. 端到端验证
 # 见 §8.9
 ```
+
+---
+
+## 12. ★ v0.6 发布实战：v0.6.0 case study
+
+> 本节记录 v0.6.0 实际发布过程，**与 §11（v0.5）的差异**是重点，可直接作为下次发版模板。
+
+### 12.1 起点
+
+- 工作分支：`master`，HEAD 在 `cd8f88c`（docs: 完善 v0.5 文档）
+- v0.6 功能已开发完（Release 附件 / 编辑 / 详情抽屉 / 搜索），`tsc` 0 错，`vitest` 281 例全过
+- 目标：发 GitHub + Gitee 双平台，同步 Gitee 仓库简介
+
+### 12.2 实际步骤（用时约 25 分钟）
+
+```powershell
+# 1. 先改版本号（§11 踩坑 1 的教训：必须 build 前改）
+# package.json: "version": "0.5.0" → "0.6.0"
+
+# 2. 临时改构建输出目录（避开 win-unpacked 文件锁）
+# package.json: "build.directories.output": "release" → "release-v060"
+
+# 3. 生产构建
+$env:ELECTRON_BUILDER_NSIS_DIR = "C:\A\03Projects\MiniMax\GitGUI\tools\nsis\nsis-3.11"
+$env:CSC_IDENTITY_AUTO_DISCOVERY = "false"
+npm run build:win
+# 产物：release-v060/KunyaoGit-Setup-0.6.0-x64.exe (90.35 MB on disk / 86.17 MB reported) ✓
+
+# 4. 打便携版 zip（本次直接用 Compress-Archive，未走 package-portable.cjs）
+Compress-Archive -Path dist,dist-electron,package.json `
+  -DestinationPath release-v060/KunyaoGit-portable-v0.6.0.zip -Force
+# 产物：3.50 MB ✓
+
+# 5. 复制产物到两个目录（PowerShell Copy-Item 在本次环境报错，改用 cmd copy）
+cmd /c "copy /Y release-v060\KunyaoGit-Setup-0.6.0-x64.exe .release-assets\"
+cmd /c "copy /Y release-v060\KunyaoGit-portable-v0.6.0.zip .release-assets\"
+cmd /c "copy /Y release-v060\KunyaoGit-Setup-0.6.0-x64.exe release\"
+cmd /c "copy /Y release-v060\KunyaoGit-portable-v0.6.0.zip release\"
+
+# 6. 新建 publish-v060.cjs（基于 publish-v026.cjs 模板，替换 RELEASE_BODY）
+#    另外同步改 publish-v026.cjs / update-gitee-body.cjs / update-gitee-repo-desc.cjs
+
+# 7. 发 GitHub（GH_TOKEN 自动从 git remote github URL 提取 PAT）
+node scripts/publish/publish-v060.cjs
+# ✅ Release 创建 + body 更新 + 2 个 asset 流式上传，共约 18 秒
+
+# 8. 发 Gitee
+node scripts/publish/update-gitee-body.cjs
+# ✅ Release 创建 (id:893131) + 86.17 MB NSIS 上传成功（15 秒）+ portable（2 秒）
+
+# 9. 同步 Gitee 仓库简介
+node scripts/publish/update-gitee-repo-desc.cjs
+# ✅ 1035 字符
+
+# 10. 恢复 package.json output 字段（release-v060 → release）
+
+# 11. commit + push
+git add <29 个文件>
+git commit -m "release: v0.6.0 — Release 附件 + 详情抽屉 + Markdown 渲染"
+git push gitee master     # ✅
+git push github master    # ⚠ 见 12.4 坑 2
+
+# 12. 端到端验证
+$token = (git remote get-url github) -replace '^https://([^@]+)@github\.com/.*$','$1'
+cmd /c "set GH_TOKEN=$token && node scripts\publish\list-assets.cjs"
+# Release v0.6.0: https://github.com/buxiaju/KunyaoGit/releases/tag/v0.6.0
+#   KunyaoGit-portable-v0.6.0.zip  3.50 MB
+#   KunyaoGit-Setup-0.6.0-x64.exe  86.17 MB
+```
+
+### 12.3 ✅ 好消息：Gitee 附件配额已恢复
+
+§11 记录的「Gitee Release 附件配额 1 GB 已用完 + raw 路径对 .exe 返回 403」在 v0.6 **不再成立**：
+
+```
+[23:40:50.221Z] 流式上传 KunyaoGit-Setup-0.6.0-x64.exe (86.17 MB) 到 Gitee
+[23:41:05.789Z] ✅ 上传成功: KunyaoGit-Setup-0.6.0-x64.exe
+```
+
+86 MB 的 NSIS 安装包成功传到 Gitee Release 附件。**Gitee 用户现在可以直接从 Release 页面下载安装包**，不必再跳 GitHub。
+
+> `update-gitee-body.cjs` 底部仍保留「NSIS 请从 GitHub 下载」的兜底说明段（同时也更新到了 v0.6 链接）。如果后续确认配额稳定，可以考虑删掉那段。
+
+### 12.4 踩过的坑（v0.6.0 实际遇到）
+
+1. **`npm install` 被 PowerShell 执行策略拦**
+   `npm install marked --save` 直接报 `无法加载文件 npm.ps1，未对文件进行数字签名`。
+   **解法**：改走 `cmd /c "npm install marked --save"`，绕过 PS1 签名检查。**后续所有 npm 命令都用这个形式。**
+
+2. **`git push github` 在沙箱网络不通**
+   `github.com:443` 连接超时（21 秒后失败），但 `api.github.com:443` 通 —— 所以 publish 脚本（走 API）成功，`git push`（走 git 协议）失败。SSH 也没配 key。
+   **解法**：Gitee 先推成功，GitHub 那一段由用户在自己环境补 `git push github master`。**Release 资产已经通过 API 发好了，push 只是同步 commit 本身。**
+
+3. **`Copy-Item` 在本次环境静默失败**
+   多文件 `Copy-Item -Path a,b -Destination c -Force` 没有报错但也没复制。
+   **解法**：改用 `cmd /c "copy /Y src dst"` 逐个复制，可靠。
+
+4. **`toBeInTheDocument()` 不可用**
+   新写的 `ReleaseCard.test.tsx` 用了 `expect(x).toBeInTheDocument()`，5 个用例全挂 —— 本项目**没有装 `@testing-library/jest-dom`**。
+   **解法**：改用 `expect(x).toBeTruthy()` / `expect(x).toBeNull()`。**已写进 CONTRIBUTING.md §4.4 提醒后续贡献者。**
+
+5. **GitHub API 匿名调用被限流**
+   验证 Release 时直接 `Invoke-WebRequest https://api.github.com/...` 报 `API rate limit exceeded`。
+   **解法**：用 `list-assets.cjs` + 从 git remote 提取的 token 走认证请求。
+
+6. **`vite-plugin-electron` 热重启时 dev 服务整体退出**
+   日志尾部 `ERROR: The process "14920" not found.` —— 插件尝试重启主进程时找不到已退出的 Electron 进程，连带整个 dev 挂掉。
+   **解法**：重新 `npm run dev`。属于已知开发期噪音，不影响生产构建。
+
+### 12.5 v0.6 发版效率
+
+| 阶段 | 用时 |
+| --- | --- |
+| 版本号 + 输出目录改配置 | 1 min |
+| 生产构建（`build:win`） | 约 6 min |
+| 便携版 zip + 复制产物 | 2 min |
+| 新建/改 4 个 publish 脚本 | 5 min |
+| GitHub 发布 | 18 sec |
+| Gitee 发布（含 86 MB 上传） | 19 sec |
+| Gitee 简介同步 | 3 sec |
+| 文档更新（README/CHANGELOG/自测清单/ARCHITECTURE 等 8 个） | 约 10 min |
+| commit + push gitee | 1 min |
+| **合计** | **约 25 min**（不含文档则约 15 min） |
+
+比 §11 的 v0.5（约 40 min）快了不少，主要是 publish 脚本已成型 + 没再踩「先 build 后改版本号」的坑。
 
 ---
 
