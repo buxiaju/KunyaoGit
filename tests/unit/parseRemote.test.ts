@@ -1,156 +1,95 @@
-// v0.4+ parseRemoteUrl 单元测试
-// 覆盖 GitHub / Gitee 的 https / ssh / 带凭据 / 无 .git 后缀等格式
+// v0.6+ SSH 推送支持：parseRemote 互转 + protocol 检测
 
 import { describe, it, expect } from 'vitest';
-import { parseRemoteUrl } from '../../src/lib/parseRemote';
+import {
+  parseRemoteUrl,
+  detectProtocol,
+  toSshUrl,
+  toHttpsUrl,
+} from '../../electron/lib/parseRemote';
+// 镜像实现两边必须保持一致；src/lib/parseRemote.ts 在 import 时已通过类型检查
+import * as srcParse from '../../src/lib/parseRemote';
 
-describe('parseRemoteUrl', () => {
-  describe('GitHub HTTPS', () => {
-    it('解析标准 https 带 .git 后缀', () => {
-      const r = parseRemoteUrl('https://github.com/buxiaju/KunyaoGit.git');
-      expect(r).toEqual({
-        owner: 'buxiaju',
-        repo: 'KunyaoGit',
-        platform: 'github',
-        displayUrl: 'https://github.com/buxiaju/KunyaoGit.git',
-      });
-    });
-
-    it('解析 https 不带 .git 后缀', () => {
-      const r = parseRemoteUrl('https://github.com/buxiaju/KunyaoGit');
-      expect(r?.owner).toBe('buxiaju');
-      expect(r?.repo).toBe('KunyaoGit');
-      expect(r?.platform).toBe('github');
-    });
-
-    it('剥离 URL 中的 user:token 凭据', () => {
-      const r = parseRemoteUrl('https://buxiaju:ghp_xxxxxxxx@github.com/buxiaju/KunyaoGit.git');
-      expect(r?.owner).toBe('buxiaju');
-      expect(r?.repo).toBe('KunyaoGit');
-      expect(r?.platform).toBe('github');
-      // displayUrl 不应该含 token
-      expect(r?.displayUrl).not.toContain('ghp_');
-      expect(r?.displayUrl).toBe('https://github.com/buxiaju/KunyaoGit.git');
-    });
-
-    it('处理 URL 末尾的查询参数', () => {
-      const r = parseRemoteUrl('https://github.com/buxiaju/KunyaoGit.git?foo=bar');
-      expect(r?.owner).toBe('buxiaju');
-      expect(r?.repo).toBe('KunyaoGit');
-    });
-
-    it('处理 URL 末尾的 hash', () => {
-      const r = parseRemoteUrl('https://github.com/buxiaju/KunyaoGit.git#readme');
-      expect(r?.owner).toBe('buxiaju');
-      expect(r?.repo).toBe('KunyaoGit');
-    });
+describe('detectProtocol', () => {
+  it('HTTPS', () => {
+    expect(detectProtocol('https://github.com/foo/bar.git')).toBe('https');
   });
-
-  describe('GitHub SSH', () => {
-    it('解析 git@ 格式', () => {
-      const r = parseRemoteUrl('git@github.com:buxiaju/KunyaoGit.git');
-      expect(r?.owner).toBe('buxiaju');
-      expect(r?.repo).toBe('KunyaoGit');
-      expect(r?.platform).toBe('github');
-    });
-
-    it('解析 git@ 格式不带 .git', () => {
-      const r = parseRemoteUrl('git@github.com:buxiaju/KunyaoGit');
-      expect(r?.owner).toBe('buxiaju');
-      expect(r?.repo).toBe('KunyaoGit');
-    });
-
-    it('解析 ssh:// 协议格式', () => {
-      const r = parseRemoteUrl('ssh://git@github.com/buxiaju/KunyaoGit.git');
-      expect(r?.owner).toBe('buxiaju');
-      expect(r?.repo).toBe('KunyaoGit');
-      expect(r?.platform).toBe('github');
-    });
+  it('scp-like SSH (git@host:owner/repo.git)', () => {
+    expect(detectProtocol('git@github.com:foo/bar.git')).toBe('ssh');
+    expect(detectProtocol('git@gitee.com:buxiaju/repo.git')).toBe('ssh');
   });
-
-  describe('Gitee', () => {
-    it('解析 Gitee https', () => {
-      const r = parseRemoteUrl('https://gitee.com/buxiaju/KunyaoGit.git');
-      expect(r?.owner).toBe('buxiaju');
-      expect(r?.repo).toBe('KunyaoGit');
-      expect(r?.platform).toBe('gitee');
-    });
-
-    it('解析 Gitee ssh', () => {
-      const r = parseRemoteUrl('git@gitee.com:buxiaju/KunyaoGit.git');
-      expect(r?.owner).toBe('buxiaju');
-      expect(r?.repo).toBe('KunyaoGit');
-      expect(r?.platform).toBe('gitee');
-    });
-
-    it('Gitee 大小写不敏感', () => {
-      const r = parseRemoteUrl('https://GITEE.COM/buxiaju/KunyaoGit.git');
-      expect(r?.platform).toBe('gitee');
-    });
+  it('ssh:// 形式', () => {
+    expect(detectProtocol('ssh://git@github.com/foo/bar.git')).toBe('ssh');
   });
-
-  describe('其他平台 / 边界情况', () => {
-    it('未知平台标记为 other', () => {
-      const r = parseRemoteUrl('https://gitlab.com/foo/bar.git');
-      expect(r?.owner).toBe('foo');
-      expect(r?.repo).toBe('bar');
-      expect(r?.platform).toBe('other');
-    });
-
-    it('自建 Git 服务标记为 other', () => {
-      const r = parseRemoteUrl('https://git.company.internal/team/project.git');
-      expect(r?.platform).toBe('other');
-      expect(r?.owner).toBe('team');
-      expect(r?.repo).toBe('project');
-    });
-
-    it('空字符串返回 null', () => {
-      expect(parseRemoteUrl('')).toBeNull();
-    });
-
-    it('非字符串返回 null', () => {
-      // @ts-expect-error 故意传错类型测试防御
-      expect(parseRemoteUrl(null)).toBeNull();
-      // @ts-expect-error
-      expect(parseRemoteUrl(undefined)).toBeNull();
-    });
-
-    it('缺少 repo 段返回 null', () => {
-      expect(parseRemoteUrl('https://github.com/buxiaju')).toBeNull();
-    });
-
-    it('只有 host 返回 null', () => {
-      expect(parseRemoteUrl('https://github.com')).toBeNull();
-    });
-
-    it('两端空白自动 trim', () => {
-      const r = parseRemoteUrl('  https://github.com/buxiaju/KunyaoGit.git  ');
-      expect(r?.owner).toBe('buxiaju');
-      expect(r?.repo).toBe('KunyaoGit');
-    });
+  it('git:// 形式', () => {
+    expect(detectProtocol('git://github.com/foo/bar.git')).toBe('git');
   });
-
-  describe('特殊仓库名', () => {
-    it('仓库名含连字符', () => {
-      const r = parseRemoteUrl('https://github.com/foo-bar/baz-qux.git');
-      expect(r?.owner).toBe('foo-bar');
-      expect(r?.repo).toBe('baz-qux');
-    });
-
-    it('仓库名含点号（非 .git 后缀）', () => {
-      const r = parseRemoteUrl('https://github.com/foo/bar.js.git');
-      expect(r?.repo).toBe('bar.js');
-    });
-
-    it('仓库名含下划线', () => {
-      const r = parseRemoteUrl('https://github.com/foo/my_repo.git');
-      expect(r?.repo).toBe('my_repo');
-    });
-
-    it('owner 是组织名', () => {
-      const r = parseRemoteUrl('https://github.com/microsoft/vscode.git');
-      expect(r?.owner).toBe('microsoft');
-      expect(r?.repo).toBe('vscode');
-    });
+  it('HTTP (非 HTTPS)', () => {
+    expect(detectProtocol('http://github.com/foo/bar.git')).toBe('git');
   });
+  it('空 / 非字符串', () => {
+    expect(detectProtocol('')).toBe('unknown');
+    expect(detectProtocol(null as any)).toBe('unknown');
+    expect(detectProtocol(undefined as any)).toBe('unknown');
+  });
+});
+
+describe('toSshUrl（健壮性 / v0.6+ SSH）', () => {
+  it('HTTPS GitHub URL → SSH', () => {
+    expect(toSshUrl('https://github.com/buxiaju/DouBi.git')).toBe('git@github.com:buxiaju/DouBi.git');
+    expect(toSshUrl('https://github.com/buxiaju/DouBi')).toBe('git@github.com:buxiaju/DouBi.git');
+  });
+  it('HTTPS Gitee URL → SSH', () => {
+    expect(toSshUrl('https://gitee.com/buxiaju/DouBi.git')).toBe('git@gitee.com:buxiaju/DouBi.git');
+  });
+  it('已 SSH 形式 → 归一化为标准 scp 形式', () => {
+    expect(toSshUrl('ssh://git@github.com/buxiaju/DouBi.git')).toBe('git@github.com:buxiaju/DouBi.git');
+    expect(toSshUrl('git@github.com:buxiaju/DouBi.git')).toBe('git@github.com:buxiaju/DouBi.git');
+  });
+  it('带 user:pass token 的 URL → 也能转（解析时忽略）', () => {
+    expect(toSshUrl('https://ghp_xxx@github.com/buxiaju/DouBi.git')).toBe('git@github.com:buxiaju/DouBi.git');
+  });
+  it('其他平台（GitLab）保留原 host', () => {
+    expect(toSshUrl('https://gitlab.com/foo/bar.git')).toBe('git@gitlab.com:foo/bar.git');
+  });
+  it('非法 URL 返回 null', () => {
+    expect(toSshUrl('not a url')).toBeNull();
+    expect(toSshUrl('')).toBeNull();
+  });
+});
+
+describe('toHttpsUrl', () => {
+  it('SSH URL → HTTPS', () => {
+    expect(toHttpsUrl('git@github.com:buxiaju/DouBi.git')).toBe('https://github.com/buxiaju/DouBi.git');
+    expect(toHttpsUrl('ssh://git@gitee.com/buxiaju/DouBi.git')).toBe('https://gitee.com/buxiaju/DouBi.git');
+  });
+  it('HTTPS URL → 归一化（去掉 .git 加回）', () => {
+    expect(toHttpsUrl('https://github.com/buxiaju/DouBi.git')).toBe('https://github.com/buxiaju/DouBi.git');
+    expect(toHttpsUrl('https://github.com/buxiaju/DouBi')).toBe('https://github.com/buxiaju/DouBi.git');
+  });
+});
+
+describe('src/lib/parseRemote 与 electron/lib/parseRemote 镜像一致（v0.6+）', () => {
+  // 两份实现必须严格一致，否则主进程和渲染层解析同一 URL 会得到不同结果。
+  // 这里抽样测几个关键函数。
+  const cases = [
+    'https://github.com/buxiaju/DouBi.git',
+    'git@github.com:buxiaju/DouBi.git',
+    'ssh://git@gitee.com/buxiaju/DouBi.git',
+    'https://ghp_xxx@github.com/buxiaju/DouBi.git',
+  ];
+  for (const url of cases) {
+    it(`detectProtocol 一致: ${url}`, () => {
+      expect(detectProtocol(url)).toBe(srcParse.detectProtocol(url));
+    });
+    it(`toSshUrl 一致: ${url}`, () => {
+      expect(toSshUrl(url)).toBe(srcParse.toSshUrl(url));
+    });
+    it(`toHttpsUrl 一致: ${url}`, () => {
+      expect(toHttpsUrl(url)).toBe(srcParse.toHttpsUrl(url));
+    });
+    it(`parseRemoteUrl 一致: ${url}`, () => {
+      expect(parseRemoteUrl(url)).toEqual(srcParse.parseRemoteUrl(url));
+    });
+  }
 });

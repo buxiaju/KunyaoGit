@@ -119,7 +119,27 @@ export default function ChangesPanel() {
         toast.success(remote ? t('repo.pushedToRemoteName', { remote: remote.name }) : t('repo.pushedToRemote'));
         await refreshStatus();
       } else {
-        toast.error(t('repo.pushFailed', { error: p.error }));
+        // v0.6+ SSH 推送支持：检测到网络问题时主动提示切换
+        const { isNetworkError, switchOriginToSsh } = await import('../../lib/pushErrorHint');
+        if (isNetworkError(p.error) && remote) {
+          // 用 confirm 让用户主动确认（侵入操作必须显式授权）
+          const ok = window.confirm(
+            `${t('settings.pushFailedNetwork', { error: p.error.slice(0, 120) })}\n\n${t('settings.pushFailedNetworkHint')}`
+          );
+          if (ok) {
+            const sw = await switchOriginToSsh(current.path, remote.name);
+            if (sw.ok) {
+              toast.success(`已切换 ${remote.name}: ${sw.oldUrl} → ${sw.newUrl}`);
+              // 不自动重试 push（避免再次失败时用户体验混乱），让用户主动再点一次 push
+            } else {
+              toast.error(`切换 SSH 失败：${sw.error}`);
+            }
+          } else {
+            toast.error(t('repo.pushFailed', { error: p.error }));
+          }
+        } else {
+          toast.error(t('repo.pushFailed', { error: p.error }));
+        }
       }
     } finally {
       setPushingRemote(null);

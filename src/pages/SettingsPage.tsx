@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useSettingsStore } from '../stores/settings';
 import { useUpdateStore } from '../stores/update';
 import { useI18n } from '../i18n';
-import { Github, Globe, Save, CheckCircle2, XCircle, Loader2, FolderOpen, Eye, EyeOff, RefreshCw, Download, ExternalLink, Info, Languages, Palette, Check } from 'lucide-react';
+import { Github, Globe, Save, CheckCircle2, XCircle, Loader2, FolderOpen, Eye, EyeOff, RefreshCw, Download, ExternalLink, Info, Languages, Palette, Check, KeyRound, Terminal } from 'lucide-react';
 import { toast } from '../components/common/Toast';
 import type { AppUpdateInfo } from '../../shared/types';
 import { THEME_LIST, setTheme } from '../hooks/useTheme';
@@ -17,8 +17,14 @@ export default function SettingsPage() {
   const [giteeToken, setGiteeToken] = useState('');
   const [showGh, setShowGh] = useState(false);
   const [showGt, setShowGt] = useState(false);
-  const [testing, setTesting] = useState<'git' | 'github' | 'gitee' | null>(null);
+  const [testing, setTesting] = useState<'git' | 'github' | 'gitee' | 'ssh' | null>(null);
   const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  // v0.6+ SSH 推送支持
+  const [sshKeyPath, setSshKeyPath] = useState(settings.sshKeyPath || '');
+  const [preferredProtocol, setPreferredProtocol] = useState<'auto' | 'https' | 'ssh'>(
+    settings.preferredProtocol || 'auto'
+  );
+  const [sshTestResult, setSshTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
   const [currentVersion, setCurrentVersion] = useState('');
   const [updateInfo, setUpdateInfo] = useState<AppUpdateInfo | null>(null);
@@ -27,12 +33,43 @@ export default function SettingsPage() {
   useEffect(() => {
     setGitPath(settings.gitPath || '');
     setDefaultCloneDir(settings.defaultCloneDir || '');
+    setSshKeyPath(settings.sshKeyPath || '');
+    setPreferredProtocol(settings.preferredProtocol || 'auto');
     window.gitgui.app.getVersion().then(setCurrentVersion);
   }, [settings]);
 
   const saveGeneral = async () => {
     await save({ gitPath: gitPath || undefined, defaultCloneDir });
     toast.success(t('settings.saved'));
+  };
+
+  // v0.6+ SSH：保存私钥路径 + 协议偏好
+  const saveSsh = async () => {
+    await save({ sshKeyPath: sshKeyPath.trim() || '', preferredProtocol });
+    toast.success(t('settings.saved'));
+  };
+
+  // v0.6+ SSH：测试连接
+  const testSshConnection = async () => {
+    setTesting('ssh');
+    setSshTestResult(null);
+    try {
+      // 先把当前输入的路径保存到 settings，这样 GitService 下次 new 时会读到
+      await save({ sshKeyPath: sshKeyPath.trim() || '' });
+      const r: any = await window.gitgui.settings.testSsh(sshKeyPath.trim() || undefined);
+      if (r.ok) {
+        // r.message 含 "已认证为 <user>" 或 "Hi <user>"
+        const m = r.message?.match(/已认证为\s+(\S+)|Hi\s+(\S+?)[!]/);
+        const user = m?.[1] || m?.[2] || r.message;
+        setSshTestResult({ ok: true, msg: t('settings.sshAuthOk', { user }) });
+      } else {
+        setSshTestResult({ ok: false, msg: t('settings.sshAuthFailed', { error: r.error || r.message || '未知错误' }) });
+      }
+    } catch (e) {
+      setSshTestResult({ ok: false, msg: t('settings.sshAuthFailed', { error: (e as Error).message }) });
+    } finally {
+      setTesting(null);
+    }
   };
 
   const pickDir = async () => {
@@ -298,6 +335,73 @@ export default function SettingsPage() {
               </button>
             </div>
           </Field>
+        </section>
+
+        {/* v0.6+ SSH 推送支持 */}
+        <section className="panel p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <KeyRound size={18} />
+            <h2 className="text-lg font-medium">{t('settings.sshSection')}</h2>
+          </div>
+          <p className="text-xs text-gray-500 -mt-2">{t('settings.sshSectionHint')}</p>
+
+          <Field label={t('settings.sshKeyPath')} hint={t('settings.sshKeyPathHint')}>
+            <div className="flex gap-2">
+              <input
+                className="input flex-1"
+                value={sshKeyPath}
+                onChange={(e) => setSshKeyPath(e.target.value)}
+                placeholder={t('settings.sshKeyPathPlaceholder')}
+              />
+              <button
+                onClick={async () => {
+                  // 用现成的 openPath 让用户在文件管理器里选
+                  // （fs:read-dir 之类的接口都是目录的，没有「选文件」接口；
+                  //   这里退到 prompt，让用户粘贴路径）
+                  const p = prompt(t('settings.sshKeyPathHint'));
+                  if (p) setSshKeyPath(p);
+                }}
+                className="btn-secondary"
+              >
+                <FolderOpen size={14} /> {t('settings.select')}
+              </button>
+            </div>
+          </Field>
+
+          <Field label={t('settings.preferredProtocol')}>
+            <div className="flex gap-2">
+              {(['auto', 'https', 'ssh'] as const).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setPreferredProtocol(p)}
+                  className={`px-3 py-1.5 rounded border text-sm ${
+                    preferredProtocol === p
+                      ? 'border-primary-500 bg-primary-500/10 text-primary-300'
+                      : 'border-gray-700 text-gray-400 hover:border-gray-500'
+                  }`}
+                >
+                  {p === 'auto' && t('settings.protocolAuto')}
+                  {p === 'https' && t('settings.protocolHttps')}
+                  {p === 'ssh' && t('settings.protocolSsh')}
+                </button>
+              ))}
+            </div>
+          </Field>
+
+          <div className="flex items-center gap-2">
+            <button onClick={testSshConnection} disabled={testing === 'ssh'} className="btn-ghost">
+              {testing === 'ssh' ? <Loader2 size={14} className="animate-spin" /> : <Terminal size={14} />}
+              {t('settings.testSsh')}
+            </button>
+            <button onClick={saveSsh} className="btn-primary">
+              <Save size={14} /> {t('settings.save')}
+            </button>
+            {sshTestResult && (
+              <div className={`text-xs ${sshTestResult.ok ? 'text-emerald-400' : 'text-red-400'}`}>
+                {sshTestResult.msg}
+              </div>
+            )}
+          </div>
         </section>
 
         {/* 关于 */}

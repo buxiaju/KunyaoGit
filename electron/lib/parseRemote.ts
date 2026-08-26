@@ -70,3 +70,57 @@ export function parseRemoteUrl(url: string): ParsedRemote | null {
 
   return { owner, repo, platform, displayUrl };
 }
+
+/** 远程 URL 协议类型。 */
+export type RemoteProtocol = 'ssh' | 'https' | 'git' | 'unknown';
+
+/**
+ * 识别一个 git remote URL 用的协议。
+ * 注意只识别 URL 自身的协议，不去 DNS 探测。
+ */
+export function detectProtocol(url: string): RemoteProtocol {
+  if (!url || typeof url !== 'string') return 'unknown';
+  const clean = url.trim();
+  if (/^ssh:\/\//i.test(clean)) return 'ssh';
+  if (/^https?:\/\//i.test(clean)) return /^https:\/\//i.test(clean) ? 'https' : 'git';
+  if (/^git:\/\//i.test(clean)) return 'git';
+  // git@host:owner/repo 形式（scp-like SSH）
+  if (/^[\w-]+@[\w.-]+:/.test(clean)) return 'ssh';
+  return 'unknown';
+}
+
+/**
+ * 把任意形式的 remote URL 转换成 SSH 形式（`git@github.com:owner/repo.git`）。
+ * 不能识别时返回 null。
+ */
+export function toSshUrl(url: string): string | null {
+  const parsed = parseRemoteUrl(url);
+  if (!parsed) return null;
+  // 平台专属 host：GitHub 用 github.com，Gitee 用 gitee.com，其它保留原 host
+  let host = 'github.com';
+  if (parsed.platform === 'gitee') host = 'gitee.com';
+  else if (parsed.platform === 'other') {
+    // 尽力从原 URL 抽 host
+    const m = url.match(/(?:@|@?[\w-]+@|\/\/)([\w.-]+?)(?::\d+)?[\/:]/);
+    if (m && m[1]) host = m[1];
+    else return null;
+  }
+  return `git@${host}:${parsed.owner}/${parsed.repo}.git`;
+}
+
+/**
+ * 把任意形式的 remote URL 转换成 HTTPS 形式。
+ * 不能识别时返回 null。
+ */
+export function toHttpsUrl(url: string): string | null {
+  const parsed = parseRemoteUrl(url);
+  if (!parsed) return null;
+  let host = 'github.com';
+  if (parsed.platform === 'gitee') host = 'gitee.com';
+  else if (parsed.platform === 'other') {
+    const m = url.match(/(?:@|@?[\w-]+@|\/\/)([\w.-]+?)(?::\d+)?[\/:]/);
+    if (m && m[1]) host = m[1];
+    else return null;
+  }
+  return `https://${host}/${parsed.owner}/${parsed.repo}.git`;
+}
