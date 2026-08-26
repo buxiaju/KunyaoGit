@@ -23,12 +23,31 @@ export function createGitguiMock() {
       quit: vi.fn(),
     },
     dialog: {
+      showOpen: vi.fn().mockResolvedValue({ canceled: true, filePaths: [] }),
       openDirectory: vi.fn().mockResolvedValue(null),
       openFile: vi.fn().mockResolvedValue(null),
     },
+    // 注意：SETTINGS_GET / SETTINGS_SET 的 handler 直接返回裸 AppSettings，
+    // 不是 Result 包装（见 electron/ipc/settings.ts）。早期这里错误地用了 ok(...)，
+    // 导致测试中拿到的是 { ok:true, data:{} } 而不是设置对象。
     settings: {
-      get: vi.fn().mockResolvedValue(ok({})),
-      set: vi.fn().mockResolvedValue(ok(undefined)),
+      get: vi.fn().mockResolvedValue({
+        theme: 'dark',
+        language: 'zh',
+        defaultCloneDir: '',
+        diffView: 'split',
+        auth: {},
+      }),
+      set: vi.fn().mockImplementation(async (partial: unknown) => ({
+        theme: 'dark',
+        language: 'zh',
+        defaultCloneDir: '',
+        diffView: 'split',
+        auth: {},
+        ...(partial as object),
+      })),
+      testGit: vi.fn().mockResolvedValue({ ok: true, version: '2.47.0' }),
+      testAuth: vi.fn().mockResolvedValue(ok({ user: 'tester' })),
     },
     git: {
       status: vi.fn().mockResolvedValue(ok([])),
@@ -76,14 +95,18 @@ export function createGitguiMock() {
       init: vi.fn().mockResolvedValue(ok(null)),
       recent: vi.fn().mockResolvedValue(ok([])),
     },
-    fsLocal: {
-      readFile: vi.fn().mockResolvedValue(ok('')),
+    // 注意：键名必须与 electron/preload.ts 暴露的 `fs` 一致。
+    // 早期这里错写为 `fsLocal`，导致所有调用 window.gitgui.fs.* 的渲染层代码
+    // 在测试中根本没有被 mock 住（访问到 undefined 才报错）。
+    fs: {
+      readDir: vi.fn().mockResolvedValue(ok([])),
+      readFile: vi.fn().mockResolvedValue(ok({ content: '', size: 0 })),
       writeFile: vi.fn().mockResolvedValue(ok(undefined)),
-      tree: vi.fn().mockResolvedValue(ok([])),
-      createFile: vi.fn().mockResolvedValue(ok(undefined)),
-      createDir: vi.fn().mockResolvedValue(ok(undefined)),
+      writeBinary: vi.fn().mockResolvedValue(ok(undefined)),
+      mkdirp: vi.fn().mockResolvedValue(ok(undefined)),
+      fileTree: vi.fn().mockResolvedValue(ok([])),
+      delete: vi.fn().mockResolvedValue(ok(undefined)),
       rename: vi.fn().mockResolvedValue(ok(undefined)),
-      remove: vi.fn().mockResolvedValue(ok(undefined)),
     },
     github: {
       listRepos: vi.fn().mockResolvedValue(ok([])),
@@ -140,9 +163,6 @@ export function createGitguiMock() {
       install: vi.fn().mockResolvedValue(ok(undefined)),
       onProgress: vi.fn().mockReturnValue(() => {}),
       cancel: vi.fn().mockResolvedValue(ok(undefined)),
-    },
-    dialog: {
-      showOpen: vi.fn().mockResolvedValue({ canceled: true, filePaths: [] }),
     },
   };
 }

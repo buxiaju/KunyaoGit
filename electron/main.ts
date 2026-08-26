@@ -10,6 +10,9 @@ import { registerGiteeHandlers } from './ipc/gitee.js';
 import { registerReleaseHandlers } from './ipc/release.js';
 import { registerDialogHandlers } from './ipc/dialog.js';
 import { registerUpdateHandlers } from './ipc/update.js';
+import { registerAppHandlers } from './ipc/app.js';
+import { assertSafeExternalUrl } from './lib/safeUrl.js';
+import { installCrashGuards, handleCrash, type CrashGuardDeps } from './lib/crashGuard.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -35,6 +38,60 @@ function setupCsp() {
 }
 
 let mainWindow: BrowserWindow | null = null;
+
+// ---------------------------------------------------------------------------
+// 崩溃兜底（健壮性加固）
+// 在模块顶层就安装，这样启动早期（whenReady 之前）的异常也能被捕获。
+// app.getPath('userData') 只做路径计算，在 app ready 前调用是安全的。
+// ---------------------------------------------------------------------------
+const crashLogDir = path.join(app.getPath('userData'), 'logs');
+
+function notifyCrash(kind: string, message: string) {
+  const short = message.split('\n')[0]?.slice(0, 300) || '未知错误';
+  const logFile = path.join(crashLogDir, 'main-error.log');
+  const canReload = kind === 'renderProcessGone' || kind === 'loadFailed';
+  const buttons = canReload ? ['重新加载界面', '继续运行', '退出应用'] : ['继续运行', '退出应用'];
+
+  dialog
+    .showMessageBox({
+      type: 'error',
+      title: 'KunyaoGit 遇到问题',
+      message: `应用发生了一个未预期的错误（${kind}）`,
+      detail: `${short}\n\n诊断日志已写入：\n${logFile}`,
+      buttons,
+      defaultId: 0,
+      cancelId: canReload ? 1 : 0,
+      noLink: true,
+    })
+    .then((r) => {
+      const label = buttons[r.response];
+      if (label === '退出应用') app.quit();
+      else if (label === '重新加载界面') mainWindow?.webContents.reload();
+    })
+    .catch(() => {
+      // 弹窗自身失败（例如无可用窗口）时不再升级处理
+    });
+}
+
+const crashDeps: CrashGuardDeps = {
+  logDir: crashLogDir,
+  notify: (kind, message) => notifyCrash(kind, message),
+};
+
+installCrashGuards(crashDeps);
+
+/** 统一的外部链接打开入口：只放行 http/https。 */
+function openExternalSafely(url: unknown) {
+  const checked = assertSafeExternalUrl(url);
+  if (!checked.ok) {
+    console.warn(`[security] 拒绝打开外部链接：${checked.error} (${String(url).slice(0, 200)})`);
+    return { ok: false as const, error: checked.error };
+  }
+  shell.openExternal(checked.data).catch((e) => {
+    console.warn(`[security] openExternal 失败：${(e as Error).message}`);
+  });
+  return { ok: true as const, data: undefined };
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -72,8 +129,24 @@ function createWindow() {
   });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    openExternalSafely(url);
     return { action: 'deny' };
+  });
+
+  // --- 渲染进程健康监听（健壮性加固）---------------------------------------
+  // 渲染进程崩溃后页面会变成空白，主进程原本完全不知情，用户只能强杀重启。
+  mainWindow.webContents.on('render-process-gone', (_e, details) => {
+    handleCrash(crashDeps, 'renderProcessGone', `reason=${details.reason} exitCode=${details.exitCode}`);
+  });
+
+  mainWindow.webContents.on('unresponsive', () => {
+    handleCrash(crashDeps, 'windowUnresponsive', '渲染进程长时间无响应');
+  });
+
+  mainWindow.webContents.on('did-fail-load', (_e, errorCode, errorDescription, validatedURL, isMainFrame) => {
+    // -3 = ERR_ABORTED，属于正常的导航取消（例如 HMR 期间），不算故障
+    if (!isMainFrame || errorCode === -3) return;
+    handleCrash(crashDeps, 'loadFailed', `code=${errorCode} ${errorDescription} url=${validatedURL}`);
   });
 
   mainWindow.on('closed', () => {
@@ -83,6 +156,34 @@ function createWindow() {
 
 app.setAppUserModelId('com.kunyao.kunyaogit');
 
+// ---------------------------------------------------------------------------
+// 单实例锁（健壮性加固 P1）
+//
+// 原本没有加锁，多开实例会有两个主进程同时读写 %APPDATA%/gitgui-settings.json。
+// electron-store 是「读改写整个文件」的模式，并发写会互相覆盖，
+// 极端情况下写入过程被打断就会产生半截 JSON —— 也就是 P0 修的那种「配置损坏」。
+// 换言之：不加这把锁，配置损坏的成因就一直存在。
+//
+// 拿不到锁说明已有实例在运行：退出自己，并让已有实例把窗口拉到前台。
+// ---------------------------------------------------------------------------
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    // 用户再次启动应用（或双击关联文件）时，聚焦已有窗口而不是新开一个
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      if (!mainWindow.isVisible()) mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+
+  bootstrap();
+}
+
+function bootstrap() {
 app.whenReady().then(() => {
   setupCsp();
 
@@ -96,11 +197,12 @@ app.whenReady().then(() => {
   registerReleaseHandlers();
   registerDialogHandlers();
   registerUpdateHandlers();
+  registerAppHandlers();
 
   // 暴露给渲染进程的安全 API
   ipcMain.handle('app:get-platform', () => process.platform);
   ipcMain.handle('app:get-version', () => app.getVersion());
-  ipcMain.handle('app:open-external', (_, url: string) => shell.openExternal(url));
+  ipcMain.handle('app:open-external', (_, url: string) => openExternalSafely(url));
 
   createWindow();
 
@@ -115,3 +217,4 @@ app.on('window-all-closed', () => {
 
 // 深色主题跟随系统
 nativeTheme.themeSource = 'dark';
+}

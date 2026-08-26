@@ -220,10 +220,8 @@ export const commands: Command[] = [
     category: 'settings',
     run: async () => {
       // 通过 shell.openPath 打开应用数据目录
-      // 数据目录：%APPDATA%\KunyaoGit （NSIS 配置的 data dir 名）
-      const path = `${navigator.platform.toLowerCase().includes('win') ? '%APPDATA%' : '~/.config'}/KunyaoGit`;
-      // 主进程展开环境变量
-      await window.gitgui.app.openPath(path);
+      // 主进程收到 @userData 后会展开为 app.getPath('userData')
+      await window.gitgui.app.openPath('@userData');
     },
   },
 ];

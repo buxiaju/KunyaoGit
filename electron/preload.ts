@@ -66,6 +66,8 @@ const api = {
     remoteAdd: (repoPath: string, name: string, url: string) =>
       ipcRenderer.invoke(IPC.GIT_REMOTE_ADD, { path: repoPath, name, url }),
     remoteRemove: (repoPath: string, name: string) => ipcRenderer.invoke(IPC.GIT_REMOTE_REMOVE, { path: repoPath, name }),
+    // v0.6+ SSH 推送支持：把 remote URL 切到 SSH / HTTPS（解决 github.com:443 受限场景）
+    setRemoteUrl: (repoPath: string, name: string, url: string) => ipcRenderer.invoke(IPC.GIT_SET_REMOTE_URL, { path: repoPath, name, url }),
     // v0.5+ 列出仓库所有工作区文件（用于 Ctrl+P 跳转）
     listFiles: (repoPath: string, opts?: { maxCount?: number; withStatus?: boolean }) =>
       ipcRenderer.invoke(IPC.GIT_LS_FILES, { path: repoPath, ...opts }),
@@ -179,6 +181,8 @@ const api = {
     testGit: (gitPath?: string) => ipcRenderer.invoke(IPC.SETTINGS_TEST_GIT, gitPath),
     testAuth: (platform: 'github' | 'gitee', token: string) =>
       ipcRenderer.invoke(IPC.SETTINGS_TEST_AUTH, { platform, token }),
+    // v0.6+ SSH 推送支持：测试 SSH 连接（不需要 token，验证私钥是否配对）
+    testSsh: (sshKeyPath?: string) => ipcRenderer.invoke(IPC.SETTINGS_TEST_SSH, sshKeyPath),
   },
 
   // 通用
@@ -188,6 +192,9 @@ const api = {
     getPlatform: () => ipcRenderer.invoke('app:get-platform'),
     getVersion: () => ipcRenderer.invoke('app:get-version'),
     openExternal: (url: string) => ipcRenderer.invoke('app:open-external', url),
+    // 健壮性加固 E：把渲染层错误（unhandledrejection / window.onerror）落盘到主进程日志
+    logError: (entry: { kind: 'unhandledrejection' | 'error' | 'manual'; message: string; url?: string; timestamp?: string }) =>
+      ipcRenderer.invoke(IPC.APP_LOG_ERROR, entry),
   },
 
   // 更新检查 / 应用内下载安装

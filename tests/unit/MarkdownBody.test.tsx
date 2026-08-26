@@ -1,5 +1,11 @@
+// @vitest-environment jsdom
+//
 // v0.6+ MarkdownBody 组件测试
-// 覆盖：空 source / 纯文本 / GFM 标题 / 列表 / 链接
+// 覆盖：空 source / 纯文本 / GFM 标题 / 列表 / 链接 / 净化行为
+//
+// ⚠️ 使用 jsdom 而非项目默认的 happy-dom：DOMPurify 3.4.14 在 happy-dom 下
+// 会静默失效，组件会走纯文本降级路径，无法验证真实渲染与过滤结果。
+// 生产环境是 Electron/Chromium，行为与 jsdom 一致。
 
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -42,11 +48,54 @@ describe('MarkdownBody', () => {
     expect(html).toMatch(/<code>/);
   });
 
-  it('安全说明：当前实现未 sanitize（XSS 由发布者负责）', () => {
-    // 显式测试：script 标签会原样渲染（这是已知限制）
+  // --- v0.6 健壮性加固：接入 DOMPurify 之后的安全行为 ---
+  // 原先这里断言的是「未 sanitize（XSS 由发布者负责）」。
+  // 该假设不成立：RemotePage 可以浏览任意公开仓库的 Release，
+  // body 属于不可信远程输入，因此断言意图整体反转。
+
+  it('安全加固：<script> 被移除', () => {
     const { container } = render(<MarkdownBody source={'<script>alert(1)</script>'} />);
     const html = container.querySelector('.markdown-body')?.innerHTML || '';
-    // 注释：未来应接入 DOMPurify；当前 release body 信任发布者
-    expect(html).toContain('script');
+    expect(html).not.toContain('<script');
+    expect(html).not.toContain('alert(1)');
+  });
+
+  it('安全加固：img onerror 事件属性被移除', () => {
+    const { container } = render(
+      <MarkdownBody source={'<img src=x onerror="window.gitgui.fs.delete(\'C:/\')">'} />
+    );
+    const html = container.querySelector('.markdown-body')?.innerHTML || '';
+    expect(html.toLowerCase()).not.toContain('onerror');
+    expect(html).not.toContain('fs.delete');
+  });
+
+  it('安全加固：javascript: 链接被移除', () => {
+    const { container } = render(<MarkdownBody source={'[click](javascript:alert(1))'} />);
+    const html = container.querySelector('.markdown-body')?.innerHTML || '';
+    expect(html.toLowerCase()).not.toContain('javascript:');
+  });
+
+  it('安全加固：iframe 被移除', () => {
+    const { container } = render(<MarkdownBody source={'<iframe src="https://evil.invalid"></iframe>'} />);
+    const html = container.querySelector('.markdown-body')?.innerHTML || '';
+    expect(html).not.toContain('<iframe');
+  });
+
+  it('安全加固：外链被改写为 target=_blank + rel=noopener', () => {
+    // 否则点击会让整个 Electron 应用导航到外部站点，白屏且无法返回
+    const { container } = render(<MarkdownBody source={'[gh](https://github.com/x/y)'} />);
+    const a = container.querySelector('.markdown-body a');
+    expect(a?.getAttribute('target')).toBe('_blank');
+    expect(a?.getAttribute('rel')).toContain('noopener');
+  });
+
+  it('正常内容不受净化影响：加粗 / 斜体 / 表格保留', () => {
+    const { container } = render(
+      <MarkdownBody source={'**b** _i_\n\n| h |\n| - |\n| d |'} />
+    );
+    const html = container.querySelector('.markdown-body')?.innerHTML || '';
+    expect(html).toContain('<strong>b</strong>');
+    expect(html).toContain('<em>i</em>');
+    expect(html).toContain('<table>');
   });
 });

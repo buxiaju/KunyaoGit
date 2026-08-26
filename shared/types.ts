@@ -87,6 +87,25 @@ export interface AppSettings {
   authorEmail?: string;
   diffView: 'unified' | 'split';
   auth: AuthConfig;
+  /**
+   * SSH 私钥绝对路径（健壮性加固 / v0.6+ SSH 推送支持）。
+   * - 留空：git 用 `~/.ssh/id_ed25519` / `~/.ssh/id_rsa` 等默认约定
+   * - 配了：用 `GIT_SSH_COMMAND="ssh -i <path> -o IdentitiesOnly=yes"` 强制走该 key
+   *
+   * 触发场景：HTTPS 推送被网络拦截（如国内访问 github.com:443 受限）时，
+   * 用户可在此配 SSH key + 切 remote URL 到 SSH 协议走 22 端口。
+   */
+  sshKeyPath?: string;
+  /**
+   * 推送协议偏好（v0.6+ SSH 推送支持）。
+   * - `auto`：用仓库现配的 remote URL（默认；不自动改）
+   * - `https`：强制把 remote URL 转 HTTPS 后推送
+   * - `ssh`：强制把 remote URL 转 SSH 后推送
+   *
+   * 注意：`https` / `ssh` 模式**会临时改仓库的 remote URL**（一次推送），
+   * 用完再恢复。仓库里的真实配置不会被改坏。
+   */
+  preferredProtocol?: 'auto' | 'https' | 'ssh';
 }
 
 export type Theme = 'dark' | 'ocean' | 'light';

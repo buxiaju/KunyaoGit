@@ -4,6 +4,7 @@ import { useRepoStore } from '../../stores/repo';
 import { useSettingsStore } from '../../stores/settings';
 import { useI18n } from '../../i18n';
 import StatusBar from '../common/StatusBar';
+import ErrorBoundary from '../common/ErrorBoundary';
 
 export default function Layout() {
   const current = useRepoStore((s) => s.current);
@@ -142,7 +143,14 @@ export default function Layout() {
 
       {/* 主体 */}
       <main className="flex-1 overflow-hidden">
-        <Outlet />
+        {/*
+          页面级错误边界：单个页面渲染失败时，侧边导航与状态栏仍然可用，
+          用户可以切到别的页面自救，而不是整个应用白屏。
+          key 用当前仓库路径，切换仓库时重置错误态。
+        */}
+        <ErrorBoundary lang={lang} key={current?.path || 'no-repo'}>
+          <Outlet />
+        </ErrorBoundary>
       </main>
       </div>
 

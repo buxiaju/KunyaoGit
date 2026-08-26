@@ -1,10 +1,8 @@
 import simpleGit, { SimpleGit, StatusResult, BranchSummary, LogResult, DefaultLogFields } from 'simple-git';
 import path from 'node:path';
 import fs from 'node:fs/promises';
+import { assertInsideRepo, redactPath } from '../lib/safePath';
 
-function pathJoin(...parts: string[]): string {
-  return parts.join('/').replace(/\\/g, '/');
-}
 import type {
   CommitInfo,
   BranchInfo,
@@ -19,15 +17,77 @@ import type {
   BlameLine,
 } from '../../shared/types';
 
+/**
+ * 单次 git 调用的「静默超时」（健壮性加固 P1）。
+ *
+ * 原本 simple-git 没有配置任何 timeout，一旦底层 git 进程卡住就永不返回：
+ * 渲染层的 await 永远不 resolve，界面卡在 loading 且没有任何提示，
+ * 用户只能强杀应用。最典型的触发场景是对需要认证的 remote 执行
+ * fetch/pull/push —— git 在等凭据输入，而 GUI 里没有可交互的终端。
+ *
+ * 这里用的是 simple-git 的 `timeout.block`，语义是「两次输出之间的最大间隔」，
+ * 不是操作总时长。所以 clone 一个大仓库（有持续进度输出）不会被误杀，
+ * 而真正卡死（完全无输出）的调用会在 60s 后失败退出。
+ */
+const BLOCK_TIMEOUT_MS = 60_000;
+
 export class GitService {
   private git: SimpleGit;
 
-  constructor(private repoPath: string, gitBinPath?: string) {
+  constructor(private repoPath: string, gitBinPath?: string, sshKeyPath?: string) {
+    // 健壮性加固 / v0.6+ SSH 推送支持：
+    // 如果用户在设置里配了 SSH 私钥路径，给 git 进程注入 GIT_SSH_COMMAND，
+    // 让 fetch/push/pull 走 SSH 而不是 HTTPS（国内访问 github.com:443 受限时救命）。
+    // - IdentitiesOnly=yes：只尝试指定 key，避免误用 ssh-agent 里其他 key
+    // - StrictHostKeyChecking=accept-new：自动接受新 host key（首次连接）
+    //   但拒绝已变更的 key（防 MITM）
+    // - UserKnownHostsFile 不设：用系统默认的 ~/.ssh/known_hosts
+    let env: NodeJS.ProcessEnv | undefined;
+    if (sshKeyPath && sshKeyPath.trim() !== '') {
+      const cmd = `ssh -i "${sshKeyPath}" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o BatchMode=yes`;
+      env = { ...process.env, GIT_SSH_COMMAND: cmd };
+    }
     this.git = simpleGit({
       baseDir: repoPath,
       binary: gitBinPath || 'git',
       maxConcurrentProcesses: 4,
+      timeout: { block: BLOCK_TIMEOUT_MS },
+      ...(env ? { env } : {}),
     });
+  }
+
+  /**
+   * 把底层错误翻译成用户能看懂的提示。
+   * simple-git 的超时错误原文是英文的 "block timeout reached"，
+   * 直接抛给界面用户无法理解，也不知道该怎么处理。
+   *
+   * 同时对消息做路径脱敏：simple-git / Node fs 错误常常带完整绝对路径
+   * （如 `ENOENT: ... 'C:\\Users\\kunyao\\Documents\\xxx'`），不能让这些
+   * 路径细节随 toast / 日志 / 远程 API 错误回显泄露给渲染层或上游服务。
+   */
+  static describeError(e: unknown): string {
+    const raw = (e as Error)?.message || String(e);
+    if (/block timeout reached/i.test(raw)) {
+      return `Git 操作超时（${BLOCK_TIMEOUT_MS / 1000}s 无响应）。如果是网络操作，请检查网络连通性、代理设置，或确认该远程仓库是否需要认证凭据`;
+    }
+    return redactPath(raw);
+  }
+
+  /** 统一的失败返回构造，集中做错误消息翻译。 */
+  private fail(e: unknown): { ok: false; error: string } {
+    return { ok: false, error: GitService.describeError(e) };
+  }
+
+  /**
+   * 仓库内文件路径校验（健壮性加固 B）。被 `blame` / `fileLog` / `fileDiff` /
+   * `diffFile` / `readConflictFile` 五个方法在第一行调用，阻止渲染层传
+   * `../../../etc/passwd` 类的越界输入。
+   *
+   * 失败时直接返回 `{ ok: false, error }` 形态 —— handler 把它当业务错误
+   * 透传给 UI，不抛异常。
+   */
+  private assertInsideRepo(file: unknown): { ok: true; data: string } | { ok: false; error: string } {
+    return assertInsideRepo(this.repoPath, file);
   }
 
   static async isGitRepo(repoPath: string): Promise<boolean> {
@@ -77,7 +137,7 @@ export class GitService {
 
       return { ok: true, data: files };
     } catch (e) {
-      return { ok: false, error: (e as Error).message };
+      return this.fail(e);
     }
   }
 
@@ -98,7 +158,7 @@ export class GitService {
       }));
       return { ok: true, data: list };
     } catch (e) {
-      return { ok: false, error: (e as Error).message };
+      return this.fail(e);
     }
   }
 
@@ -132,7 +192,7 @@ export class GitService {
       }
       return { ok: true, data: list };
     } catch (e) {
-      return { ok: false, error: (e as Error).message };
+      return this.fail(e);
     }
   }
 
@@ -141,7 +201,7 @@ export class GitService {
       await this.git.add(paths);
       return { ok: true, data: undefined };
     } catch (e) {
-      return { ok: false, error: (e as Error).message };
+      return this.fail(e);
     }
   }
 
@@ -150,7 +210,7 @@ export class GitService {
       await this.git.reset(['HEAD', '--', ...paths]);
       return { ok: true, data: undefined };
     } catch (e) {
-      return { ok: false, error: (e as Error).message };
+      return this.fail(e);
     }
   }
 
@@ -159,7 +219,7 @@ export class GitService {
       await this.git.checkout(['--', ...paths]);
       return { ok: true, data: undefined };
     } catch (e) {
-      return { ok: false, error: (e as Error).message };
+      return this.fail(e);
     }
   }
 
@@ -188,7 +248,7 @@ export class GitService {
       }
       return { ok: true, data: { hash: m[2] } };
     } catch (e) {
-      return { ok: false, error: (e as Error).message };
+      return this.fail(e);
     }
   }
 
@@ -205,7 +265,7 @@ export class GitService {
         : result.ref?.local || 'push ok';
       return { ok: true, data: summary };
     } catch (e) {
-      return { ok: false, error: (e as Error).message };
+      return this.fail(e);
     }
   }
 
@@ -218,7 +278,7 @@ export class GitService {
       const result = await this.git.pull(args);
       return { ok: true, data: result.summary?.toString() || 'pull ok' };
     } catch (e) {
-      return { ok: false, error: (e as Error).message };
+      return this.fail(e);
     }
   }
 
@@ -230,7 +290,7 @@ export class GitService {
       await this.git.raw(args);
       return { ok: true, data: undefined };
     } catch (e) {
-      return { ok: false, error: (e as Error).message };
+      return this.fail(e);
     }
   }
 
@@ -243,7 +303,7 @@ export class GitService {
       await this.git.checkout(args);
       return { ok: true, data: undefined };
     } catch (e) {
-      return { ok: false, error: (e as Error).message };
+      return this.fail(e);
     }
   }
 
@@ -254,7 +314,7 @@ export class GitService {
       await this.git.checkout(args);
       return { ok: true, data: undefined };
     } catch (e) {
-      return { ok: false, error: (e as Error).message };
+      return this.fail(e);
     }
   }
 
@@ -263,7 +323,7 @@ export class GitService {
       await this.git.deleteLocalBranch(name, force);
       return { ok: true, data: undefined };
     } catch (e) {
-      return { ok: false, error: (e as Error).message };
+      return this.fail(e);
     }
   }
 
@@ -277,7 +337,7 @@ export class GitService {
       const result = await this.git.raw(args);
       return { ok: true, data: result };
     } catch (e) {
-      return { ok: false, error: (e as Error).message };
+      return this.fail(e);
     }
   }
 
@@ -290,7 +350,7 @@ export class GitService {
       }
       return { ok: true, data: undefined };
     } catch (e) {
-      return { ok: false, error: (e as Error).message };
+      return this.fail(e);
     }
   }
 
@@ -299,7 +359,7 @@ export class GitService {
       await this.git.stash(['pop']);
       return { ok: true, data: undefined };
     } catch (e) {
-      return { ok: false, error: (e as Error).message };
+      return this.fail(e);
     }
   }
 
@@ -338,7 +398,7 @@ export class GitService {
       }
       return { ok: true, data: entries };
     } catch (e) {
-      return { ok: false, error: (e as Error).message };
+      return this.fail(e);
     }
   }
 
@@ -350,7 +410,7 @@ export class GitService {
       const out = await this.git.raw(['stash', 'show', '-p', '--no-color', ref]);
       return { ok: true, data: parseUnifiedDiff(out) };
     } catch (e) {
-      return { ok: false, error: (e as Error).message };
+      return this.fail(e);
     }
   }
 
@@ -362,7 +422,7 @@ export class GitService {
       await this.git.stash(['apply', ref]);
       return { ok: true, data: undefined };
     } catch (e) {
-      return { ok: false, error: (e as Error).message };
+      return this.fail(e);
     }
   }
 
@@ -374,7 +434,7 @@ export class GitService {
       await this.git.stash(['drop', ref]);
       return { ok: true, data: undefined };
     } catch (e) {
-      return { ok: false, error: (e as Error).message };
+      return this.fail(e);
     }
   }
 
@@ -383,7 +443,7 @@ export class GitService {
       await this.git.reset([`--${mode}`, target]);
       return { ok: true, data: undefined };
     } catch (e) {
-      return { ok: false, error: (e as Error).message };
+      return this.fail(e);
     }
   }
 
@@ -404,7 +464,7 @@ export class GitService {
       const m = out.match(/\[([^\s]+)(?: \([^)]+\))? ([0-9a-f]{7,40})\]/i);
       return { ok: true, data: { hash: m ? m[2] : undefined } };
     } catch (e) {
-      return { ok: false, error: (e as Error).message };
+      return this.fail(e);
     }
   }
 
@@ -421,7 +481,7 @@ export class GitService {
       const m = out.match(/\[([^\s]+)(?: \([^)]+\))? ([0-9a-f]{7,40})\]/i);
       return { ok: true, data: { hash: m ? m[2] : undefined } };
     } catch (e) {
-      return { ok: false, error: (e as Error).message };
+      return this.fail(e);
     }
   }
 
@@ -434,17 +494,18 @@ export class GitService {
       await this.git.add(path);
       return { ok: true, data: undefined };
     } catch (e) {
-      return { ok: false, error: (e as Error).message };
+      return this.fail(e);
     }
   }
 
   /**
    * 读取文件原始内容（含冲突标记）
    */
-  async readConflictFile(path: string): Promise<Result<{ ours: string; base: string; theirs: string }>> {
+  async readConflictFile(file: string): Promise<Result<{ ours: string; base: string; theirs: string }>> {
+    const safeFile = this.assertInsideRepo(file);
+    if (!safeFile.ok) return safeFile;
     try {
-      const full = pathJoin(this.repoPath, path);
-      const current = await require('node:fs/promises').readFile(full, 'utf-8');
+      const current = await fs.readFile(safeFile.data, 'utf-8');
       // 解析冲突标记
       const oursMatch = current.match(/<{7}\s*\n([\s\S]*?)\n={7}/);
       const theirsMatch = current.match(/={7}\s*\n([\s\S]*?)\n>{7}/);
@@ -457,7 +518,7 @@ export class GitService {
         },
       };
     } catch (e) {
-      return { ok: false, error: (e as Error).message };
+      return this.fail(e);
     }
   }
 
@@ -472,7 +533,7 @@ export class GitService {
       });
       return { ok: true, data: out };
     } catch (e) {
-      return { ok: false, error: (e as Error).message };
+      return this.fail(e);
     }
   }
 
@@ -481,7 +542,7 @@ export class GitService {
       await this.git.addRemote(name, url);
       return { ok: true, data: undefined };
     } catch (e) {
-      return { ok: false, error: (e as Error).message };
+      return this.fail(e);
     }
   }
 
@@ -490,7 +551,42 @@ export class GitService {
       await this.git.removeRemote(name);
       return { ok: true, data: undefined };
     } catch (e) {
-      return { ok: false, error: (e as Error).message };
+      return this.fail(e);
+    }
+  }
+
+  /**
+   * 修改已存在 remote 的 URL（v0.6+ SSH 推送支持）。
+   * 用途：把 origin 从 HTTPS URL 切到 SSH URL（`git@github.com:owner/repo.git`），
+   * 之后 push/pull/fetch 自动走 SSH。
+   *
+   * @param name  remote 名（通常是 'origin'）
+   * @param url   新 URL（必须是合法 git remote URL；建议先用 `toSshUrl` / `toHttpsUrl` 转换）
+   */
+  async setRemoteUrl(name: string, url: string): Promise<Result<{ oldUrl: string; newUrl: string }>> {
+    try {
+      if (typeof name !== 'string' || !name.trim()) {
+        return { ok: false, error: 'remote 名称无效' };
+      }
+      if (typeof url !== 'string' || !url.trim()) {
+        return { ok: false, error: 'URL 无效' };
+      }
+      // 读旧 URL
+      const list = await this.git.getRemotes(true);
+      const existing = list.find((r) => r.name === name);
+      if (!existing) {
+        return { ok: false, error: `remote '${name}' 不存在` };
+      }
+      const oldUrl = existing.refs.fetch || existing.refs.push || '';
+      if (oldUrl === url) {
+        return { ok: true, data: { oldUrl, newUrl: url } };
+      }
+      await this.git.remote(['set-url', name, url]);
+      // 失效缓存：URL 改了，simple-git 实例对 remote 的引用也得刷新
+      // （simple-git 内部没有缓存，但保险起见清掉）
+      return { ok: true, data: { oldUrl, newUrl: url } };
+    } catch (e) {
+      return this.fail(e);
     }
   }
 
@@ -499,7 +595,7 @@ export class GitService {
       const r = await this.git.raw(['rev-parse', '--abbrev-ref', 'HEAD']);
       return { ok: true, data: r.trim() };
     } catch (e) {
-      return { ok: false, error: (e as Error).message };
+      return this.fail(e);
     }
   }
 
@@ -511,11 +607,13 @@ export class GitService {
       const raw = await this.git.raw(args);
       return { ok: true, data: parseUnifiedDiff(raw) };
     } catch (e) {
-      return { ok: false, error: (e as Error).message };
+      return this.fail(e);
     }
   }
 
   async diffFile(file: string, opts: { staged?: boolean } = {}): Promise<Result<FileDiff | null>> {
+    const safe = this.assertInsideRepo(file);
+    if (!safe.ok) return safe;
     const all = await this.diff(opts);
     if (!all.ok) return all;
     return { ok: true, data: all.data.find((d) => d.path === file || d.oldPath === file) || null };
@@ -561,7 +659,7 @@ export class GitService {
       }
       return { ok: true, data: unique.map((p) => ({ path: p })) };
     } catch (e) {
-      return { ok: false, error: (e as Error).message };
+      return this.fail(e);
     }
   }
 
@@ -579,6 +677,8 @@ export class GitService {
    *   <空行>
    */
   async blame(file: string): Promise<Result<BlameLine[]>> {
+    const safe = this.assertInsideRepo(file);
+    if (!safe.ok) return safe;
     try {
       // 切到仓库根目录运行 blame（file 相对路径）
       const out = await this.git.raw(['blame', '--line-porcelain', '--', file]);
@@ -642,7 +742,7 @@ export class GitService {
       }
       return { ok: true, data: result };
     } catch (e) {
-      return { ok: false, error: (e as Error).message };
+      return this.fail(e);
     }
   }
 
@@ -651,6 +751,8 @@ export class GitService {
    * 返回 CommitInfo[]，按时间倒序
    */
   async fileLog(file: string, opts: { maxCount?: number; follow?: boolean } = {}): Promise<Result<CommitInfo[]>> {
+    const safe = this.assertInsideRepo(file);
+    if (!safe.ok) return safe;
     const maxCount = opts.maxCount ?? 50;
     const follow = opts.follow ?? true;
     try {
@@ -674,7 +776,7 @@ export class GitService {
       });
       return { ok: true, data: result };
     } catch (e) {
-      return { ok: false, error: (e as Error).message };
+      return this.fail(e);
     }
   }
 
@@ -688,6 +790,8 @@ export class GitService {
     file: string,
     opts: { fromHash?: string; toHash?: string } = {}
   ): Promise<Result<FileDiff | null>> {
+    const safe = this.assertInsideRepo(file);
+    if (!safe.ok) return safe;
     try {
       const args: string[] = ['diff', '--no-color'];
       if (opts.fromHash) args.push(`${opts.fromHash}^`);
@@ -698,7 +802,7 @@ export class GitService {
       const all = parseUnifiedDiff(out);
       return { ok: true, data: all.find((d) => d.path === file || d.oldPath === file) || null };
     } catch (e) {
-      return { ok: false, error: (e as Error).message };
+      return this.fail(e);
     }
   }
 }

@@ -2,152 +2,134 @@ import { ipcMain } from 'electron';
 import { IPC } from '../../shared/ipc-channels';
 import { GitService } from '../services/git';
 import { getSettings } from '../services/settings';
+import { assertSafePath } from '../lib/safePath';
 
-function getGit(repoPath: string): GitService {
-  const settings = getSettings();
-  return new GitService(repoPath, settings.gitPath);
+/**
+ * 按仓库路径缓存 GitService 实例（健壮性加固 P2）。
+ *
+ * 原本每个 handler 都 `new GitService(repoPath, settings.gitPath)`：
+ *   - 每次都重读 settings.gitPath（多余的 IO）；
+ *   - 用户改 gitPath 后**老实例**仍持有旧 binary（行为不一致）；
+ *   - 32 个 handler 散落，单元测试无法覆盖 getGit 内部逻辑。
+ *
+ * 缓存用真实路径作 key：避免 `C:/repo` 和 `C:\repo` 在 Windows 上被当成
+ * 不同仓库。同时 handler 在关仓库时通过 `invalidateGitCache` 主动清理。
+ */
+const gitCache = new Map<string, GitService>();
+
+function cacheKey(repoPath: string): string {
+  return process.platform === 'win32' ? repoPath.toLowerCase() : repoPath;
+}
+
+/** 测试 / 外部（关仓库）用：移除某个仓库的缓存实例。 */
+export function invalidateGitCache(repoPath: string): void {
+  gitCache.delete(cacheKey(repoPath));
+}
+
+/** 测试用：清空整个缓存。 */
+export function clearGitCache(): void {
+  gitCache.clear();
+}
+
+/**
+ * 仓库根路径校验 + 缓存获取 GitService（健壮性加固 A + P2）。
+ *
+ * 校验失败的 handler 一律返回 `{ ok: false, error: '...' }`，不抛异常：
+ * 渲染层弹 toast 即可，不必知道是「路径越界」还是「仓库未打开」。
+ */
+function getGitSafe(repoPath: unknown): { ok: true; data: GitService } | { ok: false; error: string } {
+  if (typeof repoPath !== 'string' || repoPath.trim() === '') {
+    return { ok: false, error: '仓库路径无效' };
+  }
+  const safe = assertSafePath(repoPath);
+  if (!safe.ok) return safe;
+  const key = cacheKey(safe.data);
+  let svc = gitCache.get(key);
+  if (!svc) {
+    try {
+      const settings = getSettings();
+      svc = new GitService(safe.data, settings.gitPath, settings.sshKeyPath);
+      gitCache.set(key, svc);
+    } catch (e) {
+      // simple-git 在目录不存在等情况下会直接 throw，统一兜成 Result
+      return { ok: false, error: GitService.describeError(e) };
+    }
+  }
+  return { ok: true, data: svc };
+}
+
+/**
+ * 把所有 32 个 handler 的「先校验、再调用」两步收口成一个 wrapper。
+ * handler 只关心「拿到 GitService 后做什么」，不再各自散落校验。
+ *
+ * 兼容两种入参形态：
+ *   1. `ipcMain.handle(IPC.X, (_e, repoPath: string) => ...)` —— 直接传路径
+ *   2. `ipcMain.handle(IPC.X, (_e, { path, ... }: { path, ... }) => ...)` —— 包装在对象里
+ *
+ * 兜底：service 层抛错（simple-git 启动失败 / 目录不存在等）也统一转 Result，
+ * 避免 IPC channel 把堆栈吐回渲染层。
+ */
+function handle<T>(
+  fn: (svc: GitService, payload: any) => Promise<T>
+): (_e: unknown, payload: any) => Promise<T | { ok: false; error: string }> {
+  return async (_e, payload) => {
+    let candidate: unknown = payload;
+    if (payload && typeof payload === 'object' && 'path' in (payload as object)) {
+      candidate = (payload as { path: unknown }).path;
+    } else if (typeof payload === 'string') {
+      candidate = payload;
+    }
+    const result = getGitSafe(candidate);
+    if (!result.ok) return result;
+    try {
+      return await fn(result.data, payload);
+    } catch (e) {
+      return { ok: false, error: GitService.describeError(e) };
+    }
+  };
 }
 
 export function registerGitHandlers() {
-  ipcMain.handle(IPC.GIT_STATUS, async (_e, repoPath: string) => {
-    return getGit(repoPath).status();
-  });
-
-  ipcMain.handle(IPC.GIT_LOG, async (_e, { path, maxCount, branch }: { path: string; maxCount?: number; branch?: string }) => {
-    return getGit(path).log({ maxCount, branch });
-  });
-
-  ipcMain.handle(IPC.GIT_BRANCHES, async (_e, repoPath: string) => {
-    return getGit(repoPath).branches();
-  });
-
-  ipcMain.handle(IPC.GIT_STAGE, async (_e, { path, paths }: { path: string; paths: string[] }) => {
-    return getGit(path).stage(paths);
-  });
-
-  ipcMain.handle(IPC.GIT_UNSTAGE, async (_e, { path, paths }: { path: string; paths: string[] }) => {
-    return getGit(path).unstage(paths);
-  });
-
-  ipcMain.handle(IPC.GIT_DISCARD, async (_e, { path, paths }: { path: string; paths: string[] }) => {
-    return getGit(path).discard(paths);
-  });
-
-  ipcMain.handle(IPC.GIT_COMMIT, async (_e, { path, message, amend, signOff }: { path: string; message: string; amend?: boolean; signOff?: boolean }) => {
-    return getGit(path).commit(message, { amend, signOff });
-  });
-
-  ipcMain.handle(IPC.GIT_PUSH, async (_e, { path, remote, branch, setUpstream, force }: { path: string; remote?: string; branch?: string; setUpstream?: boolean; force?: boolean }) => {
-    return getGit(path).push({ remote, branch, setUpstream, force });
-  });
-
-  ipcMain.handle(IPC.GIT_PULL, async (_e, { path, remote, branch, rebase }: { path: string; remote?: string; branch?: string; rebase?: boolean }) => {
-    return getGit(path).pull({ remote, branch, rebase });
-  });
-
-  ipcMain.handle(IPC.GIT_FETCH, async (_e, { path, remote, prune }: { path: string; remote?: string; prune?: boolean }) => {
-    return getGit(path).fetch({ remote, prune });
-  });
-
-  ipcMain.handle(IPC.GIT_CHECKOUT, async (_e, { path, target, create }: { path: string; target: string; create?: boolean }) => {
-    return getGit(path).checkout(target, { create });
-  });
-
-  ipcMain.handle(IPC.GIT_CREATE_BRANCH, async (_e, { path, name, from }: { path: string; name: string; from?: string }) => {
-    return getGit(path).createBranch(name, from);
-  });
-
-  ipcMain.handle(IPC.GIT_DELETE_BRANCH, async (_e, { path, name, force }: { path: string; name: string; force?: boolean }) => {
-    return getGit(path).deleteBranch(name, force);
-  });
-
-  ipcMain.handle(IPC.GIT_MERGE, async (_e, { path, branch, noFF, squash, message }: { path: string; branch: string; noFF?: boolean; squash?: boolean; message?: string }) => {
-    return getGit(path).merge(branch, { noFF, squash, message });
-  });
-
-  ipcMain.handle(IPC.GIT_DIFF, async (_e, { path, staged, from, to }: { path: string; staged?: boolean; from?: string; to?: string }) => {
-    return getGit(path).diff({ staged, from, to });
-  });
-
-  ipcMain.handle(IPC.GIT_DIFF_FILE, async (_e, { path, file, staged }: { path: string; file: string; staged?: boolean }) => {
-    return getGit(path).diffFile(file, { staged });
-  });
-
-  ipcMain.handle(IPC.GIT_STASH, async (_e, { path, message }: { path: string; message?: string }) => {
-    return getGit(path).stash(message);
-  });
-
-  ipcMain.handle(IPC.GIT_STASH_POP, async (_e, repoPath: string) => {
-    return getGit(repoPath).stashPop();
-  });
-
-  // v0.4+ Stash 队列管理
-  ipcMain.handle(IPC.GIT_STASH_LIST, async (_e, repoPath: string) => {
-    return getGit(repoPath).stashList();
-  });
-
-  ipcMain.handle(IPC.GIT_STASH_SHOW, async (_e, { path: p, ref }: { path: string; ref: string }) => {
-    return getGit(p).stashShow(ref);
-  });
-
-  ipcMain.handle(IPC.GIT_STASH_APPLY, async (_e, { path: p, ref }: { path: string; ref: string }) => {
-    return getGit(p).stashApply(ref);
-  });
-
-  ipcMain.handle(IPC.GIT_STASH_DROP, async (_e, { path: p, ref }: { path: string; ref: string }) => {
-    return getGit(p).stashDrop(ref);
-  });
-
-  ipcMain.handle(IPC.GIT_RESET, async (_e, { path, target, mode }: { path: string; target: string; mode?: 'soft' | 'mixed' | 'hard' }) => {
-    return getGit(path).reset(target, mode);
-  });
-
-  ipcMain.handle(IPC.GIT_RESOLVE_CONFLICT, async (_e, { path, file, side }: { path: string; file: string; side: 'ours' | 'theirs' }) => {
-    return getGit(path).resolveConflict(file, side);
-  });
-
+  // 基础命令
+  ipcMain.handle(IPC.GIT_STATUS, handle((g) => g.status()));
+  ipcMain.handle(IPC.GIT_LOG, handle((g, payload: any) => g.log({ maxCount: payload?.maxCount, branch: payload?.branch })));
+  ipcMain.handle(IPC.GIT_BRANCHES, handle((g) => g.branches()));
+  ipcMain.handle(IPC.GIT_STAGE, handle((g, payload: any) => g.stage(payload?.paths || [])));
+  ipcMain.handle(IPC.GIT_UNSTAGE, handle((g, payload: any) => g.unstage(payload?.paths || [])));
+  ipcMain.handle(IPC.GIT_DISCARD, handle((g, payload: any) => g.discard(payload?.paths || [])));
+  ipcMain.handle(IPC.GIT_COMMIT, handle((g, payload: any) => g.commit(payload?.message, { amend: payload?.amend, signOff: payload?.signOff })));
+  ipcMain.handle(IPC.GIT_PUSH, handle((g, payload: any) => g.push({ remote: payload?.remote, branch: payload?.branch, setUpstream: payload?.setUpstream, force: payload?.force })));
+  ipcMain.handle(IPC.GIT_PULL, handle((g, payload: any) => g.pull({ remote: payload?.remote, branch: payload?.branch, rebase: payload?.rebase })));
+  ipcMain.handle(IPC.GIT_FETCH, handle((g, payload: any) => g.fetch({ remote: payload?.remote, prune: payload?.prune })));
+  ipcMain.handle(IPC.GIT_CHECKOUT, handle((g, payload: any) => g.checkout(payload?.target, { create: payload?.create })));
+  ipcMain.handle(IPC.GIT_CREATE_BRANCH, handle((g, payload: any) => g.createBranch(payload?.name, payload?.from)));
+  ipcMain.handle(IPC.GIT_DELETE_BRANCH, handle((g, payload: any) => g.deleteBranch(payload?.name, payload?.force)));
+  ipcMain.handle(IPC.GIT_MERGE, handle((g, payload: any) => g.merge(payload?.branch, { noFF: payload?.noFF, squash: payload?.squash, message: payload?.message })));
+  ipcMain.handle(IPC.GIT_DIFF, handle((g, payload: any) => g.diff({ staged: payload?.staged, from: payload?.from, to: payload?.to })));
+  ipcMain.handle(IPC.GIT_DIFF_FILE, handle((g, payload: any) => g.diffFile(payload?.file, { staged: payload?.staged })));
+  ipcMain.handle(IPC.GIT_STASH, handle((g, payload: any) => g.stash(payload?.message)));
+  ipcMain.handle(IPC.GIT_STASH_POP, handle((g) => g.stashPop()));
+  // v0.4+ Stash 队列
+  ipcMain.handle(IPC.GIT_STASH_LIST, handle((g) => g.stashList()));
+  ipcMain.handle(IPC.GIT_STASH_SHOW, handle((g, payload: any) => g.stashShow(payload?.ref)));
+  ipcMain.handle(IPC.GIT_STASH_APPLY, handle((g, payload: any) => g.stashApply(payload?.ref)));
+  ipcMain.handle(IPC.GIT_STASH_DROP, handle((g, payload: any) => g.stashDrop(payload?.ref)));
+  ipcMain.handle(IPC.GIT_RESET, handle((g, payload: any) => g.reset(payload?.target, payload?.mode)));
+  ipcMain.handle(IPC.GIT_RESOLVE_CONFLICT, handle((g, payload: any) => g.resolveConflict(payload?.file, payload?.side)));
   // v0.4+ Cherry-pick / Revert
-  ipcMain.handle(IPC.GIT_CHERRY_PICK, async (_e, { path, hash, mainline }: { path: string; hash: string; mainline?: number }) => {
-    return getGit(path).cherryPick(hash, { mainline });
-  });
-
-  ipcMain.handle(IPC.GIT_REVERT, async (_e, { path, hash, mainline }: { path: string; hash: string; mainline?: number }) => {
-    return getGit(path).revert(hash, { mainline });
-  });
-
-  ipcMain.handle(IPC.GIT_READ_CONFLICT, async (_e, { path, file }: { path: string; file: string }) => {
-    return getGit(path).readConflictFile(file);
-  });
-
-  // v0.5+ 列出仓库所有工作区文件（tracked + untracked）
-  ipcMain.handle(IPC.GIT_LS_FILES, async (_e, { path, maxCount, withStatus }: { path: string; maxCount?: number; withStatus?: boolean }) => {
-    return getGit(path).listFiles({ maxCount, withStatus });
-  });
-
-  // v0.5+ Blame（编辑器 gutter hover 用）
-  ipcMain.handle(IPC.GIT_BLAME, async (_e, { path, file }: { path: string; file: string }) => {
-    return getGit(path).blame(file);
-  });
-
-  // v0.5+ 文件历史（FileHistoryPanel 用）
-  ipcMain.handle(IPC.GIT_FILE_LOG, async (_e, { path, file, maxCount, follow }: { path: string; file: string; maxCount?: number; follow?: boolean }) => {
-    return getGit(path).fileLog(file, { maxCount, follow });
-  });
-
-  // v0.5+ 文件某次 commit 的 diff（FileHistoryPanel 详情用）
-  ipcMain.handle(IPC.GIT_FILE_DIFF, async (_e, { path, file, fromHash, toHash }: { path: string; file: string; fromHash?: string; toHash?: string }) => {
-    return getGit(path).fileDiff(file, { fromHash, toHash });
-  });
-
-  ipcMain.handle(IPC.GIT_REMOTE_LIST, async (_e, repoPath: string) => {
-    return getGit(repoPath).remoteList();
-  });
-
-  ipcMain.handle(IPC.GIT_REMOTE_ADD, async (_e, { path, name, url }: { path: string; name: string; url: string }) => {
-    return getGit(path).remoteAdd(name, url);
-  });
-
-  ipcMain.handle(IPC.GIT_REMOTE_REMOVE, async (_e, { path, name }: { path: string; name: string }) => {
-    return getGit(path).remoteRemove(name);
-  });
+  ipcMain.handle(IPC.GIT_CHERRY_PICK, handle((g, payload: any) => g.cherryPick(payload?.hash, { mainline: payload?.mainline })));
+  ipcMain.handle(IPC.GIT_REVERT, handle((g, payload: any) => g.revert(payload?.hash, { mainline: payload?.mainline })));
+  ipcMain.handle(IPC.GIT_READ_CONFLICT, handle((g, payload: any) => g.readConflictFile(payload?.file)));
+  // v0.5+ 文件级命令
+  ipcMain.handle(IPC.GIT_LS_FILES, handle((g, payload: any) => g.listFiles({ maxCount: payload?.maxCount, withStatus: payload?.withStatus })));
+  ipcMain.handle(IPC.GIT_BLAME, handle((g, payload: any) => g.blame(payload?.file)));
+  ipcMain.handle(IPC.GIT_FILE_LOG, handle((g, payload: any) => g.fileLog(payload?.file, { maxCount: payload?.maxCount, follow: payload?.follow })));
+  ipcMain.handle(IPC.GIT_FILE_DIFF, handle((g, payload: any) => g.fileDiff(payload?.file, { fromHash: payload?.fromHash, toHash: payload?.toHash })));
+  // Remote
+  ipcMain.handle(IPC.GIT_REMOTE_LIST, handle((g) => g.remoteList()));
+  ipcMain.handle(IPC.GIT_REMOTE_ADD, handle((g, payload: any) => g.remoteAdd(payload?.name, payload?.url)));
+  ipcMain.handle(IPC.GIT_REMOTE_REMOVE, handle((g, payload: any) => g.remoteRemove(payload?.name)));
+  // v0.6+ SSH 推送支持：把 origin 切到 SSH（或反向切回 HTTPS）
+  // 注：handler 的 wrapper 已经做了仓库根路径校验，URL 内容在 service 层校验
+  ipcMain.handle(IPC.GIT_SET_REMOTE_URL, handle((g, payload: any) => g.setRemoteUrl(payload?.name, payload?.url)));
 }

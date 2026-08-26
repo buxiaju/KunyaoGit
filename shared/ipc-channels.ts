@@ -47,6 +47,7 @@ export const IPC = {
   GIT_REMOTE_LIST: 'git:remote-list',
   GIT_REMOTE_ADD: 'git:remote-add',
   GIT_REMOTE_REMOVE: 'git:remote-remove',
+  GIT_SET_REMOTE_URL: 'git:set-remote-url',
 
   // 文件系统 / 编辑器
   FS_READ_DIR: 'fs:read-dir',
@@ -105,12 +106,14 @@ export const IPC = {
   SETTINGS_SET: 'settings:set',
   SETTINGS_TEST_GIT: 'settings:test-git',
   SETTINGS_TEST_AUTH: 'settings:test-auth',
+  SETTINGS_TEST_SSH: 'settings:test-ssh',
   DIALOG_SHOW_OPEN: 'dialog:show-open',
   DIALOG_SHOW_SAVE: 'dialog:show-save',
 
   // 通用
   APP_OPEN_PATH: 'app:open-path',
   APP_SHELL_OPEN: 'app:shell-open',
+  APP_LOG_ERROR: 'app:log-error',
 
   // 更新检查 / 应用内下载安装
   UPDATE_CHECK: 'update:check',

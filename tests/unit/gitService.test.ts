@@ -8,14 +8,28 @@ const mockRaw = vi.fn();
 const mockStash = vi.fn();
 const mockStatus = vi.fn();
 const mockLog = vi.fn();
+const mockGetRemotes = vi.fn();
+const mockRemote = vi.fn();
+const mockAddRemote = vi.fn();
+const mockRemoveRemote = vi.fn();
+
+// 记录 simpleGit 被调用的 options（含 env）
+const simpleGitOptions: any[] = [];
 
 vi.mock('simple-git', () => ({
-  default: vi.fn(() => ({
-    raw: mockRaw,
-    stash: mockStash,
-    status: mockStatus,
-    log: mockLog,
-  })),
+  default: vi.fn((opts: any) => {
+    simpleGitOptions.push(opts);
+    return {
+      raw: mockRaw,
+      stash: mockStash,
+      status: mockStatus,
+      log: mockLog,
+      getRemotes: mockGetRemotes,
+      remote: mockRemote,
+      addRemote: mockAddRemote,
+      removeRemote: mockRemoveRemote,
+    };
+  }),
 }));
 
 const { GitService } = await import('../../electron/services/git');
@@ -462,5 +476,100 @@ index 111..222 100644
         expect(r.data).toEqual([{ path: 'a.ts', status: undefined }]);
       }
     });
+  });
+});
+
+describe('GitService 构造：v0.6+ SSH 推送支持（sshKeyPath 注入 GIT_SSH_COMMAND）', () => {
+  beforeEach(() => {
+    simpleGitOptions.length = 0;
+  });
+
+  it('传 sshKeyPath 时，simple-git 收到 env.GIT_SSH_COMMAND', () => {
+    new GitService('/tmp/repo', undefined, 'C:\\Users\\me\\.ssh\\id_ed25519');
+    expect(simpleGitOptions).toHaveLength(1);
+    const env = simpleGitOptions[0].env;
+    expect(env).toBeDefined();
+    expect(env.GIT_SSH_COMMAND).toContain('ssh');
+    expect(env.GIT_SSH_COMMAND).toContain('-i');
+    expect(env.GIT_SSH_COMMAND).toContain('C:\\Users\\me\\.ssh\\id_ed25519');
+    expect(env.GIT_SSH_COMMAND).toContain('IdentitiesOnly=yes');
+    expect(env.GIT_SSH_COMMAND).toContain('StrictHostKeyChecking=accept-new');
+  });
+
+  it('不传 sshKeyPath 时，simple-git 不设 env（让 git 用默认）', () => {
+    new GitService('/tmp/repo');
+    expect(simpleGitOptions[0].env).toBeUndefined();
+  });
+
+  it('sshKeyPath 是空字符串时同样不设 env', () => {
+    new GitService('/tmp/repo', undefined, '');
+    expect(simpleGitOptions[0].env).toBeUndefined();
+  });
+
+  it('sshKeyPath 是空白时也不设 env', () => {
+    new GitService('/tmp/repo', undefined, '   ');
+    expect(simpleGitOptions[0].env).toBeUndefined();
+  });
+});
+
+describe('GitService.setRemoteUrl（v0.6+ SSH 推送支持）', () => {
+  beforeEach(() => {
+    mockGetRemotes.mockReset();
+    mockRemote.mockReset();
+  });
+
+  it('修改 origin 的 URL（HTTPS → SSH）', async () => {
+    mockGetRemotes.mockResolvedValueOnce([
+      { name: 'origin', refs: { fetch: 'https://github.com/buxiaju/repo.git', push: 'https://github.com/buxiaju/repo.git' } },
+    ]);
+    mockRemote.mockResolvedValueOnce('');
+
+    const svc = new GitService('/tmp/repo');
+    const r = await svc.setRemoteUrl('origin', 'git@github.com:buxiaju/repo.git');
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.data.oldUrl).toBe('https://github.com/buxiaju/repo.git');
+      expect(r.data.newUrl).toBe('git@github.com:buxiaju/repo.git');
+    }
+    expect(mockRemote).toHaveBeenCalledWith(['set-url', 'origin', 'git@github.com:buxiaju/repo.git']);
+  });
+
+  it('新旧 URL 相同时直接返回 ok，不调 git remote', async () => {
+    mockGetRemotes.mockResolvedValueOnce([
+      { name: 'origin', refs: { fetch: 'git@github.com:buxiaju/repo.git', push: 'git@github.com:buxiaju/repo.git' } },
+    ]);
+    const svc = new GitService('/tmp/repo');
+    const r = await svc.setRemoteUrl('origin', 'git@github.com:buxiaju/repo.git');
+    expect(r.ok).toBe(true);
+    expect(mockRemote).not.toHaveBeenCalled();
+  });
+
+  it('remote 不存在时返回错误', async () => {
+    mockGetRemotes.mockResolvedValueOnce([]);
+    const svc = new GitService('/tmp/repo');
+    const r = await svc.setRemoteUrl('origin', 'git@github.com:buxiaju/repo.git');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/不存在/);
+  });
+
+  it('空 name / url 拒绝', async () => {
+    const svc = new GitService('/tmp/repo');
+    const r1 = await svc.setRemoteUrl('', 'x');
+    const r2 = await svc.setRemoteUrl('origin', '');
+    const r3 = await svc.setRemoteUrl('origin', null as any);
+    expect(r1.ok).toBe(false);
+    expect(r2.ok).toBe(false);
+    expect(r3.ok).toBe(false);
+  });
+
+  it('git remote 失败时返回错误（描述走 describeError）', async () => {
+    mockGetRemotes.mockResolvedValueOnce([
+      { name: 'origin', refs: { fetch: 'https://github.com/buxiaju/repo.git', push: '' } },
+    ]);
+    mockRemote.mockRejectedValueOnce(new Error('fatal: unable to access'));
+    const svc = new GitService('/tmp/repo');
+    const r = await svc.setRemoteUrl('origin', 'git@github.com:buxiaju/repo.git');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toContain('unable to access');
   });
 });
