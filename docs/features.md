@@ -30,6 +30,7 @@
 21. [文件历史 + Blame（v0.5）](#21-文件历史--blamev05)
 22. [健壮性加固（v0.6+）](#22-健壮性加固v06)
 23. [SSH 推送支持（v0.6+）](#23-ssh-推送支持v06)
+24. [SSH 按 host 路由（v0.6.2+）](#24-ssh-按-host-路由v062)
 
 > **v0.6 增量**分两块：[§6 Release 管理](#6-release-管理--changelog-自动生成) 内就地扩写（附件 / 编辑 / 详情抽屉 / 搜索 / 草稿）；[§22 健壮性加固](#22-健壮性加固v06) 新增 P0 7 项 + P1 5 项，含路径边界、协议白名单、异常兜底、配置损坏自愈、Markdown sanitize、符号链接环保护等。
 
@@ -1480,6 +1481,130 @@ v0.6+ 起，所有 `fs:*` 与 `repo:*` 通道在主进程都过 `assertSafePath(
   - 单条上限 16KB（防恶意/异常情况下撑爆日志）
   - 写盘失败静默 —— 日志落盘不能反过来影响主进程稳定性
 - **形态校验**：`kind` 必须在 `unhandledrejection | error | manual` 之一；`message` 必填；非合法值返回 `{ ok: false }`，不写盘
+
+## 24. SSH 按 host 路由（v0.6.2+）
+
+### 24.1 背景
+
+v0.6.1 的 SSH 推送支持是"单一 key"模式：`AppSettings.sshKeyPath` 一项，GitService 构造时把 `ssh -i <key>` 注入 `GIT_SSH_COMMAND` env。问题是**所有** host（github / gitee）都用同一个 key：
+
+- 安全上：公钥一旦泄露，所有平台都中招
+- 实践上：很多用户希望**GitHub 用专门的工作 key，Gitee 用专门的私 key**
+
+v0.6.2 改成**按 host 独立 key** + 用 OpenSSH 标准做法（`~/.ssh/config` 路由），不再注入 env。
+
+### 24.2 数据模型
+
+```ts
+AppSettings = {
+  sshKeyPath?: string;                              // @deprecated v0.6.2 起的兜底
+  sshKeysByHost?: {
+    github?: string;                                 // 用于 github.com
+    gitee?: string;                                  // 用于 gitee.com
+  };
+  preferredProtocol?: 'auto' | 'https' | 'ssh';
+}
+```
+
+**路由规则**（`getEffectiveKeyForHost`）：
+
+1. `sshKeysByHost[host]` 配了 → 用它
+2. 否则 fallback 到顶层 `sshKeyPath`
+3. 都没 → `undefined`（让 git 用 OpenSSH 默认 `~/.ssh/id_ed25519` 等约定）
+
+**v0.6.1 迁移**：UI 层把 `sshKeyPath` 自动复制到 `sshKeysByHost.github`（向后兼容）。
+
+### 24.3 OpenSSH config 路由
+
+**核心改造**：GitService 构造时**不**再注入 `GIT_SSH_COMMAND` env。改写 `~/.ssh/config`：
+
+```
+# >>> KunyaoGit managed block (do not edit) >>>
+Host github.com
+  IdentityFile C:\Users\kunyao\.ssh\id_ed25519_github
+  IdentitiesOnly yes
+  StrictHostKeyChecking accept-new
+
+Host gitee.com
+  IdentityFile C:\Users\kunyao\.ssh\id_ed25519_gitee
+  IdentitiesOnly yes
+  StrictHostKeyChecking accept-new
+# <<< KunyaoGit managed block <<<
+```
+
+**优势**：
+- `git` / `ssh` / `ssh-add` 走同一份 config，行为一致
+- 用户的其他 Host 块原样保留（KunyaoGit 只管自己的 `>>> <<<` 标记段）
+- 符合 OpenSSH 标准做法，未来加新 host（gitlab / gitea）只是新加一段
+- GitService 构造的 env 干净，simpleGit 配置不被污染
+
+### 24.4 一键生成密钥
+
+设置页「SSH 推送」区每个 host 行都有「生成新密钥」按钮，展开表单：
+
+- **密钥文件名**：默认 `id_ed25519_github` / `id_ed25519_gitee`
+- **注释**：默认 `kunyao@kunyaogit.local (GitHub)` 等
+- **类型**：固定 ed25519（推荐，现代）
+
+点击「生成」→ 调 `ssh-keygen -t ed25519 -f <path> -N "" -C <comment>` → 私钥落在 `~/.ssh/<name>`，返回公钥 + fingerprint。生成后**自动复制公钥到剪贴板**，展示公钥 + 跳转平台链接（GitHub Settings → SSH keys / Gitee 个人设置 → SSH 公钥）。
+
+### 24.5 按 host 测试连接
+
+测试连接按钮**分 host**：
+
+- 「测试 GitHub 连接」→ `ssh -i <key> -T git@github.com`
+- 「测试 Gitee 连接」→ `ssh -i <key> -T git@gitee.com`
+
+返回结果：
+- 成功：`Hi <user>! You've successfully authenticated...` 解析为「已认证为 <user>」
+- 失败：按错误分类（Permission denied / DNS / 超时 / 命令不存在）
+
+为安全起见，**仅白名单** github.com / gitee.com 两个 host（避免探测任意 SSH 服务）。
+
+### 24.6 新增 IPC 通道（5 个）
+
+```
+SETTINGS_TEST_SSH_FOR_HOST  // 按 host 测试（旧 SETTINGS_TEST_SSH 保留）
+SETTINGS_SSH_GENERATE       // 一键生成 ed25519
+SETTINGS_SSH_READ_PUBKEY     // 读 .pub 文件（显示给用户）
+SETTINGS_SSH_WRITE_CONFIG    // 写 ~/.ssh/config
+SETTINGS_SSH_READ_CONFIG     // 读 ~/.ssh/config（预览给用户）
+```
+
+### 24.7 新增 / 修改文件
+
+| 文件 | 性质 | 用途 |
+| --- | --- | --- |
+| `electron/lib/sshConfig.ts` | 新增 | 纯函数：writeSshConfig / renderBlock / stripManagedSection / getEffectiveKeyForHost / detectRemoteHost |
+| `src/lib/sshConfig.ts` | 新增 | 渲染端镜像（getEffectiveKeyForHost / detectRemoteHost） |
+| `electron/services/git.ts` | 修改 | 构造时不再注入 env（OpenSSH config 接管） |
+| `electron/services/settings.ts` | 修改 | 加 generateSshKey / readPublicKey / readSshConfigFile / writeSshConfigFile / testSshConnectionForHost |
+| `electron/ipc/settings.ts` | 修改 | 注册 5 个新 handler |
+| `electron/preload.ts` | 修改 | 暴露 5 个新 API |
+| `src/stores/settings.ts` | 修改 | DEFAULTS 加 sshKeysByHost |
+| `src/pages/SettingsPage.tsx` | 修改 | SSH 区重写：按 host 拆分 + 一键生成 + 公钥显示/复制 |
+| `src/i18n/zh.ts` / `en.ts` | 修改 | + 22 个 key |
+| `shared/types.ts` | 修改 | + `sshKeysByHost` 字段 |
+| `shared/ipc-channels.ts` | 修改 | + 5 个 channel |
+| `tests/unit/sshConfig.test.ts` | 新增 | 25 例（纯函数，零 mock） |
+| `tests/unit/gitService.test.ts` | 修改 | v0.6.1 的 4 个 env 测试改写为 v0.6.2 行为 |
+
+### 24.8 验证
+
+| 检查 | 命令 | 期望 |
+| --- | --- | --- |
+| TypeScript | `npm run typecheck` | 0 错 |
+| 单元测试 | `npm test` | 598/598 全绿（v0.6.1 留的 572 + sshConfig 25 + gitService 1 调整） |
+| 构建 | `npx vite build` | 0 错 |
+| sshConfig 路由 | 设置页填两个 key + 「写入 ~/.ssh/config」 | 打开 `~/.ssh/config` 能看到 KunyaoGit managed block |
+| 一键生成 | 点击「生成新密钥」 | 私钥落在 `~/.ssh/id_ed25519_github` 等，公钥自动复制 |
+| 按 host 测试 | 「测试 GitHub」+「测试 Gitee」 | 分别返回各自认证结果 |
+
+### 24.9 已知限制
+
+- **私钥 passphrase**：v0.6.2 UI 不提供 passphrase 输入（默认空）。需要 passphrase 的用户可以手动用 ssh-keygen 重新加密；或 v0.6.3 加 passphrase + ssh-agent
+- **ssh-add 自动加载**：生成后没自动 `ssh-add`，需要用户手动 `ssh-add ~/.ssh/id_ed25519_github` 或重启 ssh-agent
+- **Gitee SSH 响应格式**与 GitHub 不同（不一定有 `Hi <user>!`），可能误判为失败；v0.6.3 加 Gitee 特定解析
 
 ---
 

@@ -849,7 +849,7 @@ tests/
 └── unit/                    # 所有测试文件
     ├── parseRemote.test.ts         # ★ v0.6.1 远程 URL 解析 + 互转（30 例含 src/electron 镜像一致性）
     ├── parseUnifiedDiff.test.ts    # diff 解析（11 例）
-    ├── gitService.test.ts          # GitService mock（53 例，★ v0.6.1 加 GIT_SSH_COMMAND + setRemoteUrl 12 例）
+    ├── gitService.test.ts          # GitService mock（53 例，★ v0.6.1 + setRemoteUrl 12 例 / ★ v0.6.2 改 4 例为"不注入 env"）
     ├── i18n.test.ts                # i18n 完整性 + t() 插值（27 例）
     ├── commands.test.ts            # 命令面板注册表 + 过滤（20 例）
     ├── StatusBar.test.tsx          # 底部状态栏组件（21 例）
@@ -874,14 +874,15 @@ tests/
     ├── gitTimeout.test.ts          # ★ v0.6 Git 60s 超时 + 错误本地化（4 例）
     ├── appLogError.test.ts         # ★ v0.6 渲染层错误落盘（9 例）
     ├── pushErrorHint.test.ts       # ★ v0.6.1 isNetworkError + switchOriginToSsh（15 例）
-    └── sshConnection.test.ts       # ★ v0.6.1 parseSshResult + testSshConnection（15 例）
+    ├── sshConnection.test.ts       # ★ v0.6.1 parseSshResult + testSshConnection（15 例）
+    └── sshConfig.test.ts            # ★ v0.6.2 OpenSSH config 写入 + getEffectiveKeyForHost（25 例）
 ```
 
-合计 **572 例**，28 个测试文件，跑完约 5 秒。
+合计 **598 例**，29 个测试文件，跑完约 5 秒。
 
-演进：v0.4 218 例（10 文件）→ v0.5 268 例（12 文件，+fuzzyMatch/+FileHistoryPanel/+gitService.listFiles/+useShortcuts Ctrl+P）→ v0.6 281 例（14 文件，+MarkdownBody 6 / +ReleaseCard 7）→ **v0.6.1 572 例**（28 文件，4 轮健壮性加固 + SSH 推送支持共 14 个新文件 +491 例；详细见各文件注释的 ★ v0.6 / ★ v0.6.1 标记）。
+演进：v0.4 218 例（10 文件）→ v0.5 268 例（12 文件，+fuzzyMatch/+FileHistoryPanel/+gitService.listFiles/+useShortcuts Ctrl+P）→ v0.6 281 例（14 文件，+MarkdownBody 6 / +ReleaseCard 7）→ v0.6.1 572 例（28 文件，4 轮健壮性加固 + SSH 推送支持共 14 个新文件 +291 例）→ **v0.6.2 598 例**（29 文件，SSH 按 host 路由 +1 个新文件 sshConfig.test.ts +25 例 + gitService.test.ts 1 例调整；详细见各文件注释的 ★ v0.6 / ★ v0.6.1 / ★ v0.6.2 标记）。
 
-> PowerShell 下 `npm test` 退出码可能是 1（`MODULE_TYPELESS_PACKAGE_JSON` 警告被算进 stderr），看输出里的 `Tests 572 passed` 行判断真实结果。
+> PowerShell 下 `npm test` 退出码可能是 1（`MODULE_TYPELESS_PACKAGE_JSON` 警告被算进 stderr），看输出里的 `Tests 598 passed` 行判断真实结果。
 
 ### 10.3 跑测试
 
