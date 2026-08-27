@@ -28,36 +28,55 @@ function log(msg) {
 
 const RELEASE_BODY = `# KunyaoGit v${VERSION}
 
+## v0.6.2 特性
+- 🔑 **SSH 按 host 路由**（v0.6.1 单一 key → v0.6.2 多 key + OpenSSH config 接管）
+  - **数据模型**：\`AppSettings.sshKeysByHost = { github?: string, gitee?: string }\` 新增；旧 \`sshKeyPath\` 标记 @deprecated 保留为兜底
+  - **OpenSSH config 路由**：\`electron/lib/sshConfig.ts\` 把 "Host github.com / Host gitee.com" 块写入 \`~/.ssh/config\`，用 \`# >>> KunyaoGit managed block (do not edit) >>>\` / \`# <<< KunyaoGit managed block <<<\` 标记管理。用户的其他 Host 块原样保留
+  - **GitService 改造**：构造时**不**再注入 \`GIT_SSH_COMMAND\` env，让 OpenSSH config 接管 ssh 行为
+  - **新 IPC 通道** 5 个：\`SETTINGS_TEST_SSH_FOR_HOST\` / \`SETTINGS_SSH_GENERATE\` / \`SETTINGS_SSH_READ_PUBKEY\` / \`SETTINGS_SSH_WRITE_CONFIG\` / \`SETTINGS_SSH_READ_CONFIG\`
+- 🛠️ **一键生成 SSH 密钥**（设置页「SSH 推送」区）：调 \`ssh-keygen -t ed25519 -f <path> -N "" -C <comment>\` 生成；私钥落 \`~/.ssh/id_ed25519_<host>\`；**自动复制公钥**到剪贴板
+- 🔍 **按 host 测试连接**：仅白名单 github.com / gitee.com；成功解析 \`Hi <user>!\`，失败分类
+- 🧪 **自动化测试** — 572 → **598 例**（+26），29 文件
+
 ## v0.6.1 特性
-- 🔐 **SSH 推送支持**（解决 github.com:443 受限场景，国内环境必备）
+- 🔐 **SSH 推送支持**（解决 github.com:443 受限场景）
   - **设置项**：\`AppSettings.sshKeyPath\` + \`preferredProtocol\`（auto / https / ssh 三选一）
-  - **GitService 构造时**按 sshKeyPath 注入 \`GIT_SSH_COMMAND=ssh -i <key> -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o BatchMode=yes\`，push / fetch / pull 自动走指定 key
+  - **GitService 构造时**按 sshKeyPath 注入 \`GIT_SSH_COMMAND=ssh -i <key> -o IdentitiesOnly=yes\`
   - **URL 互转**：\`parseRemote\`（electron + src 两镜像强一致）新增 \`detectProtocol\` / \`toSshUrl\` / \`toHttpsUrl\`
-  - **新 IPC 通道**：\`git:set-remote-url\`（一键改 origin）+ \`settings:test-ssh\`（探测 git@github.com）
+  - **新 IPC 通道**：\`git:set-remote-url\` + \`settings:test-ssh\`
   - **设置页新增「SSH 推送」区**：私钥路径 + 协议偏好 + 测试连接
-  - **push 失败增强**：\`isNetworkError\` 检测 \`Failed to connect to ... port 443\` 类错误，\`window.confirm\` 弹窗"是否切换到 SSH？"，确认后 \`switchOriginToSsh\` 自动改 remote URL
+  - **push 失败增强**：\`isNetworkError\` 检测 + \`window.confirm\` 弹窗 + \`switchOriginToSsh\` 自动改 remote URL
 - 🛡️ **P0 健壮性加固**（4 轮共 12 项）
-  - **P0 崩溃兜底**：主进程 uncaughtException / unhandledRejection 落盘（30s 节流）+ 渲染进程 error / unhandledrejection 监听（5s 节流）+ 渲染进程崩溃/无响应监听（render-process-gone / unresponsive / did-fail-load，过滤 ERR_ABORTED）+ 两层 ErrorBoundary（外层包 Router/I18nProvider，内层保 Layout 侧边栏；刻意不依赖 useI18n，Provider 缺席时双层兜底）
-  - **P0 安全加固**：协议白名单扩 4 入口（WHATWG URL 解析挡 java\\nscript: / 大小写混写）+ 仓库根白名单 + 系统目录黑名单（path.relative 而非 startsWith，防 C:\\repo-evil 命中 C:\\repo）+ 配置文件 JSON 损坏自愈（备份为 .corrupt-<时间戳>.json 后重建，目录不可写降级内存 store）+ Markdown sanitize（DOMPurify + 启动自检探针 + 失效降级，实测 3.4.14 在 happy-dom 下静默失效的发现）
-  - **P0.5/P0.6 补漏**：\`ipc/git.ts\` 32 个 handler 收口走 \`getGitSafe\`（含 \`Map<repoPath, GitService>\` 缓存 + simple-git 启动异常 try/catch 兜成 Result）+ 5 个 file 参数（blame / fileLog / fileDiff / diffFile / readConflictFile）走 \`assertInsideRepo\` 仓库内校验
-  - **P1 稳定性**：单实例锁（git requestSingleInstanceLock + second-instance 唤起，根因：单实例锁之前并发写 gitgui-settings.json 会产生半截 JSON 触发 P0 损坏自愈）+ Git 命令 60s 超时 + Block timeout reached 翻译中文 + settings 加载/保存容错（失败也置 loaded:true 不卡 loading）+ settings 写串行化（writeQueue: Promise chain，单进程内并发不再丢更新）+ 二进制文件读取 10MB 上限 + REPO_LIST_RECENT 并行化（Promise.all 而非串行 fs.access）+ 不可达条目跳过而非删除（移动硬盘未插时不让用户记录莫名消失）
-  - **P1.5+ 错误脱敏**：\`redactPath\` 把 C:\\Users\\kunyao\\Documents\\xxx\\file.txt 脱敏为 \`~\\xxx\\file.txt\`（保留最后两段：文件名 + 直接父目录），GitService.describeError + globalErrorHandler.describeReason 双层脱敏，toast / 日志 / 远程 API 错误回显统一处理
-  - **P1.7 渲染层错误落盘**：新增 IPC \`app:log-error\`，\`userData/logs/renderer-error.log\`（与 main-error.log 独立，1MB 轮转，16KB 单条上限，失败静默）
+  - **P0 崩溃兜底**：主进程 uncaughtException / unhandledRejection 落盘（30s 节流）+ 渲染进程 error / unhandledrejection 监听（5s 节流）+ 渲染进程崩溃/无响应监听（render-process-gone / unresponsive / did-fail-load，过滤 ERR_ABORTED）+ 两层 ErrorBoundary（外层包 Router/I18nProvider，内层保 Layout 侧边栏；刻意不依赖 useI18n）
+  - **P0 安全加固**：协议白名单扩 4 入口 + 仓库根白名单 + 系统目录黑名单 + 配置文件 JSON 损坏自愈 + Markdown sanitize
+  - **P0.5/P0.6 补漏**：\`ipc/git.ts\` 32 个 handler 收口走 \`getGitSafe\` + 5 个 file 参数走 \`assertInsideRepo\`
+  - **P1 稳定性**：单实例锁 + Git 命令 60s 超时 + settings 加载/保存容错 + 写串行化 + 二进制文件 10MB 上限 + REPO_LIST_RECENT 并行化
+  - **P1.5+ 错误脱敏**：\`redactPath\` 把 C:\\Users\\kunyao\\Documents\\xxx\\file.txt 脱敏为 \`~\\xxx\\file.txt\`
+  - **P1.7 渲染层错误落盘**：新增 IPC \`app:log-error\`，\`userData/logs/renderer-error.log\`
   - **P1.8 文件树 symlink 环保护**：\`buildFileTree\` 走 realpath 去重
-- 🧪 **自动化测试** — 281 → **572 例**（+291），28 文件，约 5 秒
-- 📚 **依赖新增**：\`dompurify@^3.4.14\`（生产，Markdown sanitize）、\`jsdom@^26\`（dev，仅测试用）
-- 🆕 **新 IPC 通道** 2 个：\`git:set-remote-url\` / \`app:log-error\`
 
 ## v0.6.0 特性
 - 📎 **Release 附件上传 / 下载 / 删除（GitHub + Gitee 双平台）**
-- 🧪 **自动化测试** — 268 → 281 例（+13）
+- 🧪 **自动化测试** — 268 → **281 例**（+13）
+
+## v0.5.0 特性
+- ⌨️ **Ctrl+P 跳转文件** — 复用命令面板组件，VS Code 式模糊搜索
+- 📜 **文件历史 + Blame** — FileHistoryPanel 侧边抽屉
+
+## v0.4.0 特性
+- 📊 **底部状态栏** — 三段式布局
+- ⌨️ **全局快捷键** — Ctrl/Cmd+Shift+P 命令面板、Ctrl/Cmd+R 刷新、Shift+? 速查表
+- 🔍 **命令面板** — VS Code 式 Ctrl+Shift+P 模态
+- 📦 **Stash 队列** — Apply / Pop / Show Diff / Drop
+- 🍒 **Cherry-pick / Revert** — hover 工具条入口
+- 🌐 **PR / MR 创建** — 解析远程 URL + GitHub + Gitee 双平台
 
 ## 下载
 - **KunyaoGit-Setup-${VERSION}-x64.exe** — NSIS 安装包（推荐）
 - **KunyaoGit-portable-v${VERSION}.zip** — 便携版
 
 ## 升级
-- **v0.2.0 ~ v0.6.0 用户**：启动应用后会自动检查更新并弹窗，点"立即下载并安装"即可。
+- **v0.2.0 ~ v0.6.1 用户**：启动应用后会自动检查更新并弹窗，点"立即下载并安装"即可。
 
 ## 仓库
 - GitHub: https://github.com/buxiaju/KunyaoGit
@@ -65,9 +84,9 @@ const RELEASE_BODY = `# KunyaoGit v${VERSION}
 
 ## NSIS 安装包下载
 由于 Gitee Release 附件配额 1 GB 已用完且 Gitee raw 路径对 .exe 返回 403，NSIS 安装包（86 MB）请从 GitHub 下载：
-- https://github.com/buxiaju/KunyaoGit/releases/download/v0.6.1/KunyaoGit-Setup-0.6.1-x64.exe
+- https://github.com/buxiaju/KunyaoGit/releases/download/v0.6.2/KunyaoGit-Setup-0.6.2-x64.exe
 
-Gitee 用户也可 \`git clone\` 本仓库后在 \`.release-assets/KunyaoGit-Setup-0.6.1-x64.exe\` 路径获取。
+Gitee 用户也可 \`git clone\` 本仓库后在 \`.release-assets/KunyaoGit-Setup-0.6.2-x64.exe\` 路径获取。
 
 `;
 
