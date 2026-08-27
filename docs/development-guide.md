@@ -568,12 +568,12 @@ node scripts/publish/publish-v026.cjs
 node scripts/publish/update-gitee-body.cjs
 ```
 
-**Gitee 配额限制**（v0.4+ 沿用）：
+**Gitee 配额限制**（v0.4 ~ v0.5 时期结论，**v0.6+ 已失效**，见下方「v0.6.3 更新」）：
 - Gitee Release 附件单文件大小限制 + 仓库附件总配额 1 GB
 - v0.4 前 NSIS 86MB × 多次 release 已用满 1 GB 配额
 - Gitee raw 路径对 `.exe` 返回 403（不只 401，还直接拒绝二进制下载）
 
-**对策**：
+**对策**（同为 v0.5 时期做法）：
 - `update-gitee-body.cjs` 底部固定保留「NSIS 安装包下载」段：
   ```
   由于 Gitee Release 附件配额 1 GB 已用完且 Gitee raw 路径对 .exe 返回 403，NSIS 安装包（86 MB）请从 GitHub 下载：
@@ -582,6 +582,18 @@ node scripts/publish/update-gitee-body.cjs
   ```
 - 每次发版**记得更新该段里的 vX.Y.Z + 文件名**（之前 v0.4 改过 v0.4.0 → v0.5.0，commit `74a6106`）
 - portable zip 小（3.5 MB）能直接传 Gitee 附件；NSIS 86 MB 永远只能走 GitHub
+
+> **⚠️ v0.6.3 更新 — 上面两段已过时，别再照抄**
+>
+> 1. **Gitee Release 附件配额已恢复**（§12.3 首次记录，v0.6.3 再次实测确认）：
+>    `update-gitee-body.cjs` 走 `attach_files` API **直传 86 MB NSIS 成功**（17 秒），
+>    所以「NSIS 永远只能走 GitHub」这个结论**不成立**。两边 Release 现在都带完整安装包。
+> 2. **不要把「Release 附件配额」和「仓库 git 体积」混为一谈**——这是两套独立配额：
+>    - Release 附件配额：1 GB，已恢复，走 API 上传，**不进 git history**
+>    - 仓库 git 体积：v0.6.3 push 时已 829MB / 819MB 软警告（§13.3），这才是真正的瓶颈
+>    v0.6.3 之前的 RELEASE_BODY 把两者写成同一件事（「附件配额接近 819MB 软警告」），已在本版修正。
+> 3. **v0.6.3 起 NSIS 不再 commit 到 `.release-assets/`**：只走 Release API 上传，
+>    避免继续膨胀 git history。代价是 `git clone` 拿不到安装包，Release body 已明确写了这点。
 
 ### 8.7 公告（v0.5+ 新增）
 
@@ -1426,18 +1438,109 @@ v0.6.3 push 时 Gitee 仓库 829MB / 819MB 软警告（仍能 push）。如果�
 | --- | --- | --- |
 | 是否 commit `.release-assets/*.exe` | ✅ commit（`release: v0.6.2 — 资产 + 发布脚本`） | ❌ 不 commit（绕开 Gitee 829MB） |
 | `publish-vXXX.cjs` 是否上传到 GitHub Release | ✅ | ✅ |
-| `publish-vXXX.cjs` 是否上传到 Gitee Release | ✅ | ✅ |
-| 是否需要 `update-gitee-body.cjs` | ✅ | ⚠️ 复用 v0.6.2 脚本（v0.6.3 body 内容相同或更新） |
+| `publish-vXXX.cjs` 是否上传到 Gitee Release | ✅ | ✅（实测 86 MB NSIS 直传成功，17 秒） |
+| 是否需要 `update-gitee-body.cjs` | ✅ | ✅（RELEASE_BODY 已同步 v0.6.3） |
 | 是否需要 `update-gitee-repo-desc.cjs` | ✅ | ✅ |
 | tag | `v0.6.2` | `v0.6.3` |
-| 推送 | `git push gitee + github master` | 同上 |
+| 推送 | `git push gitee + github master` | gitee 走 HTTPS；**github 改走 SSH 22**（443 被 reset） |
 
-### 13.5 教训 / 复用
+### 13.5 发版当天踩的 3 个坑（v0.6.3 实录）
+
+这三个都不是代码 bug，而是**发布流水线**的坑，下次发版会原样复现，务必先看这节。
+
+#### 13.5.1 `app.asar` 被 MiniMax Code 锁住 → electron-builder 打包失败
+
+**现象**：`npm run build:win` 的 tsc + vite build 全成功，卡在 electron-builder：
+
+```
+⨯ remove ...\release\win-unpacked\resources\app.asar:
+  The process cannot access the file because it is being used by another process.
+```
+
+**排查**：`Get-Process` 里**没有任何 electron / KunyaoGit 进程**，但 `Rename-Item app.asar` 仍报占用。
+用 Restart Manager API（`rstrtmgr.dll` 的 `RmStartSession` / `RmRegisterResources` / `RmGetList`）
+才定位到真正的持有者：**MiniMax Code 自己**（agent 宿主进程持有句柄，不能杀）。
+
+工具已存档为 `scripts/debug/who-locks.ps1`，但 ExecutionPolicy 禁止直接跑脚本文件，
+需要 inline 执行同段 C# P/Invoke（见该文件注释）。
+
+**解法**（不动锁、绕开目录）：
+
+```powershell
+npx.cmd electron-builder --win --config.directories.output=release-063
+Copy-Item 'release-063\KunyaoGit-Setup-0.6.3-x64.exe' 'release\' -Force
+Copy-Item 'release-063\KunyaoGit-Setup-0.6.3-x64.exe.blockmap' 'release\' -Force
+```
+
+因为 publish 脚本固定从 `release/` 读资产，build 完必须回拷。
+`.gitignore` 已补通用规则 `release-*/` 兜住这类临时输出目录。
+
+> portable zip **不受影响**：`package-portable.cjs` 是从 `dist/` + `dist-electron/` + `package.json`
+> 压缩的（3.5 MB），跟 `win-unpacked` 无关，可以直接
+> `Compress-Archive -Path dist,dist-electron,package.json -DestinationPath release\KunyaoGit-portable-v0.6.3.zip -Force`。
+
+#### 13.5.2 `RELEASE_BODY` 模板字符串里的 Markdown 反引号没转义 → publish 脚本语法错误
+
+**现象**：`node scripts/publish/publish-v063.cjs` 直接 `SyntaxError`，指向 RELEASE_BODY 正文行。
+
+**根因**：`const RELEASE_BODY = \`...\`` 是**模板字符串**，而 v0.6.3 的 release note 正文里有
+122 处 Markdown inline code（`` `generateSshKey` `` / `` `~/.ssh/config` `` …）。
+用 `scripts/dup-*.cjs` 整块替换 RELEASE_BODY 时**没有转义反引号**，字符串被提前终止。
+
+**解法**：`scripts/fix-release-body-backticks.cjs`（已入库，幂等）——
+用 sentinel 定位 `const RELEASE_BODY = \`` ... `` \`; `` 段落，
+先反转义再统一转义 `` ` `` → `` \` `` 和 `${` → `\${`。
+注意结束 marker 要用正则 `/\r?\n\`;\r?\n/`，因为老脚本是 **CRLF** 行尾（`indexOf('\n\`;\n')` 匹配不到）。
+
+**流程约束**：`dup-*` 生成 publish 脚本后，**必须先 `node --check` 再跑**：
+
+```powershell
+node scripts/fix-release-body-backticks.cjs
+node --check scripts/publish/publish-v063.cjs
+node --check scripts/publish/update-gitee-body.cjs
+```
+
+#### 13.5.3 github remote 切 SSH 后，publish 脚本拿不到 GitHub token
+
+**背景**：GitHub 443 被 reset（`fatal: unable to access ... Recv failure: Connection was reset`），
+把 remote 切到 SSH 22 解决了 push：
+
+```powershell
+git remote set-url github git@github.com:buxiaju/KunyaoGit.git
+git push github master   # ✅ 通了
+```
+
+**副作用**：`publish-vXXX.cjs` 的 token 来源是
+`git remote get-url github` 里内联的 `https://<token>@github.com/...`。
+换成 SSH URL 后正则匹配不到 → `❌ 缺少 GH_TOKEN`。
+（SSH 只能 push，**不能调 REST API**，Release 创建必须要 token。）
+
+**解法**：token 还在 Windows 凭据管理器里（`cmdkey /list` 可见
+`LegacyGeneric:target=git:https://github.com`），用 `git credential fill` 取出注入环境变量：
+
+```powershell
+$OutputEncoding = New-Object System.Text.UTF8Encoding($false)   # ← 关键
+$out = @('protocol=https', 'host=github.com', 'username=buxiaju', '') | git credential fill 2>$null
+$env:GH_TOKEN = (($out | Where-Object { $_ -like 'password=*' }) -replace '^password=','')
+node scripts/publish/publish-v063.cjs
+```
+
+**两个必踩的 PowerShell 细节**：
+1. **`$OutputEncoding` 默认带 BOM** → 写进 stdin 的第一行变成 `\ufeffprotocol=https`，
+   git 报 `fatal: refusing to work with credential missing protocol field`。
+   必须换成 `UTF8Encoding($false)`（无 BOM）。
+2. stdin 要用**字符串数组**逐行传（`@('protocol=https', ...)`），
+   单个 `"a\`nb"` 字符串传不进去。
+
+### 13.6 教训 / 复用
 
 1. **bug fix patch 不需要"按模块"拆批**：v0.6.3 后端改一处，前端跟着改同一处，i18n 跟着改，测试跟着加——这是**一个逻辑单元**，强拆只会让 git log 看起来"碎"。3 commit（fix / feat / docs）已足够清晰。
 2. **dev 模式 ESM `require` 报错是 vite-plugin-electron 的隐式要求**：v0.6.1/v0.6.2 production 走 electron-builder CJS bundle 能 require，没暴露。这次 v0.6.3 真实 dev 调试才暴露。**新代码要避免 `require` 顶层模块**，统一用 ES `import`。
 3. **OpenSSH 行为细节**：`ssh -T git@github.com` 成功消息走 stderr（不是 stdout）；OpenSSH 交互式终端会加 ANSI 颜色码。`parseSshResult` 必须合并 stdout+stderr 检测；UI 必须剥 ANSI。这两个细节是 GitHub/Gitee ssh 协议层的硬规范。
 4. **状态共享串台**：页面级共用 `testResult` 这种 state，多个独立测试都写它就会互相串。**先按"用户感知的 UI 区块"分 state**，不要等 bug 暴露再拆。
+5. **发布流水线的坑比代码 bug 更贵**：v0.6.3 代码部分早就 typecheck 0 error / 631 测试全绿，真正卡住发版的是 §13.5 那三个环境坑（文件锁 / 模板字符串转义 / token 来源）。**发版前先把流水线跑通一遍再改代码**，别把两类问题混在一起排。
+6. **代码生成脚本必须配语法校验**：`scripts/dup-*.cjs` 这类"整块替换模板字符串"的脚本天然容易生成语法错误的产物。生成后**立刻 `node --check`**，不要等到跑 publish 才发现（publish 有外部副作用，失败位置更难判断）。
+7. **概念别混**：Gitee 的「Release 附件配额（1 GB，已恢复）」和「仓库 git 体积（829MB / 819MB 软警告）」是两套独立限制。v0.6.3 之前的 RELEASE_BODY 和 §8.6 都把两者写成同一件事，导致「NSIS 只能走 GitHub」这个错误结论沿用了好几个版本。
 
 ---
 

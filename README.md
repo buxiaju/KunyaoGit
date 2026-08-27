@@ -6,27 +6,29 @@
 
 > 一个 Git 桌面客户端，深度集成 **GitHub** 和 **Gitee**（码云）。
 
-![Electron](https://img.shields.io/badge/Electron-33-9feaf9) ![React](https://img.shields.io/badge/React-18-61dafb) ![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178c6) ![License](https://img.shields.io/badge/license-MIT-green) ![Version](https://img.shields.io/badge/version-v0.5.0-22c55e)
+![Electron](https://img.shields.io/badge/Electron-33-9feaf9) ![React](https://img.shields.io/badge/React-18-61dafb) ![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178c6) ![License](https://img.shields.io/badge/license-MIT-green) ![Version](https://img.shields.io/badge/version-v0.6.3-22c55e)
 
 ---
 
-## 🎉 v0.6.0 已发布 — Release 附件 + 详情抽屉 + Markdown 渲染
+## 🎉 v0.6.3 已发布 — SSH 设置区 8 个真实 bug 修复 + 密钥管理
 
-> **下载**：[GitHub Releases](https://github.com/buxiaju/KunyaoGit/releases/tag/v0.6.0) · [Gitee Releases](https://gitee.com/buxiaju/KunyaoGit/releases/tag/v0.6.0)
+> **下载**：[GitHub Releases](https://github.com/buxiaju/KunyaoGit/releases/tag/v0.6.3) · [Gitee Releases](https://gitee.com/buxiaju/KunyaoGit/releases/tag/v0.6.3)
 >
-> - 🪟 **NSIS 安装包**（86 MB）— 主流下载，桌面/开始菜单快捷方式 + 卸载入口
-> - 📦 **便携版 zip**（3.5 MB）— 绿色版，解压即用
+> - 🪟 **NSIS 安装包**（约 90 MB）— 主流下载，桌面/开始菜单快捷方式 + 卸载入口
+> - 📦 **便携版 zip**（约 3.7 MB）— 绿色版，解压即用
 >
-> **v0.6.0 主要更新**：
-> - 📎 **Release 附件上传 / 下载 / 删除**（GitHub + Gitee 双平台）— 创建 release 时多选本地附件；已发布 release 可在详情抽屉继续管理
-> - ✏️ **Release 编辑** — 详情抽屉可改 name / body / prerelease；GitHub 支持 draft ↔ release 切换
-> - 🎨 **Release 详情抽屉** — 640px 右侧抽屉，body 用 `marked` 渲染 Markdown，附件完整列表 + 「发布草稿」按钮
-> - 🔍 **Release 列表搜索** — 顶部搜索框按 tag / name 实时过滤
-> - 🧪 **自动化测试** — 从 268 例扩展到 **281 例**（+13：MarkdownBody 6 例 + ReleaseCard 7 例）
+> **v0.6.3 主要更新**（全部来自 v0.6.2 上线后的实际点击 + 截图反馈）：
+> - 🗝️ **SSH 密钥管理** — 新增「已存在的 SSH 私钥」卡片：扫描 `~/.ssh/id_*`，展示文件名 + host badge + fingerprint，支持「使用此 key」一键填入和「删除」（带二次确认 + 路径护栏）
+> - 🔑 **一键生成密钥不再报错** — 空 keyPath + host 自动落到 `~/.ssh/id_ed25519_<github|gitee>`（原来直接抛「keyPath 不能为空」）
+> - 🎨 **SSH 测试结果正确显示** — 修 `parseSshResult` 漏 stderr（GitHub `ssh -T` 成功消息走 stderr 是 OpenSSH 规范）+ 新增 `stripAnsi` 剥终端颜色码（原来显示 `[36;01m不倦居...[0m`）
+> - 🛠️ **「选择」按钮可用** — Git 可执行文件路径改用系统文件选择器（Electron 渲染层默认禁用 `window.prompt()`）
+> - 🔧 **UI 状态与卡片位置修正** — `testResult` 拆成 `gitTestResult` / `sshTestResult` 不再互相串台；生成结果卡片移到对应 host 字段下方
+> - 📦 **dev 模式 ESM require 修复** — `writeSshConfigFile` 的顶层 `require()` 改 static `import`
+> - 🧪 **自动化测试** — 从 598 例扩展到 **631 例全绿**（31 文件：generateSshKey 9 + listSshKeys 16 + sshConnection +6）
 >
-> 详细 changelog：见 [GitHub Release Notes](https://github.com/buxiaju/KunyaoGit/releases/tag/v0.6.0) 或 `CHANGELOG.md`。
+> 详细 changelog：见 [GitHub Release Notes](https://github.com/buxiaju/KunyaoGit/releases/tag/v0.6.3)、`CHANGELOG.md` 或 `docs/features.md` §23.8。
 >
-> **升级方式**：启动旧版会**自动检查更新**并弹窗，点"立即下载并安装"即可一键升级到 v0.6.0；也可下载安装包覆盖安装。
+> **升级方式**：启动旧版会**自动检查更新**并弹窗，点"立即下载并安装"即可一键升级到 v0.6.3；也可下载安装包覆盖安装。
 
 ---
 
