@@ -1532,6 +1532,40 @@ node scripts/publish/publish-v063.cjs
 2. stdin 要用**字符串数组**逐行传（`@('protocol=https', ...)`），
    单个 `"a\`nb"` 字符串传不进去。
 
+#### 13.5.4 Release API 会自动打 tag → 与后续文档 commit 不一致
+
+**现象**：走完 publish 脚本后，`git push github v0.6.3` 报
+`! [rejected] v0.6.3 -> v0.6.3 (already exists)`。
+
+**根因**：GitHub 和 Gitee 的 Release 创建 API 在带 `target_commitish: 'master'` 时
+**会自动创建 tag**，指向调用那一刻的 master HEAD（v0.6.3 是 `7da4103`）。
+而发版后还会继续产生 commit（README banner、文档补充、Release body 文案修正），
+本地再 `git tag` 就落在更后面的 commit 上，两边对不上。
+
+> 注意 Gitee 的 `git ls-remote --tags` 返回的是 **annotated tag object SHA**（如 `b870a55`），
+> 不是 commit SHA。要 peel 才能比对：
+> `git fetch gitee 'refs/tags/v0.6.3:refs/remotes/tmp' ; git rev-list -n 1 refs/remotes/tmp`
+
+**v0.6.3 采用的方案**（作者拍板）：**force push 本地 tag 覆盖远端**，让 tag 指向
+发版全部收尾后的 commit（`c8313e6`），这样 tag 里包含完整的 README + 文档。
+
+```powershell
+git tag -f -a v0.6.3 <final-commit> -m "..."
+git push -f github v0.6.3
+git push -f gitee v0.6.3
+```
+
+安全性说明：Release 的**资产和 body 都不受影响**（它们挂在 release 对象上，不挂 tag），
+只是 Release 页面「Commits since this release」的基准点变了。
+另一个方案是本地 tag 回退对齐远端（tag = 构建时源码），v0.6.3 没选。
+
+**边界约定**：tag 一旦 force push 定稿，**该版本后续的 commit 不再移 tag**，
+算作下一个版本的 post-release 准备。否则会陷入"改文档→移 tag"的循环。
+
+**下次发版建议**：把文档收尾（README banner / CHANGELOG / case study）
+放在**调用 publish 脚本之前**，让 Release API 自动打的 tag 一次就落在最终 commit 上，
+彻底避免这一步 force push。
+
 ### 13.6 教训 / 复用
 
 1. **bug fix patch 不需要"按模块"拆批**：v0.6.3 后端改一处，前端跟着改同一处，i18n 跟着改，测试跟着加——这是**一个逻辑单元**，强拆只会让 git log 看起来"碎"。3 commit（fix / feat / docs）已足够清晰。
@@ -1541,6 +1575,7 @@ node scripts/publish/publish-v063.cjs
 5. **发布流水线的坑比代码 bug 更贵**：v0.6.3 代码部分早就 typecheck 0 error / 631 测试全绿，真正卡住发版的是 §13.5 那三个环境坑（文件锁 / 模板字符串转义 / token 来源）。**发版前先把流水线跑通一遍再改代码**，别把两类问题混在一起排。
 6. **代码生成脚本必须配语法校验**：`scripts/dup-*.cjs` 这类"整块替换模板字符串"的脚本天然容易生成语法错误的产物。生成后**立刻 `node --check`**，不要等到跑 publish 才发现（publish 有外部副作用，失败位置更难判断）。
 7. **概念别混**：Gitee 的「Release 附件配额（1 GB，已恢复）」和「仓库 git 体积（829MB / 819MB 软警告）」是两套独立限制。v0.6.3 之前的 RELEASE_BODY 和 §8.6 都把两者写成同一件事，导致「NSIS 只能走 GitHub」这个错误结论沿用了好几个版本。
+8. **发版顺序应该是「文档收尾 → 调 publish API」**：Release 创建 API 会自动打 tag（§13.5.4），先发布再补文档必然导致 tag 不一致，多一次 force push。下次把 README banner / CHANGELOG / case study 全部 commit 完再跑 publish 脚本。
 
 ---
 
