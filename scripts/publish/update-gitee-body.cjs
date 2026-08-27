@@ -28,9 +28,9 @@ function log(msg) {
 
 const RELEASE_BODY = `# KunyaoGit v0.6.3
 
-## v0.6.3 特性 — 🐛 真实使用 bug 集中修（7 项）
+## v0.6.3 特性 — 🐛 真实使用 bug 集中修（8 项）
 
-v0.6.2 上线后用截图反馈 + 实际点击暴露的 7 个 bug 集中修：
+v0.6.2 上线后用截图反馈 + 实际点击暴露的 8 个 bug 集中修：
 
 - 🔑 **\`generateSshKey\` 空 keyPath 误 throw**
   - 原来后端对前端传的 \`keyPath: ''\` 直接抛 \`'keyPath 不能为空'\`

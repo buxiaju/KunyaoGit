@@ -8,7 +8,7 @@
 
 ## [0.6.3] - 2026-08-27
 
-v0.6.2 实际使用中暴露的 6 个 bug 集中修：generateSshKey 对空 keyPath 误 throw + SSH 设置区冗余 / 错位 + parseSshResult 漏 stderr / ANSI 颜色码 / testResult 串台 / require 在 ESM 下抛错。代码 / 测试 / 文档 / 发版都在这一轮落定。
+v0.6.2 实际使用中暴露的 8 个 bug 集中修：generateSshKey 对空 keyPath 误 throw + SSH 设置区冗余字段 / Git 路径「选择」按钮失效 + 缺密钥列表与删除入口 + parseSshResult 漏 stderr + ANSI 颜色码 + testResult 串台 + require 在 ESM 下抛错 + 生成结果卡片错位。代码 / 测试 / 文档 / 发版都在这一轮落定。
 
 ### Fixed
 - 🔑 **`generateSshKey` 空 keyPath 误 throw**（v0.6.2 真实使用 bug）
