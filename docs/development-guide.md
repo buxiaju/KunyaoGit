@@ -19,6 +19,7 @@
 10. [★ v0.4+ 自动化测试](#10-v04-自动化测试)
 11. [★ v0.5 发布实战：v0.5.0 case study](#11-v05-发布实战v050-case-study)
 12. [★ v0.6 发布实战：v0.6.0 case study](#12-v06-发布实战v060-case-study)
+13. [★ v0.6.3 发布实战：bug fix patch case study](#13-v063-发布实战bug-fix-patch-case-study)
 
 ---
 
@@ -1379,6 +1380,64 @@ cmd /c "set GH_TOKEN=$token && node scripts\publish\list-assets.cjs"
 | 入库安装包 | `.release-assets/` |
 | 本地 NSIS 工具链 | `tools/nsis/nsis-3.11/`（gitignored） |
 | Vite 开发端口 | `http://localhost:5173`（strictPort） |
+
+---
+
+## 13. ★ v0.6.3 发布实战：bug fix patch case study
+
+v0.6.3 是**纯 bug fix patch**（无新功能），用户截图反馈 + 实际使用暴露的 6+ 个 v0.6.2 真实 bug 集中修。这一轮**简化发版流程**：直接 1 个 fix/feat commit + 1 个 docs commit + 1 个 chore(release) commit + push + NSIS build + publish，**不**走 v0.6.2 的 4 批拆 commit（因为只是局部 bug fix，没跨模块）。
+
+### 13.1 v0.6.3 改动清单
+
+| 类别 | 数量 | 详情 |
+| --- | --- | --- |
+| 后端 bug 修 | 4 | `generateSshKey` 空 keyPath 误 throw / `parseSshResult` 漏 stderr / `stripAnsi` 剥 ANSI / `writeSshConfigFile` dev ESM `require` 报错 |
+| 后端新功能 | 1 | `listSshKeys` + `deleteSshKey`（含路径护栏） |
+| 前端 bug 修 | 4 | `pickGit` 改 dialog.showOpen / 拆 `testResult` 状态 / 移 `genResult` 卡片 / 删兜底 SSH 私钥路径 UI 字段 |
+| 前端新功能 | 1 | SSH 设置区加"已存在的 SSH 私钥"卡片（自动扫 / 使用此 key / 删除带 confirm） |
+| i18n | + 7 / − 4 key | 加 `gitPathDialogTitle` / `sshExistingKeys` 等；删 `gitPathPrompt` / `sshKeyPath*` |
+| 测试 | + 33 例 | 22 → 33 sshConnection + listSshKeys（598 → 631 总数） |
+
+### 13.2 简化 commit 拆分
+
+只拆 3 个 commit（不像 v0.6.2 拆 4 批）：
+
+1. **`fix(ssh-test): v0.6.3+ 剥 ANSI + parseSshResult 合并 stdout+stderr + writeSshConfigFile static import`** — 3 个独立 bug 修集中一处（都涉及后端 SSH 测试 + dev 兼容性）
+2. **`feat(ssh-keys): v0.6.3+ 列出/删除 ~/.ssh 私钥 + SSH 设置区 UX 增强`** — 后端新功能 + 前端 UI 改 + i18n 同步 + 测试（关联紧密，单独拆没意义）
+3. **`docs(ssh): v0.6.3+ 文档同步`** — CHANGELOG / features.md §23.8 / development-guide §13
+4. **`chore(release): v0.6.3 归档`** — `package.json` 0.6.2 → 0.6.3 + `scripts/publish/publish-v063.cjs` + `CHANGELOG.md` 已含在上一个 commit
+
+> 之前 v0.6.2 拆了 6 个 commit（feat-host / feat-ui / docs / chore-release / release 资产 / update-gitee-body）。v0.6.3 只 3 个——**bug fix 不需要"按 host / 按 UI 模块"那种细粒度拆批**。
+
+### 13.3 Gitee 829MB 限制的应对
+
+v0.6.3 push 时 Gitee 仓库 829MB / 819MB 软警告（仍能 push）。如果发版再传 90MB NSIS 会变成 919MB → push 必失败。
+
+**v0.6.3 应对策略**：
+- v0.6.3 NSIS **不 commit** 到 `.release-assets/`（绕开 git history）
+- 直接通过 `publish-v063.cjs` 走 **GitHub Release API + Gitee Release API** 上传
+- 这样 v0.6.3 push 时仓库增加量只有 docs + scripts（< 50KB），不超限
+- **代价**：从 `git clone` 拿到的工作树没有 NSIS 安装包；用户必须去 GitHub/Gitee Release 页面下载
+- **后续**：v0.6.4 之前必须清旧 NSIS 资产 / 用 LFS / 升级 Gitee（任选）
+
+### 13.4 v0.6.3 publish 脚本与 v0.6.2 差异
+
+| 差异 | v0.6.2 | v0.6.3 |
+| --- | --- | --- |
+| 是否 commit `.release-assets/*.exe` | ✅ commit（`release: v0.6.2 — 资产 + 发布脚本`） | ❌ 不 commit（绕开 Gitee 829MB） |
+| `publish-vXXX.cjs` 是否上传到 GitHub Release | ✅ | ✅ |
+| `publish-vXXX.cjs` 是否上传到 Gitee Release | ✅ | ✅ |
+| 是否需要 `update-gitee-body.cjs` | ✅ | ⚠️ 复用 v0.6.2 脚本（v0.6.3 body 内容相同或更新） |
+| 是否需要 `update-gitee-repo-desc.cjs` | ✅ | ✅ |
+| tag | `v0.6.2` | `v0.6.3` |
+| 推送 | `git push gitee + github master` | 同上 |
+
+### 13.5 教训 / 复用
+
+1. **bug fix patch 不需要"按模块"拆批**：v0.6.3 后端改一处，前端跟着改同一处，i18n 跟着改，测试跟着加——这是**一个逻辑单元**，强拆只会让 git log 看起来"碎"。3 commit（fix / feat / docs）已足够清晰。
+2. **dev 模式 ESM `require` 报错是 vite-plugin-electron 的隐式要求**：v0.6.1/v0.6.2 production 走 electron-builder CJS bundle 能 require，没暴露。这次 v0.6.3 真实 dev 调试才暴露。**新代码要避免 `require` 顶层模块**，统一用 ES `import`。
+3. **OpenSSH 行为细节**：`ssh -T git@github.com` 成功消息走 stderr（不是 stdout）；OpenSSH 交互式终端会加 ANSI 颜色码。`parseSshResult` 必须合并 stdout+stderr 检测；UI 必须剥 ANSI。这两个细节是 GitHub/Gitee ssh 协议层的硬规范。
+4. **状态共享串台**：页面级共用 `testResult` 这种 state，多个独立测试都写它就会互相串。**先按"用户感知的 UI 区块"分 state**，不要等 bug 暴露再拆。
 
 ---
 

@@ -767,6 +767,101 @@ ssh -i "<keyPath>" \
 | `src/components/repo/ChangesPanel.tsx` | 修改 | push 失败时主动提示切换 SSH |
 | `src/i18n/zh.ts` / `en.ts` | 修改 | + `settings.ssh*` / `settings.pushFailed*` / `settings.switchToSsh` 8 个 key |
 
+### 23.8 ★ v0.6.3：真实使用 bug 修复（7 项）
+
+v0.6.2 上线后用截图反馈 + 实际点击暴露的 7 个 bug 集中修。代码 / 测试 / 文档 / 发版都在这一轮。
+
+#### 23.8.1 `generateSshKey` 空 keyPath 误 throw
+
+v0.6.2 真实使用：用户在 SSH 设置页 Gitee 行点"生成新密钥" → 后端 `generateSshKey` 对前端传的 `keyPath: ''` 直接抛 `'keyPath 不能为空'`。
+
+**修复**：
+- `GenerateSshKeyInput.keyPath` 改可选 + 新增 `host?: 'github.com' | 'gitee.com'`
+- 空 keyPath + 有 host → 自动 `~/.ssh/id_ed25519_<github|gitee>`（自动 `mkdir -p ~/.ssh`）
+- 空 keyPath + 无 host → throw 明确错误（指明要传 host）
+- 显式 keyPath 不受影响
+
+#### 23.8.2 列出 / 删除 `~/.ssh` 私钥（解决"重复生成密钥没入口删"）
+
+v0.6.2 反馈：用户生成过 Gitee key 后，再次点"生成新密钥"报"已存在"，但**没入口**看到/删除已有 key。
+
+**新增**：
+- 后端 `listSshKeys()` 扫 `~/.ssh/id_*(ed25519|rsa|ecdsa|dsa)` + 配对 `.pub` → 算 fingerprint，按文件名后缀推断 host（`id_ed25519_github` → `github.com` / `_gitee` → `gitee.com`）
+- 后端 `deleteSshKey(keyPath)` 删一对（私钥 + .pub），**安全护栏**：路径必须在 `~/.ssh/` 下 + 文件名必须 `id_*` 前缀
+- IPC：`SETTINGS_SSH_LIST_KEYS` / `SETTINGS_SSH_DELETE_KEY`
+- 前端 SSH 设置区顶部加"已存在的 SSH 私钥"卡片，每行：文件名 + host badge（GitHub/Gitee 紫/橙） + fingerprint + ✓使用此 key（自动填到对应 host 字段） + 🗑删除（带 confirm 弹窗；删完下方对应 host 字段自动清空）
+- 进入设置页自动扫描；生成密钥成功后自动刷新
+
+#### 23.8.3 `parseSshResult` 漏 stderr / ANSI 颜色码
+
+v0.6.2 反馈：点"测试 GitHub 连接"显示 `Hi buxiaju! You've successfully authenticated, but GitHub does not provide shell access.` 整段英文；点"测试 Gitee 连接"显示 `Gitee: [36;01m不侠居(@buxiaju)[0m`（ANSI 颜色码漏出）。
+
+**根因**：
+- GitHub 的 `ssh -T git@github.com` 成功消息走 **stderr**（OpenSSH 行为），原 `parseSshResult` 只查 stdout → 匹配失败 → 走到 fallback error 整段英文
+- OpenSSH 交互式终端会给 Gitee 输出加 `\x1b[36;01m...` 之类 ANSI 颜色码
+
+**修复**：
+- `parseSshResult` 合并 `stdout + '\n' + stderr` 检测成功标记；用户名提取优先 stdout 失败回 stderr
+- 新增 `stripAnsi(s)` 纯函数（`\x1b\[[0-9;?]*[ -/]*[@-~]`），parseSshResult / catch 分支统一剥
+
+#### 23.8.4 拆 `testResult` 状态
+
+v0.6.2 反馈：点"测试 Gitee 连接"结果在 **Git 可执行文件路径**下方也显示（互相串）。
+
+**根因**：`testResult` 是页面级共用 state，测试 git path / 测试 SSH 连接都写它。
+
+**修复**：拆成 `gitTestResult`（Git 路径 Field 下方） + `sshTestResult`（SSH 推送区"写入"按钮旁边）。
+
+#### 23.8.5 修 `pickGit`：`prompt()` → 系统文件选择器
+
+v0.6.2 反馈：点"Git 可执行文件路径"的"选择"按钮 → `操作失败：prompt() is not supported`。
+
+**根因**：Electron 渲染层默认禁用 `window.prompt`。
+
+**修复**：改用 `window.gitgui.dialog.showOpen({ properties: ['openFile'], filters: [{name: 'Git', extensions: ['exe','cmd','bat']}, {name: 'All Files', extensions: ['*']}] })` 弹系统文件选择器。
+
+#### 23.8.6 删兜底 SSH 私钥路径 UI 字段
+
+v0.6.2 反馈：兜底字段冗余（按 host 已有 GitHub / Gitee 私钥）。
+
+**修复**：删 UI 展示。`state.sshKeyPath` + `settings.sshKeyPath` 仍保留兼容历史数据 + `sshWriteConfig` 兜底逻辑。
+
+#### 23.8.7 `writeSshConfigFile` dev ESM `require` 报错
+
+v0.6.2 反馈：点"写入 ~/.ssh/config"显示 `Cannot find module '../lib/sshConfig' Require stack: .../dist-electron/main.js`。
+
+**根因**：原代码 `const { writeSshConfig } = require('../lib/sshConfig')` —— CJS `require`。但 dev 模式 main.js 是 ESM（vite-plugin-electron 编译产物），ESM 没有 `require`。v0.6.1/v0.6.2 production 走 electron-builder 自己的 CJS bundle 所以能 require，没暴露。
+
+**修复**：改用文件顶部 `import { writeSshConfig } from '../lib/sshConfig'`（sshConfig.ts 纯函数无依赖，不引入循环）。
+
+#### 23.8.8 生成结果卡片位置
+
+v0.6.2 反馈：点"写入 ~/.ssh/config"后看到公钥显示 —— 实际是**之前生成密钥的成功卡片没关**（位置在 SSH 区底部"写入"按钮下方，视觉上误以为是写入按钮触发）。
+
+**修复**：把 `genResult` 卡片拆成两个 host 条件卡片，放在对应 host 的 Field 下方（GitHub 卡片在 GitHub Field 后、Gitee 卡片在 Gitee Field 后）。点哪个 host 生成就看到对应 host 旁边的卡片。
+
+#### 23.8.9 验证
+
+| 检查 | 命令 | 期望 |
+| --- | --- | --- |
+| TypeScript | `npm run typecheck` | 0 错 |
+| 单元测试 | `npm test` | **631 例全绿**（31 文件，约 6 秒；v0.6.2 基线 598 → **631**，新增 33 例覆盖 v0.6.3） |
+| 构建 | `npx vite build` | 0 错 |
+| 真实 SSH 推送 | 本地 | 配置好 SSH key 后，`git push` 走 22 端口成功；生成密钥 / 测试连接 / 写入 `~/.ssh/config` / 删除旧 key 全部正常 |
+
+#### 23.8.10 v0.6.3 新增 / 修改文件
+
+| 文件 | 性质 | 用途 |
+| --- | --- | --- |
+| `electron/services/settings.ts` | 修改 | + `listSshKeys` / `deleteSshKey` / `SshKeyInfo`；+ `stripAnsi`；`parseSshResult` 合并 stdout+stderr 检测；`writeSshConfigFile` static import |
+| `shared/ipc-channels.ts` | 修改 | + `SETTINGS_SSH_LIST_KEYS` / `SETTINGS_SSH_DELETE_KEY` |
+| `electron/preload.ts` | 修改 | 暴露 `settings.sshListKeys` / `settings.sshDeleteKey` |
+| `electron/ipc/settings.ts` | 修改 | 注册 list/delete handler |
+| `src/pages/SettingsPage.tsx` | 修改 | `existingKeys` 卡片 / `deleteExistingKey` / `refreshExistingKeys` / `pickGit` 改 dialog.showOpen / 拆 testResult / 移 genResult 卡片 / 删兜底字段 |
+| `src/i18n/zh.ts` / `en.ts` | 修改 | + 7 个 key / 删 4 个 key |
+| `tests/unit/listSshKeys.test.ts` | 新增 | 16 例 |
+| `tests/unit/sshConnection.test.ts` | 修改 | + 6 例（ANSI / stderr / stripAnsi） |
+
 ---
 
 ## 13. 多远程推送（v0.3.0）

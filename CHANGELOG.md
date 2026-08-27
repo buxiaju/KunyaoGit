@@ -6,6 +6,55 @@
 
 ---
 
+## [0.6.3] - 2026-08-27
+
+v0.6.2 实际使用中暴露的 6 个 bug 集中修：generateSshKey 对空 keyPath 误 throw + SSH 设置区冗余 / 错位 + parseSshResult 漏 stderr / ANSI 颜色码 / testResult 串台 / require 在 ESM 下抛错。代码 / 测试 / 文档 / 发版都在这一轮落定。
+
+### Fixed
+- 🔑 **`generateSshKey` 空 keyPath 误 throw**（v0.6.2 真实使用 bug）
+  - 原来后端对前端传的 `keyPath: ''` 直接抛 `'keyPath 不能为空'`
+  - `GenerateSshKeyInput.keyPath` 改可选 + 新增 `host?: 'github.com' | 'gitee.com'`
+  - 空 keyPath + 有 host → 自动 `~/.ssh/id_ed25519_<github|gitee>`（自动 mkdir `~/.ssh`）
+  - 空 keyPath + 无 host → throw 明确错误（指明要传 host）
+  - 显式 keyPath 不受影响（host 字段不参与）
+- 🛠️ **SSH 设置区 UI 精简**（v0.6.2 真实使用反馈）
+  - 删"SSH 私钥路径（兜底）"输入框（按 host 已有 GitHub / Gitee 私钥，兜底字段冗余）
+  - `state.sshKeyPath` + `settings.sshKeyPath` 仍保留兼容历史数据 + sshWriteConfig 兜底逻辑
+  - 修复"Git 可执行文件路径"的"选择"按钮：`window.prompt()` 在 Electron 渲染层默认禁用（`prompt() is not supported`），改用 `window.gitgui.dialog.showOpen({ properties: ['openFile'], filters: [{name: 'Git', extensions: ['exe','cmd','bat']}, ...] })` 弹系统文件选择器
+- 🗂️ **`listSshKeys` / `deleteSshKey`**（解决"重复生成密钥没入口删"）
+  - `listSshKeys()` 扫 `~/.ssh/id_*(ed25519|rsa|ecdsa|dsa)` + 配对 `.pub` → 算 fingerprint，按文件名后缀推断 host（`id_ed25519_github` → `github.com` / `_gitee` → `gitee.com`）
+  - `deleteSshKey(keyPath)` 删一对（私钥 + .pub），**安全护栏**：路径必须在 `~/.ssh/` 下 + 文件名必须 `id_*` 前缀
+  - 前端 SSH 区顶部加"已存在的 SSH 私钥"卡片，每行：文件名 + host badge + fingerprint + "使用此 key"（自动填到对应 host 字段） + "删除"（带 confirm 弹窗）
+  - 进入设置页自动扫描；生成密钥后自动刷新
+- 🎨 **`parseSshResult` 漏 stderr**（GitHub ssh -T 行为）
+  - GitHub 的 `ssh -T git@github.com` 成功消息走 stderr（OpenSSH 行为），原 parseSshResult 只查 stdout → 匹配失败 → 走到 fallback error 整段英文 `Hi buxiaju! ...shell access.` 露馅
+  - 改成 stdout + `\n` + stderr 合并检测成功标记；用户名提取优先 stdout 失败回 stderr
+- 🎨 **SSH 输出剥 ANSI 颜色码**
+  - OpenSSH 交互式终端会加 `\x1b[36;01m...` 之类，原样显示用户看到 `[36;01m不侠居(@buxiaju)[0m`
+  - 新增 `stripAnsi(s)` 纯函数（`\x1b\[[0-9;?]*[ -/]*[@-~]`），parseSshResult / catch 分支统一剥
+- 🔧 **拆 `testResult` 状态**
+  - 原共用 `testResult` 导致"测试 Gitee 连接"结果在 Git 路径下方也显示（互相串）
+  - 拆成 `gitTestResult`（Git 路径 Field 下方） + `sshTestResult`（SSH 推送区底部"写入"按钮旁边）
+- 📦 **`writeSshConfigFile` dev ESM require 报错**
+  - dev 模式 main.js 是 ESM（vite-plugin-electron 编译），`require('../lib/sshConfig')` 抛 `Cannot find module`
+  - 改用文件顶部 `import { writeSshConfig } from '../lib/sshConfig'`（sshConfig.ts 纯函数无依赖，不引入循环）
+- 🖼️ **生成结果卡片位置**（避免与"写入 ~/.ssh/config"按钮视觉混淆）
+  - 原来在 SSH 区底部（"写入"按钮下方），用户以为"写入"触发了公钥显示
+  - 移到对应 host 的 Field 下方（GitHub 卡片在 GitHub Field 后、Gitee 卡片在 Gitee Field 后）
+
+### Changed
+- 🌐 **i18n**（zh + en）
+  - 删：`settings.sshKeyPath` / `sshKeyPathHint` / `sshKeyPathPlaceholder` / `gitPathPrompt`
+  - 加：`settings.gitPathDialogTitle` / `sshExistingKeys` / `sshUseThisKey` / `sshDeleteKey` / `sshDeleteConfirm` / `sshDeleteOk` / `sshDeleteFailed`
+
+### Tests
+- 自动化测试 598 → **631 例全绿**（31 文件，约 6 秒）
+  - 新增 6 例：parseSshResult ANSI × 2 / parseSshResult GitHub/Gitee stderr × 2 / stripAnsi × 4
+  - 新增 16 例：listSshKeys 10 + deleteSshKey 6
+  - 之前 9 例（generateSshKey fallback / file-exists / missing-comment / 等）已存在
+
+---
+
 ## [0.6.2] - 2026-08-27
 
 v0.6.1 的 SSH 推送支持是「单一 key」模式（所有 host 共享 `sshKeyPath`），v0.6.2 升级为「按 host 独立 key」：GitHub / Gitee 各自用专用 key，OpenSSH config 路由让 ssh / git 客户端按 host 自动选 IdentityFile。设置页支持一键生成 ed25519 密钥 + 显示/复制公钥。代码 / 测试 / 文档 / 同步都在前面 3 个 commit 落定：feat(ssh-host) / feat(ssh-ui) / docs(ssh)。
