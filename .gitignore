@@ -11,6 +11,7 @@ dist/
 dist-electron/
 release/
 release-v*/
+release-*/
 release-new/
 release3/
 out/
@@ -51,5 +52,10 @@ coverage/
 *.pdb
 
 # 安装包（入 .release-assets/ 供 Gitee raw 路径分发，详见 development-guide §8.3）
+# 注：v0.6.3 起新版本 NSIS 不再入库（Gitee 仓库体积已近 819MB 上限），只走 Release API 上传
 !.release-assets/*.exe
 !.release-assets/*.zip
+
+# 一次性调试 / 代码生成脚本（本地保留，不入库）
+scripts/dup-*.cjs
+scripts/diag-*.cjs
