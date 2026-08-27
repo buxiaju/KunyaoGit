@@ -189,6 +189,10 @@ const api = {
     // v0.6.3+ keyPath 留空 + host → 后端自动生成 ~/.ssh/id_ed25519_<host>
     sshGenerate: (input: { keyPath?: string; comment: string; passphrase?: string; host?: 'github.com' | 'gitee.com' }) =>
       ipcRenderer.invoke(IPC.SETTINGS_SSH_GENERATE, input),
+    // v0.6.3+ 列出 ~/.ssh 下所有 id_* 私钥（带 .pub 配对）
+    sshListKeys: () => ipcRenderer.invoke(IPC.SETTINGS_SSH_LIST_KEYS),
+    // v0.6.3+ 删除一对私钥（私钥 + .pub），仅限 ~/.ssh/id_* 范围
+    sshDeleteKey: (keyPath: string) => ipcRenderer.invoke(IPC.SETTINGS_SSH_DELETE_KEY, keyPath),
     sshReadPubkey: (keyPath: string) => ipcRenderer.invoke(IPC.SETTINGS_SSH_READ_PUBKEY, keyPath),
     sshWriteConfig: (blocks: { host: string; keyPath?: string }[]) =>
       ipcRenderer.invoke(IPC.SETTINGS_SSH_WRITE_CONFIG, blocks),

@@ -10,6 +10,8 @@ import {
   readPublicKey,
   readSshConfigFile,
   writeSshConfigFile,
+  listSshKeys,
+  deleteSshKey,
 } from '../services/settings';
 
 export function registerSettingsHandlers() {
@@ -36,8 +38,19 @@ export function registerSettingsHandlers() {
   });
 
   // v0.6.2+：一键生成 ed25519 SSH 密钥
-  ipcMain.handle(IPC.SETTINGS_SSH_GENERATE, async (_e, input: { keyPath: string; comment: string; passphrase?: string }) => {
+  // v0.6.3+ keyPath 可选 + host 可选（空 keyPath + host → fallback ~/.ssh/id_ed25519_<host>）
+  ipcMain.handle(IPC.SETTINGS_SSH_GENERATE, async (_e, input: { keyPath?: string; comment: string; passphrase?: string; host?: 'github.com' | 'gitee.com' }) => {
     return generateSshKey(input);
+  });
+
+  // v0.6.3+：列出 ~/.ssh 下的私钥（带 .pub 配对）
+  ipcMain.handle(IPC.SETTINGS_SSH_LIST_KEYS, async () => {
+    return listSshKeys();
+  });
+
+  // v0.6.3+：删除一对私钥（私钥 + .pub），仅限 ~/.ssh/id_* 范围
+  ipcMain.handle(IPC.SETTINGS_SSH_DELETE_KEY, async (_e, keyPath: string) => {
+    return deleteSshKey(keyPath);
   });
 
   // v0.6.2+：读 .pub 文件（用于"显示公钥"）

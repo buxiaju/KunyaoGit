@@ -113,6 +113,9 @@ export const IPC = {
   SETTINGS_SSH_READ_PUBKEY: 'settings:ssh-read-pubkey',
   SETTINGS_SSH_WRITE_CONFIG: 'settings:ssh-write-config',
   SETTINGS_SSH_READ_CONFIG: 'settings:ssh-read-config',
+  // v0.6.3+ 列出/删除 ~/.ssh 下的私钥（让用户能管理历史生成过的 key）
+  SETTINGS_SSH_LIST_KEYS: 'settings:ssh-list-keys',
+  SETTINGS_SSH_DELETE_KEY: 'settings:ssh-delete-key',
   DIALOG_SHOW_OPEN: 'dialog:show-open',
   DIALOG_SHOW_SAVE: 'dialog:show-save',
 
