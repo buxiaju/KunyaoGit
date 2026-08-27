@@ -4,6 +4,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import type { AppSettings } from '../../shared/types';
 
 const execFileAsync = promisify(execFile);
@@ -278,6 +279,8 @@ export async function testSshConnection(
     args.push('-i', sshKeyPath);
     args.push('-o', 'IdentitiesOnly=yes');
   }
+  // v0.6.2 起：按 host 区分，不再硬编码 github.com
+  // 这里没 host 参数（IPC 旧签名），用 github.com 兜底；新签名 testSshConnectionForHost 走 sshKey
   args.push('git@github.com');
 
   try {
@@ -298,5 +301,172 @@ export async function testSshConnection(
       return parseSshResult(stdout, stderr);
     }
     return { ok: false, message: '', error: (e as Error)?.message || 'ssh 命令执行失败' };
+  }
+}
+
+// v0.6.2+：按 host 测试 SSH 连接
+// 已知 host：github.com / gitee.com；其他 host 一律拒绝（避免探测到任意 SSH 服务）
+const KNOWN_SSH_HOSTS = new Set(['github.com', 'gitee.com']);
+
+export interface TestSshForHostInput {
+  host: 'github.com' | 'gitee.com';
+  keyPath?: string;
+}
+
+export async function testSshConnectionForHost(
+  input: TestSshForHostInput
+): Promise<{ ok: boolean; message: string; error?: string }> {
+  const { host, keyPath } = input;
+  if (!KNOWN_SSH_HOSTS.has(host)) {
+    return { ok: false, message: '', error: `不支持的 host: ${host}（仅 github.com / gitee.com）` };
+  }
+  if (keyPath && keyPath.trim() !== '') {
+    try {
+      const stat = fs.statSync(keyPath);
+      if (!stat.isFile()) {
+        return { ok: false, message: '', error: `SSH 私钥路径不是一个文件：${keyPath}` };
+      }
+    } catch (e) {
+      return { ok: false, message: '', error: `SSH 私钥文件不存在或无法访问：${keyPath}（${(e as Error).message}）` };
+    }
+  }
+
+  const args = [
+    '-T', // 不分配 pseudo-terminal
+    '-o', 'BatchMode=yes',
+    '-o', 'ConnectTimeout=10',
+    '-o', 'StrictHostKeyChecking=accept-new',
+  ];
+  if (keyPath && keyPath.trim() !== '') {
+    args.push('-i', keyPath);
+    args.push('-o', 'IdentitiesOnly=yes');
+  }
+  args.push(`git@${host}`);
+
+  try {
+    const { stdout, stderr } = await execFileAsync('ssh', args);
+    return parseSshResult(stdout || '', stderr || '');
+  } catch (e: any) {
+    const stdout: string = e?.stdout || '';
+    const stderr: string = e?.stderr || '';
+    if (/successfully authenticated/i.test(stdout) || /Hi\s+\S+/i.test(stdout)) {
+      const m = stdout.match(/Hi\s+(\S+?)!/);
+      return { ok: true, message: m ? `已认证为 ${m[1]}` : stdout.trim() };
+    }
+    if (stdout || stderr) {
+      return parseSshResult(stdout, stderr);
+    }
+    return { ok: false, message: '', error: (e as Error)?.message || 'ssh 命令执行失败' };
+  }
+}
+
+// v0.6.2+：生成新的 ed25519 SSH 密钥
+// 返回 { privatePath, publicKey, fingerprint, sshKeygenOutput }
+export interface GenerateSshKeyInput {
+  /** 私钥文件路径（如 C:\Users\kunyao\.ssh\id_ed25519_github） */
+  keyPath: string;
+  /** 注释（一般填 "kunyao@kunyaogit.local (GitHub key)"） */
+  comment: string;
+  /** 私钥 passphrase；空串 = 不设 passphrase（方便自动化） */
+  passphrase?: string;
+}
+
+export interface GenerateSshKeyResult {
+  privatePath: string;
+  publicKey: string;
+  fingerprint: string;
+  /** ssh-keygen 完整输出（含 randomart 等） */
+  sshKeygenOutput: string;
+}
+
+export async function generateSshKey(
+  input: GenerateSshKeyInput
+): Promise<GenerateSshKeyResult> {
+  const { keyPath, comment, passphrase = '' } = input;
+  if (!keyPath || typeof keyPath !== 'string') {
+    throw new Error('keyPath 不能为空');
+  }
+  if (!comment || typeof comment !== 'string') {
+    throw new Error('comment 不能为空');
+  }
+  // 校验 keyPath 父目录存在
+  const parentDir = path.dirname(keyPath);
+  if (!fs.existsSync(parentDir)) {
+    try {
+      fs.mkdirSync(parentDir, { recursive: true });
+    } catch (e) {
+      throw new Error(`创建私钥目录失败：${parentDir}（${(e as Error).message}）`);
+    }
+  }
+  // 校验 keyPath 文件**不存在**（不覆盖已有 key）
+  if (fs.existsSync(keyPath)) {
+    throw new Error(`私钥文件已存在：${keyPath}（请先删除或换名字）`);
+  }
+
+  // 调 ssh-keygen
+  const args = [
+    '-t', 'ed25519',
+    '-f', keyPath,
+    '-N', passphrase,
+    '-C', comment,
+  ];
+
+  const { stdout, stderr } = await execFileAsync('ssh-keygen', args);
+
+  // 读 .pub
+  const pubKey = fs.readFileSync(`${keyPath}.pub`, 'utf-8').trim();
+  // 算 fingerprint
+  const { stdout: fpOut } = await execFileAsync('ssh-keygen', ['-lf', keyPath]);
+  // fpOut 形如 "256 SHA256:xxxxx user@host (ED25519)"
+  const m = fpOut.match(/SHA256:\S+/);
+  const fingerprint = m ? m[0] : fpOut.trim();
+
+  return {
+    privatePath: keyPath,
+    publicKey: pubKey,
+    fingerprint,
+    sshKeygenOutput: (stdout + stderr).trim(),
+  };
+}
+
+// v0.6.2+：读 .pub 文件
+export function readPublicKey(keyPath: string): { publicKey: string; fingerprint: string } | null {
+  if (!keyPath) return null;
+  const pubPath = `${keyPath}.pub`;
+  if (!fs.existsSync(pubPath)) return null;
+  const publicKey = fs.readFileSync(pubPath, 'utf-8').trim();
+  return { publicKey, fingerprint: '' };
+}
+
+// v0.6.2+：读 ~/.ssh/config 全文
+export function readSshConfigFile(): string {
+  const configPath = path.join(os.homedir(), '.ssh', 'config');
+  if (!fs.existsSync(configPath)) return '';
+  return fs.readFileSync(configPath, 'utf-8');
+}
+
+// v0.6.2+：写 ~/.ssh/config（用 electron/lib/sshConfig.writeSshConfig 重写 KunyaoGit 段）
+export function writeSshConfigFile(
+  blocks: { host: string; keyPath?: string }[]
+): { ok: boolean; error?: string; path: string } {
+  const sshDir = path.join(os.homedir(), '.ssh');
+  const configPath = path.join(sshDir, 'config');
+  try {
+    if (!fs.existsSync(sshDir)) {
+      fs.mkdirSync(sshDir, { recursive: true });
+    }
+    // 写文件前确保权限 0600（OpenSSH 要求）
+    if (fs.existsSync(configPath)) {
+      try { fs.chmodSync(configPath, 0o600); } catch { /* ignore */ }
+    }
+    const current = fs.existsSync(configPath) ? fs.readFileSync(configPath, 'utf-8') : '';
+    // 动态 require（避免循环）
+    const { writeSshConfig } = require('../lib/sshConfig');
+    const next = writeSshConfig(current, blocks);
+    fs.writeFileSync(configPath, next, 'utf-8');
+    try { fs.chmodSync(configPath, 0o600); } catch { /* ignore */ }
+    return { ok: true, path: configPath };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message, path: configPath };
   }
 }

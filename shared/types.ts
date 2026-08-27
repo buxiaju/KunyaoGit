@@ -88,14 +88,35 @@ export interface AppSettings {
   diffView: 'unified' | 'split';
   auth: AuthConfig;
   /**
-   * SSH 私钥绝对路径（健壮性加固 / v0.6+ SSH 推送支持）。
+   * SSH 私钥绝对路径（v0.6.1 SSH 推送支持，v0.6.2 起被 sshKeysByHost 替代但保留兼容）。
+   *
    * - 留空：git 用 `~/.ssh/id_ed25519` / `~/.ssh/id_rsa` 等默认约定
    * - 配了：用 `GIT_SSH_COMMAND="ssh -i <path> -o IdentitiesOnly=yes"` 强制走该 key
+   *
+   * **v0.6.2 起**：新加的 `sshKeysByHost` 字段支持 github / gitee 分别配置。
+   * 本字段保留为**兜底**——未在 sshKeysByHost 配置的 host 自动用本字段的 key。
+   * 设置页只显示 sshKeysByHost，迁移时会自动把本字段的值复制到 sshKeysByHost.github。
    *
    * 触发场景：HTTPS 推送被网络拦截（如国内访问 github.com:443 受限）时，
    * 用户可在此配 SSH key + 切 remote URL 到 SSH 协议走 22 端口。
    */
   sshKeyPath?: string;
+  /**
+   * 按 host 分配 SSH 私钥（v0.6.2+）。
+   *
+   * - 优先按 remote URL 的 host 选 key（github.com → githubKey，gitee.com → giteeKey）
+   * - 未配置的 host 自动 fallback 到顶层 `sshKeyPath`
+   * - 都不配置：git 用 OpenSSH 默认约定（`~/.ssh/id_ed25519` / `~/.ssh/id_rsa`）
+   *
+   * 配合 [`writeSshConfig`](#) 自动写入 `~/.ssh/config` 的 Host 块，
+   * 让 OpenSSH 客户端按 host 自动选 IdentityFile，无需在 GitService 注入 env。
+   */
+  sshKeysByHost?: {
+    /** github.com 用的私钥绝对路径（fallback 到顶层 sshKeyPath） */
+    github?: string;
+    /** gitee.com 用的私钥绝对路径（fallback 到顶层 sshKeyPath） */
+    gitee?: string;
+  };
   /**
    * 推送协议偏好（v0.6+ SSH 推送支持）。
    * - `auto`：用仓库现配的 remote URL（默认；不自动改）

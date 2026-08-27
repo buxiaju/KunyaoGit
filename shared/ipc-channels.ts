@@ -107,6 +107,12 @@ export const IPC = {
   SETTINGS_TEST_GIT: 'settings:test-git',
   SETTINGS_TEST_AUTH: 'settings:test-auth',
   SETTINGS_TEST_SSH: 'settings:test-ssh',
+  // v0.6.2+ SSH 按 host 路由
+  SETTINGS_TEST_SSH_FOR_HOST: 'settings:test-ssh-for-host',
+  SETTINGS_SSH_GENERATE: 'settings:ssh-generate',
+  SETTINGS_SSH_READ_PUBKEY: 'settings:ssh-read-pubkey',
+  SETTINGS_SSH_WRITE_CONFIG: 'settings:ssh-write-config',
+  SETTINGS_SSH_READ_CONFIG: 'settings:ssh-read-config',
   DIALOG_SHOW_OPEN: 'dialog:show-open',
   DIALOG_SHOW_SAVE: 'dialog:show-save',
 

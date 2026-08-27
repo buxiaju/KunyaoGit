@@ -479,24 +479,19 @@ index 111..222 100644
   });
 });
 
-describe('GitService 构造：v0.6+ SSH 推送支持（sshKeyPath 注入 GIT_SSH_COMMAND）', () => {
+describe('GitService 构造：v0.6.2+ SSH 按 host 路由（OpenSSH config 接管）', () => {
   beforeEach(() => {
     simpleGitOptions.length = 0;
   });
 
-  it('传 sshKeyPath 时，simple-git 收到 env.GIT_SSH_COMMAND', () => {
+  it('simple-git **不**接收 GIT_SSH_COMMAND env（由 ~/.ssh/config 接管）', () => {
     new GitService('/tmp/repo', undefined, 'C:\\Users\\me\\.ssh\\id_ed25519');
     expect(simpleGitOptions).toHaveLength(1);
-    const env = simpleGitOptions[0].env;
-    expect(env).toBeDefined();
-    expect(env.GIT_SSH_COMMAND).toContain('ssh');
-    expect(env.GIT_SSH_COMMAND).toContain('-i');
-    expect(env.GIT_SSH_COMMAND).toContain('C:\\Users\\me\\.ssh\\id_ed25519');
-    expect(env.GIT_SSH_COMMAND).toContain('IdentitiesOnly=yes');
-    expect(env.GIT_SSH_COMMAND).toContain('StrictHostKeyChecking=accept-new');
+    // v0.6.2 改造：构造时不注入 env（无论是否传 sshKeyPath）
+    expect(simpleGitOptions[0].env).toBeUndefined();
   });
 
-  it('不传 sshKeyPath 时，simple-git 不设 env（让 git 用默认）', () => {
+  it('不传 sshKeyPath 时 simple-git 同样不接收 env', () => {
     new GitService('/tmp/repo');
     expect(simpleGitOptions[0].env).toBeUndefined();
   });
@@ -506,9 +501,14 @@ describe('GitService 构造：v0.6+ SSH 推送支持（sshKeyPath 注入 GIT_SSH
     expect(simpleGitOptions[0].env).toBeUndefined();
   });
 
-  it('sshKeyPath 是空白时也不设 env', () => {
+  it('sshKeyPath 是空白时也不设 env（向后兼容参数）', () => {
     new GitService('/tmp/repo', undefined, '   ');
     expect(simpleGitOptions[0].env).toBeUndefined();
+  });
+
+  it('sshKeyPath 参数保留为向后兼容（不报错）', () => {
+    expect(() => new GitService('/tmp/repo', undefined, '/any/path')).not.toThrow();
+    expect(() => new GitService('/tmp/repo', undefined, undefined)).not.toThrow();
   });
 });
 

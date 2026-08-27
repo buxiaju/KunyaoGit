@@ -183,6 +183,15 @@ const api = {
       ipcRenderer.invoke(IPC.SETTINGS_TEST_AUTH, { platform, token }),
     // v0.6+ SSH 推送支持：测试 SSH 连接（不需要 token，验证私钥是否配对）
     testSsh: (sshKeyPath?: string) => ipcRenderer.invoke(IPC.SETTINGS_TEST_SSH, sshKeyPath),
+    // v0.6.2+ SSH 按 host 路由：按 host 测试（github / gitee）
+    testSshForHost: (input: { host: 'github.com' | 'gitee.com'; keyPath?: string }) =>
+      ipcRenderer.invoke(IPC.SETTINGS_TEST_SSH_FOR_HOST, input),
+    sshGenerate: (input: { keyPath: string; comment: string; passphrase?: string }) =>
+      ipcRenderer.invoke(IPC.SETTINGS_SSH_GENERATE, input),
+    sshReadPubkey: (keyPath: string) => ipcRenderer.invoke(IPC.SETTINGS_SSH_READ_PUBKEY, keyPath),
+    sshWriteConfig: (blocks: { host: string; keyPath?: string }[]) =>
+      ipcRenderer.invoke(IPC.SETTINGS_SSH_WRITE_CONFIG, blocks),
+    sshReadConfig: () => ipcRenderer.invoke(IPC.SETTINGS_SSH_READ_CONFIG),
   },
 
   // 通用

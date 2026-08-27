@@ -34,25 +34,24 @@ const BLOCK_TIMEOUT_MS = 60_000;
 export class GitService {
   private git: SimpleGit;
 
-  constructor(private repoPath: string, gitBinPath?: string, sshKeyPath?: string) {
-    // 健壮性加固 / v0.6+ SSH 推送支持：
-    // 如果用户在设置里配了 SSH 私钥路径，给 git 进程注入 GIT_SSH_COMMAND，
-    // 让 fetch/push/pull 走 SSH 而不是 HTTPS（国内访问 github.com:443 受限时救命）。
-    // - IdentitiesOnly=yes：只尝试指定 key，避免误用 ssh-agent 里其他 key
-    // - StrictHostKeyChecking=accept-new：自动接受新 host key（首次连接）
-    //   但拒绝已变更的 key（防 MITM）
-    // - UserKnownHostsFile 不设：用系统默认的 ~/.ssh/known_hosts
-    let env: NodeJS.ProcessEnv | undefined;
-    if (sshKeyPath && sshKeyPath.trim() !== '') {
-      const cmd = `ssh -i "${sshKeyPath}" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o BatchMode=yes`;
-      env = { ...process.env, GIT_SSH_COMMAND: cmd };
-    }
+  constructor(private repoPath: string, gitBinPath?: string, _sshKeyPath?: string) {
+    // v0.6.2 改造：构造时**不**再注入 GIT_SSH_COMMAND env。
+    // 改用 OpenSSH 标准做法——把 "Host github.com / Host gitee.com" 块写入
+    // ~/.ssh/config（见 electron/lib/sshConfig.ts + electron/services/settings.ts
+    // 的 writeSshConfig），让 OpenSSH 客户端按 host 自动选 IdentityFile。
+    //
+    // 旧做法（v0.6.1）：每个 GitService 实例注入单一 env，只支持一个 key。
+    // 新做法：ssh / git / ssh-agent 都走同一份 ~/.ssh/config，
+    // 用户的其他 ssh 调用也自动用对（更优雅）。
+    //
+    // `_sshKeyPath` 保留参数是为了**向后兼容**（v0.6.1 阶段 ipc/git.ts 的
+    // getGitSafe 仍传 settings.sshKeyPath）。新代码忽略它。
+    void _sshKeyPath;
     this.git = simpleGit({
       baseDir: repoPath,
       binary: gitBinPath || 'git',
       maxConcurrentProcesses: 4,
       timeout: { block: BLOCK_TIMEOUT_MS },
-      ...(env ? { env } : {}),
     });
   }
 
