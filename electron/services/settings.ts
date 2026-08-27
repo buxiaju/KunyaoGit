@@ -363,12 +363,17 @@ export async function testSshConnectionForHost(
 // v0.6.2+：生成新的 ed25519 SSH 密钥
 // 返回 { privatePath, publicKey, fingerprint, sshKeygenOutput }
 export interface GenerateSshKeyInput {
-  /** 私钥文件路径（如 C:\Users\kunyao\.ssh\id_ed25519_github） */
-  keyPath: string;
+  /** 私钥文件路径（如 C:\Users\kunyao\.ssh\id_ed25519_github）；留空 + host → fallback `~/.ssh/id_ed25519_<host>` */
+  keyPath?: string;
   /** 注释（一般填 "kunyao@kunyaogit.local (GitHub key)"） */
   comment: string;
   /** 私钥 passphrase；空串 = 不设 passphrase（方便自动化） */
   passphrase?: string;
+  /**
+   * v0.6.3+：host 标签（仅当 keyPath 留空时生效）
+   * 用于自动生成 `~/.ssh/id_ed25519_<host>` 路径
+   */
+  host?: 'github.com' | 'gitee.com';
 }
 
 export interface GenerateSshKeyResult {
@@ -382,12 +387,21 @@ export interface GenerateSshKeyResult {
 export async function generateSshKey(
   input: GenerateSshKeyInput
 ): Promise<GenerateSshKeyResult> {
-  const { keyPath, comment, passphrase = '' } = input;
-  if (!keyPath || typeof keyPath !== 'string') {
-    throw new Error('keyPath 不能为空');
-  }
+  let { keyPath, comment, passphrase = '', host } = input;
   if (!comment || typeof comment !== 'string') {
     throw new Error('comment 不能为空');
+  }
+  // v0.6.3 修复：keyPath 留空 + 有 host → fallback `~/.ssh/id_ed25519_<host>`
+  // （之前是 throw，这是 v0.6.2 真实使用中暴露的 bug：前端传 '' 期望 fallback 但后端 throw）
+  if (!keyPath || keyPath.trim() === '') {
+    if (!host) {
+      throw new Error('keyPath 为空时必须传 host 字段（用于自动生成 ~/.ssh/id_ed25519_<host>）');
+    }
+    const sshDir = path.join(os.homedir(), '.ssh');
+    if (!fs.existsSync(sshDir)) {
+      fs.mkdirSync(sshDir, { recursive: true });
+    }
+    keyPath = path.join(sshDir, `id_ed25519_${host === 'github.com' ? 'github' : 'gitee'}`);
   }
   // 校验 keyPath 父目录存在
   const parentDir = path.dirname(keyPath);

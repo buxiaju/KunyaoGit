@@ -186,7 +186,8 @@ const api = {
     // v0.6.2+ SSH 按 host 路由：按 host 测试（github / gitee）
     testSshForHost: (input: { host: 'github.com' | 'gitee.com'; keyPath?: string }) =>
       ipcRenderer.invoke(IPC.SETTINGS_TEST_SSH_FOR_HOST, input),
-    sshGenerate: (input: { keyPath: string; comment: string; passphrase?: string }) =>
+    // v0.6.3+ keyPath 留空 + host → 后端自动生成 ~/.ssh/id_ed25519_<host>
+    sshGenerate: (input: { keyPath?: string; comment: string; passphrase?: string; host?: 'github.com' | 'gitee.com' }) =>
       ipcRenderer.invoke(IPC.SETTINGS_SSH_GENERATE, input),
     sshReadPubkey: (keyPath: string) => ipcRenderer.invoke(IPC.SETTINGS_SSH_READ_PUBKEY, keyPath),
     sshWriteConfig: (blocks: { host: string; keyPath?: string }[]) =>

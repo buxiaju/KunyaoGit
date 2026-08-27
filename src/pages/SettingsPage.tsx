@@ -113,15 +113,13 @@ export default function SettingsPage() {
   };
 
   // v0.6.2+：生成新 SSH 密钥
+  // v0.6.3+：留 keyPath + 传 host → 后端自动写到 ~/.ssh/id_ed25519_<github|gitee>
   const generateNewKey = async (host: 'github.com' | 'gitee.com') => {
     setGenBusy(true);
     try {
-      const keyPath = `${sshKeyPath.replace(/[\\\/]$/, '').replace(/id_ed25519$/, '')}${genKeyName}${host === 'github.com' ? '_github' : '_gitee'}`;
-      // 让后端在 ~/.ssh 下生成（用 home dir，不依赖用户填的 keyPath）
-      const os = await import('node:os'); // node 模块在 renderer 不可用，改用后端默认路径
-      void os;
       const r: any = await window.gitgui.settings.sshGenerate({
-        keyPath: '', // 留空 → 后端用 ~/.ssh/<genKeyName> 兜底
+        keyPath: '', // 留空 → 后端用 host 自动生成 ~/.ssh/id_ed25519_<github|gitee>
+        host, // v0.6.3+ 显式传 host，给后端做 fallback
         comment: genKeyComment || `kunyao@kunyaogit.local (${host})`,
         passphrase: '',
       });
