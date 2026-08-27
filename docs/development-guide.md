@@ -1250,7 +1250,8 @@ Move-Item .trash2 ../_trash2_$(Get-Date -Format yyyyMMdd_HHmmss) -Force
 - 工作分支：`master`，HEAD 在 `cd8f88c`（docs: 完善 v0.5 文档）
 - v0.6 功能已开发完（Release 附件 / 编辑 / 详情抽屉 / 搜索），`tsc` 0 错，`vitest` 281 例全过
 - 目标：发 GitHub + Gitee 双平台，同步 Gitee 仓库简介
-- **v0.6.1 增量**（本次发版）：4 轮健壮性加固 + SSH 推送支持，HEAD 在 `403c1d6`（docs: ...），`tsc` 0 错，`vitest` 572 例全过
+- **v0.6.1 增量**（上次发版）：4 轮健壮性加固 + SSH 推送支持，HEAD 在 `403c1d6`（docs: ...），`tsc` 0 错，`vitest` 572 例全过
+- **v0.6.2 增量**（本次发版）：SSH 按 host 路由（OpenSSH config 接管 + 一键生成 + 按 host 测试连接），HEAD 在 `1b52823`（docs(ssh)），`tsc` 0 错，`vitest` 598 例全过
 
 ### 12.2 实际步骤（用时约 25 分钟）
 

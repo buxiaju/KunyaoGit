@@ -6,6 +6,58 @@
 
 ---
 
+## [0.6.2] - 2026-08-27
+
+v0.6.1 的 SSH 推送支持是「单一 key」模式（所有 host 共享 `sshKeyPath`），v0.6.2 升级为「按 host 独立 key」：GitHub / Gitee 各自用专用 key，OpenSSH config 路由让 ssh / git 客户端按 host 自动选 IdentityFile。设置页支持一键生成 ed25519 密钥 + 显示/复制公钥。代码 / 测试 / 文档 / 同步都在前面 3 个 commit 落定：feat(ssh-host) / feat(ssh-ui) / docs(ssh)。
+
+### Added
+- 🔑 **SSH 按 host 路由**（v0.6.1 单一 key → v0.6.2 多 key）
+  - **数据模型**：`AppSettings.sshKeysByHost = { github?: string, gitee?: string }` 新增；旧 `sshKeyPath` 标记 @deprecated 保留为兜底（未在 sshKeysByHost 配置的 host 自动 fallback）
+  - **OpenSSH config 路由**：`electron/lib/sshConfig.ts` 新增（纯函数 + 25 例单测）。把 "Host github.com / Host gitee.com" 块写入 `~/.ssh/config`，用 `# >>> KunyaoGit managed block (do not edit) >>>` / `# <<< KunyaoGit managed block <<<` 标记管理（用户的其他 Host 块原样保留）
+  - **GitService 改造**：构造时**不**再注入 `GIT_SSH_COMMAND` env。`_sshKeyPath` 参数保留兼容（仅忽略）。让 OpenSSH config 接管 ssh 行为，与系统其他 ssh 调用一致
+  - **新 IPC 通道** 5 个：`SETTINGS_TEST_SSH_FOR_HOST` / `SETTINGS_SSH_GENERATE` / `SETTINGS_SSH_READ_PUBKEY` / `SETTINGS_SSH_WRITE_CONFIG` / `SETTINGS_SSH_READ_CONFIG`
+- 🛠️ **一键生成 SSH 密钥**（设置页「SSH 推送」区）
+  - 「生成新密钥」按钮（GitHub / Gitee 行各一个）→ 弹出表单（密钥文件名 / comment / 类型）
+  - 调 `ssh-keygen -t ed25519 -f <path> -N "" -C <comment>` 生成
+  - 私钥落在 `~/.ssh/id_ed25519_github` / `id_ed25519_gitee`（无 passphrase）
+  - **自动复制公钥**到剪贴板，下方有「去 GitHub 添加 SSH key」「去 Gitee 添加 SSH key」跳转链接
+- 🔍 **按 host 测试连接**（替代 v0.6.1 的单一测试按钮）
+  - 「测试 GitHub 连接」→ `ssh -i <key> -T git@github.com`
+  - 「测试 Gitee 连接」→ `ssh -i <key> -T git@gitee.com`
+  - 仅白名单 github.com / gitee.com（避免探测任意 SSH 服务）
+  - 成功解析 `Hi <user>! You've successfully authenticated`；失败分类 Permission denied / DNS / 超时 / 命令不存在
+- 📋 **写入 `~/.ssh/config`** 一键按钮
+  - 设置页底部按钮 → 调用 `SETTINGS_SSH_WRITE_CONFIG` 写 KunyaoGit managed block
+  - 0600 权限（OpenSSH 安全要求）
+- 🔄 **v0.6.1 兼容**：旧 `sshKeyPath` 在 UI 自动迁移到 `sshKeysByHost.github`（user 改设置保存时一次性迁移）
+- 🛡️ **新增纯函数** `getEffectiveKeyForHost(host, keysByHost, fallback)` + `detectRemoteHost(url)`（两端镜像：electron/lib/sshConfig.ts + src/lib/sshConfig.ts）
+
+### Changed
+- ⚙️ **GitService 构造签名兼容**：第三个参数 `_sshKeyPath` 标记为忽略（v0.6.1 注入 env 的行为移除，OpenSSH config 接管）
+- 🌐 **i18n**（zh + en 各 + 22 个 key）：`settings.sshGithubKey` / `sshGiteeKey` / `sshGenerateKey` / `sshPublicKey` / `sshCopyToClipboard` / `sshCopied` / `sshWriteConfig` / `sshTestGithub` / `sshTestGitee` / `sshAddToGithub` / `sshAddToGitee` / `sshKeyName` / `sshKeyComment` / `sshKeyType` / `sshKeyTypeEd25519` / `sshKeyGenerated` / `sshConfigWritten` / `sshGenerateFailed` / `sshWriteConfigFailed` / `sshGenerateKeyTitle` / `sshKeyExists` / `sshOpenSshDir`
+
+### Tests
+- 自动化测试 572 → **598 例全绿**（29 文件，约 5 秒）
+- 新增 `tests/unit/sshConfig.test.ts`（25 例）：`renderBlock` / `renderManagedSection` / `stripManagedSection` / `writeSshConfig` / `getEffectiveKeyForHost` / `detectRemoteHost`
+- 改 `tests/unit/gitService.test.ts`：v0.6.1 的 4 个"传 sshKeyPath 注入 env"测试改写为 v0.6.2 行为"simple-git 不收 env（OpenSSH config 接管）"
+- 跑全量：`npm run typecheck` 0 错 / `npm test` 598/598 / `npx vite build` 0 错
+
+### Tech
+- `electron/lib/sshConfig.ts`（新增）—— 纯函数，零 fs / shell 依赖，便于单测
+- `src/lib/sshConfig.ts`（新增）—— 渲染端镜像（只含 getEffectiveKeyForHost / detectRemoteHost 两个函数）
+- `electron/services/git.ts` 改造：构造不注入 env
+- `electron/services/settings.ts` 加 4 个新函数：`generateSshKey` / `readPublicKey` / `readSshConfigFile` / `writeSshConfigFile` / `testSshConnectionForHost`
+- `src/stores/settings.ts` DEFAULTS 加 `sshKeysByHost: { github: '', gitee: '' }`
+- `src/pages/SettingsPage.tsx` SSH 区重写：按 host 拆分两个 input 行 + 「生成」「测试」「写入 config」按钮 + 内联生成表单 + 公钥展示
+
+### Known Limitations
+- **SSH 私钥 passphrase**：v0.6.2 UI 不提供 passphrase 输入（默认空）。需要 passphrase 的用户可手动 `ssh-keygen -p -f <key>` 重新加密
+- **生成后没自动 `ssh-add`**：用户需手动 `ssh-add ~/.ssh/id_ed25519_github` 或重启 ssh-agent
+- **Gitee SSH 响应格式**与 GitHub 不同（不一定含 `Hi <user>!`），可能误判为失败；v0.6.3 加 Gitee 特定解析
+- **设置页"打开 ~/.ssh 目录"** 暂未实现新 IPC `app:open-ssh-dir`（v0.6.3 候选）
+
+---
+
 ## [0.6.1] - 2026-08-27
 
 v0.6.0 稳定后一轮「非功能加固 + SSH 推送支持」双发版本。代码 / 测试 / 文档 / 同步都在前面 3 个 commit 落定：fix(robustness) / feat(ssh-push) / docs。
