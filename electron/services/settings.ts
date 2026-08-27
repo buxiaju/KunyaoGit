@@ -6,6 +6,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import type { AppSettings } from '../../shared/types';
+// v0.6.3+ 静态 import（之前用 require('../lib/sshConfig') 在 dev 模式 ESM 下抛 "require is not defined"）
+import { writeSshConfig } from '../lib/sshConfig';
 
 const execFileAsync = promisify(execFile);
 
@@ -216,6 +218,16 @@ export async function testGit(gitPath?: string): Promise<{ ok: boolean; version?
 }
 
 /**
+ * 去掉 ANSI 转义序列（颜色码 / 光标控制 / etc.）
+ * v0.6.3+：ssh -T 输出可能含 `\x1b[36;01m...` 之类（OpenSSH 在交互式终端加颜色），
+ * 直接显示会露馅。
+ */
+export function stripAnsi(s: string): string {
+  // eslint-disable-next-line no-control-regex
+  return s.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '');
+}
+
+/**
  * 把 ssh -T 输出解析成结构化结果（v0.6+ SSH 推送支持 / 纯函数）。
  * 抽出是为了便于单元测试 —— testSshConnection 在不同环境下行为差异大（mock execFile 难），
  * 解析层是稳定可测的。
@@ -224,9 +236,20 @@ export function parseSshResult(
   stdout: string,
   stderr: string
 ): { ok: boolean; message: string; error?: string } {
-  if (/successfully authenticated/i.test(stdout) || /Hi\s+\S+/i.test(stdout)) {
-    const m = stdout.match(/Hi\s+(\S+?)!/);
-    return { ok: true, message: m ? `已认证为 ${m[1]}` : stdout.trim() };
+  // v0.6.3+ 先剥 ANSI 颜色码（OpenSSH 在交互式终端会加色）
+  stdout = stripAnsi(stdout);
+  stderr = stripAnsi(stderr);
+  // v0.6.3+ GitHub 把 `Hi <user>! You've successfully authenticated...` 写到 **stderr**
+  // （不是 stdout），所以成功检测要同时看 stdout + stderr。
+  // 顺序：先尝试从 stdout 提取用户名，失败再从 stderr 提取。
+  const out = stdout + '\n' + stderr;
+  if (/successfully authenticated/i.test(out) || /Hi\s+\S+/i.test(out)) {
+    const mStdout = stdout.match(/Hi\s+(\S+?)!/);
+    const mStderr = stderr.match(/Hi\s+(\S+?)!/);
+    const user = mStdout?.[1] || mStderr?.[1];
+    if (user) return { ok: true, message: `已认证为 ${user}` };
+    // 找到认证成功但拿不到用户名（很罕见）→ 用 stdout（用户一般能看懂）
+    return { ok: true, message: (stdout || stderr).trim() };
   }
   if (/Permission denied/i.test(stderr + stdout)) {
     return { ok: false, message: '', error: '认证失败：服务器拒绝了公钥（Permission denied）。请检查 key 是否已加到 GitHub 账户' };
@@ -288,15 +311,10 @@ export async function testSshConnection(
     // ssh -T 即使认证成功也是退出码 1（GitHub 不开 shell），走 stdout 解析
     return parseSshResult(stdout || '', stderr || '');
   } catch (e: any) {
-    // execFile reject 时，e.stdout / e.stderr 也可能有内容（GitHub ssh -T 认证成功就是 reject 1 + 有 stdout）
-    const stdout: string = e?.stdout || '';
-    const stderr: string = e?.stderr || '';
-    // 先尝试当成"成功"：GitHub ssh -T 总是 reject 1 + 有 Hi 消息
-    if (/successfully authenticated/i.test(stdout) || /Hi\s+\S+/i.test(stdout)) {
-      const m = stdout.match(/Hi\s+(\S+?)!/);
-      return { ok: true, message: m ? `已认证为 ${m[1]}` : stdout.trim() };
-    }
-    // 否则走正常解析
+    // execFile reject 时，e.stdout / e.stderr 也可能有内容（GitHub ssh -T 认证成功就是 reject 1 + 消息写到 stderr）
+    const stdout: string = stripAnsi(e?.stdout || '');
+    const stderr: string = stripAnsi(e?.stderr || '');
+    // v0.6.3+ 直接调 parseSshResult（它已合并 stdout+stderr 检测成功标记）
     if (stdout || stderr) {
       return parseSshResult(stdout, stderr);
     }
@@ -347,12 +365,9 @@ export async function testSshConnectionForHost(
     const { stdout, stderr } = await execFileAsync('ssh', args);
     return parseSshResult(stdout || '', stderr || '');
   } catch (e: any) {
-    const stdout: string = e?.stdout || '';
-    const stderr: string = e?.stderr || '';
-    if (/successfully authenticated/i.test(stdout) || /Hi\s+\S+/i.test(stdout)) {
-      const m = stdout.match(/Hi\s+(\S+?)!/);
-      return { ok: true, message: m ? `已认证为 ${m[1]}` : stdout.trim() };
-    }
+    const stdout: string = stripAnsi(e?.stdout || '');
+    const stderr: string = stripAnsi(e?.stderr || '');
+    // v0.6.3+ 直接调 parseSshResult（它已合并 stdout+stderr 检测成功标记）
     if (stdout || stderr) {
       return parseSshResult(stdout, stderr);
     }
@@ -474,13 +489,105 @@ export function writeSshConfigFile(
       try { fs.chmodSync(configPath, 0o600); } catch { /* ignore */ }
     }
     const current = fs.existsSync(configPath) ? fs.readFileSync(configPath, 'utf-8') : '';
-    // 动态 require（避免循环）
-    const { writeSshConfig } = require('../lib/sshConfig');
+    // v0.6.3+ 静态 import 在文件顶部（之前 require 在 dev ESM 下抛 "require is not defined"）
     const next = writeSshConfig(current, blocks);
     fs.writeFileSync(configPath, next, 'utf-8');
     try { fs.chmodSync(configPath, 0o600); } catch { /* ignore */ }
     return { ok: true, path: configPath };
   } catch (e) {
     return { ok: false, error: (e as Error).message, path: configPath };
+  }
+}
+
+// v0.6.3+：列出 ~/.ssh 下所有 ed25519/rsa 私钥（带 .pub 的才算一对完整 key）
+// 返回 { name, path, fingerprint, host? }[]
+//   - name: 文件 basename（不含 .pub）
+//   - path: 私钥绝对路径
+//   - fingerprint: SHA256:...（取自 .pub 旁边的私钥）；失败时为 ''
+//   - host: 根据后缀推断 'github' | 'gitee' | undefined
+export interface SshKeyInfo {
+  name: string;
+  path: string;
+  fingerprint: string;
+  /** 根据文件名后缀推断的关联 host（仅识别 github/gitee，其他返回 undefined） */
+  host?: 'github.com' | 'gitee.com';
+}
+
+const HOST_FROM_NAME_RE = /id_ed25519_(github|gitee)$/;
+
+export async function listSshKeys(): Promise<SshKeyInfo[]> {
+  const sshDir = path.join(os.homedir(), '.ssh');
+  if (!fs.existsSync(sshDir)) return [];
+  let entries: string[];
+  try {
+    entries = fs.readdirSync(sshDir);
+  } catch {
+    return [];
+  }
+  const result: SshKeyInfo[] = [];
+  for (const name of entries) {
+    // 私钥文件（无 .pub 后缀），且对应的 .pub 存在
+    if (name.endsWith('.pub')) continue;
+    if (!/^id_(ed25519|rsa|ecdsa|dsa)/.test(name)) continue;
+    const keyPath = path.join(sshDir, name);
+    const pubPath = `${keyPath}.pub`;
+    if (!fs.existsSync(pubPath)) continue;
+    let stat: fs.Stats;
+    try {
+      stat = fs.statSync(keyPath);
+    } catch {
+      continue;
+    }
+    if (!stat.isFile()) continue;
+    // 算 fingerprint（swing & miss 也不致命，返回空串即可）
+    let fingerprint = '';
+    try {
+      const { stdout } = await execFileAsync('ssh-keygen', ['-lf', keyPath]);
+      const m = stdout.match(/SHA256:\S+/);
+      if (m) fingerprint = m[0];
+    } catch {
+      /* ignore */
+    }
+    const m = name.match(HOST_FROM_NAME_RE);
+    const host: SshKeyInfo['host'] = m
+      ? (m[1] === 'github' ? 'github.com' : 'gitee.com')
+      : undefined;
+    result.push({ name, path: keyPath, fingerprint, host });
+  }
+  // 按 host（github > gitee > undefined）排序，再按 name
+  result.sort((a, b) => {
+    const order = (h?: string) => (h === 'github.com' ? 0 : h === 'gitee.com' ? 1 : 2);
+    const oa = order(a.host);
+    const ob = order(b.host);
+    if (oa !== ob) return oa - ob;
+    return a.name.localeCompare(b.name);
+  });
+  return result;
+}
+
+// v0.6.3+：删除一对 SSH key（私钥 + .pub）
+// 安全：路径必须在 ~/.ssh/ 下，且文件名必须是 id_ 前缀的私钥
+export async function deleteSshKey(
+  keyPath: string
+): Promise<{ ok: boolean; error?: string }> {
+  if (!keyPath || typeof keyPath !== 'string') {
+    return { ok: false, error: 'keyPath 不能为空' };
+  }
+  const sshDir = path.join(os.homedir(), '.ssh');
+  const resolved = path.resolve(keyPath);
+  if (!resolved.startsWith(sshDir + path.sep) && resolved !== sshDir) {
+    return { ok: false, error: `只能删除 ~/.ssh/ 下的私钥：${resolved}` };
+  }
+  const name = path.basename(resolved);
+  if (!/^id_(ed25519|rsa|ecdsa|dsa)/.test(name)) {
+    return { ok: false, error: `只能删除 id_* 私钥：${name}` };
+  }
+  try {
+    if (fs.existsSync(resolved)) fs.unlinkSync(resolved);
+    const pubPath = `${resolved}.pub`;
+    if (fs.existsSync(pubPath)) fs.unlinkSync(pubPath);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
   }
 }

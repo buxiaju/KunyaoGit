@@ -71,6 +71,63 @@ describe('parseSshResult（v0.6+ SSH push，纯函数）', () => {
     expect(r.ok).toBe(false);
     expect(r.error).toMatch(/未识别/);
   });
+
+  it('v0.6.3+ stdout 含 ANSI 颜色码 → 解析成功且 message 不含转义符', () => {
+    // Gitee 真实输出示例：\x1b[36;01m不侠居(@buxiaju)\x1b[0m（青色加粗用户信息）
+    const r = parseSshResult('Hi \x1b[36;01m不侠居(@buxiaju)\x1b[0m! You\'ve successfully authenticated', '');
+    expect(r.ok).toBe(true);
+    expect(r.message).not.toMatch(/\x1b/);
+    expect(r.message).toContain('不侠居(@buxiaju)');
+  });
+
+  it('v0.6.3+ stderr 含 ANSI 颜色码 → 不影响 ok 判断（剥后内容识别）', () => {
+    const r = parseSshResult('', '\x1b[31mPermission denied (publickey)\x1b[0m');
+    expect(r.ok).toBe(false);
+    expect(r.error).not.toMatch(/\x1b/);
+    expect(r.error).toMatch(/拒绝|公钥/);
+  });
+
+  it('v0.6.3+ GitHub 成功消息走 stderr（OpenSSH 行为）→ 仍识别为成功', () => {
+    // ssh -T git@github.com 成功时：stdout 通常空，stderr 是 "Hi buxiaju! ...shell access."
+    const r = parseSshResult(
+      '',
+      "Hi buxiaju! You've successfully authenticated, but GitHub does not provide shell access."
+    );
+    expect(r.ok).toBe(true);
+    expect(r.message).toBe('已认证为 buxiaju');
+    expect(r.message).not.toMatch(/successfully authenticated/);
+  });
+
+  it('v0.6.3+ Gitee 成功消息在 stderr（也常见）→ 仍识别', () => {
+    const r = parseSshResult(
+      '',
+      "Hi 不侠居(@buxiaju)! You've been authenticated"
+    );
+    expect(r.ok).toBe(true);
+    expect(r.message).toBe('已认证为 不侠居(@buxiaju)');
+  });
+});
+
+describe('stripAnsi（v0.6.3+ ANSI 剥离，纯函数）', () => {
+  it('剥颜色码 \\x1b[36;01m...\\x1b[0m', async () => {
+    const { stripAnsi } = await import('../../electron/services/settings');
+    expect(stripAnsi('\x1b[36;01m不侠居\x1b[0m')).toBe('不侠居');
+  });
+
+  it('剥光标控制 \\x1b[2J\\x1b[H', async () => {
+    const { stripAnsi } = await import('../../electron/services/settings');
+    expect(stripAnsi('\x1b[2J\x1b[Hclear screen')).toBe('clear screen');
+  });
+
+  it('不含 ANSI 的字符串原样返回', async () => {
+    const { stripAnsi } = await import('../../electron/services/settings');
+    expect(stripAnsi('hello world')).toBe('hello world');
+  });
+
+  it('空字符串', async () => {
+    const { stripAnsi } = await import('../../electron/services/settings');
+    expect(stripAnsi('')).toBe('');
+  });
 });
 
 describe('testSshConnection（v0.6+ SSH 推送支持）', () => {
