@@ -1,6 +1,6 @@
 # KunyaoGit 功能详解
 
-> 面向用户与开发者的完整功能清单。当前版本：**v0.6.0**（见 `package.json`）。
+> 面向用户与开发者的完整功能清单。当前版本：**v0.6.3**（见 `package.json`）。
 > 所有功能均通过 Electron IPC 实现，渲染进程仅通过 `window.gitgui.*` 调用，主进程负责真正的本地 Git / 远程 API / 文件系统操作。
 
 ---
@@ -767,9 +767,9 @@ ssh -i "<keyPath>" \
 | `src/components/repo/ChangesPanel.tsx` | 修改 | push 失败时主动提示切换 SSH |
 | `src/i18n/zh.ts` / `en.ts` | 修改 | + `settings.ssh*` / `settings.pushFailed*` / `settings.switchToSsh` 8 个 key |
 
-### 23.8 ★ v0.6.3：真实使用 bug 修复（7 项）
+### 23.8 ★ v0.6.3：真实使用 bug 修复（8 项）
 
-v0.6.2 上线后用截图反馈 + 实际点击暴露的 7 个 bug 集中修。代码 / 测试 / 文档 / 发版都在这一轮。
+v0.6.2 上线后用截图反馈 + 实际点击暴露的 8 个 bug 集中修。代码 / 测试 / 文档 / 发版都在这一轮。
 
 #### 23.8.1 `generateSshKey` 空 keyPath 误 throw
 

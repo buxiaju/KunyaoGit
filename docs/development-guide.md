@@ -1,7 +1,7 @@
 # KunyaoGit 开发指南
 
 > 面向接手开发者的完整开发 / 打包 / 发布手册。配套阅读：[`ARCHITECTURE.md`](../ARCHITECTURE.md)、[`features.md`](./features.md)。
-> 当前版本：**v0.6.0**（v0.2.3+ 多语言、v0.2.4+ 下载提速、v0.2.5+ 三主题、v0.2.6+ 探活修复、v0.3.3+ 更新下载请求修复、v0.3.4+ 云端仓库搜索 / Gitee 搜索降级、v0.4+ 命令面板/快捷键/Stash 队列/Cherry-pick/Revert/PR 创建/底部状态栏、v0.5+ Ctrl+P 跳转文件 / 文件历史 + Blame、**v0.6+ Release 附件管理 / 编辑 / Markdown 渲染 / 详情抽屉**）。
+> 当前版本：**v0.6.3**（v0.2.3+ 多语言、v0.2.4+ 下载提速、v0.2.5+ 三主题、v0.2.6+ 探活修复、v0.3.3+ 更新下载请求修复、v0.3.4+ 云端仓库搜索 / Gitee 搜索降级、v0.4+ 命令面板/快捷键/Stash 队列/Cherry-pick/Revert/PR 创建/底部状态栏、v0.5+ Ctrl+P 跳转文件 / 文件历史 + Blame、v0.6.0~0.6.2 Release 附件管理 / 编辑 / Markdown 渲染 / 详情抽屉 / SSH 按 host 路由、**v0.6.3 真实使用 bug 修复（8 项）**）。
 
 ---
 
@@ -20,6 +20,7 @@
 11. [★ v0.5 发布实战：v0.5.0 case study](#11-v05-发布实战v050-case-study)
 12. [★ v0.6 发布实战：v0.6.0 case study](#12-v06-发布实战v060-case-study)
 13. [★ v0.6.3 发布实战：bug fix patch case study](#13-v063-发布实战bug-fix-patch-case-study)
+   - 真机自测：[`docs/v0.6.3-self-test-checklist.md`](./v0.6.3-self-test-checklist.md)（8 bug 一一对应可勾选）
 
 ---
 
@@ -1397,7 +1398,7 @@ cmd /c "set GH_TOKEN=$token && node scripts\publish\list-assets.cjs"
 
 ## 13. ★ v0.6.3 发布实战：bug fix patch case study
 
-v0.6.3 是**纯 bug fix patch**（无新功能），用户截图反馈 + 实际使用暴露的 6+ 个 v0.6.2 真实 bug 集中修。这一轮**简化发版流程**：直接 1 个 fix/feat commit + 1 个 docs commit + 1 个 chore(release) commit + push + NSIS build + publish，**不**走 v0.6.2 的 4 批拆 commit（因为只是局部 bug fix，没跨模块）。
+v0.6.3 是**纯 bug fix patch**（无新功能），用户截图反馈 + 实际使用暴露的 8 个 v0.6.2 真实 bug 集中修。这一轮**简化发版流程**：5 个源码 commit（fix×2 / feat / docs / chore-release）+ push + NSIS build + publish，**不**走 v0.6.2 的 6 批拆 commit（因为只是局部 bug fix，没跨模块）。发版收尾后又补了 4 个 post-release commit（fix-publish / docs-release ×2 / docs-changelog），处理 v0.6.3 发布流程本身踩的坑（详见 §13.5）。
 
 ### 13.1 v0.6.3 改动清单
 
@@ -1412,14 +1413,27 @@ v0.6.3 是**纯 bug fix patch**（无新功能），用户截图反馈 + 实际�
 
 ### 13.2 简化 commit 拆分
 
-只拆 3 个 commit（不像 v0.6.2 拆 4 批）：
+只拆 5 个源码 commit（v0.6.2 拆了 6 批）：
 
-1. **`fix(ssh-test): v0.6.3+ 剥 ANSI + parseSshResult 合并 stdout+stderr + writeSshConfigFile static import`** — 3 个独立 bug 修集中一处（都涉及后端 SSH 测试 + dev 兼容性）
-2. **`feat(ssh-keys): v0.6.3+ 列出/删除 ~/.ssh 私钥 + SSH 设置区 UX 增强`** — 后端新功能 + 前端 UI 改 + i18n 同步 + 测试（关联紧密，单独拆没意义）
-3. **`docs(ssh): v0.6.3+ 文档同步`** — CHANGELOG / features.md §23.8 / development-guide §13
-4. **`chore(release): v0.6.3 归档`** — `package.json` 0.6.2 → 0.6.3 + `scripts/publish/publish-v063.cjs` + `CHANGELOG.md` 已含在上一个 commit
+1. **`c43e960 fix(ssh-generate): v0.6.3+ generateSshKey 空 keyPath 改可选 + 自动 fallback`** — 单一 bug 修（前端空表单触发「keyPath 不能为空」误 throw）
+2. **`9c4e553 fix(ssh-test): v0.6.3+ 剥 ANSI + parseSshResult 合并 stdout+stderr + writeSshConfigFile static import`** — 3 个独立 bug 修集中一处（都涉及后端 SSH 测试 + dev 兼容性）
+3. **`7649db9 feat(ssh-keys): v0.6.3+ 列出/删除 ~/.ssh 私钥 + SSH 设置区 UX 增强`** — 后端新功能 + 前端 UI 改 + i18n 同步 + 测试（关联紧密，单独拆没意义）
+4. **`8473886 docs(ssh): v0.6.3+ 文档同步`** — CHANGELOG / features.md §23.8 / development-guide §13
+5. **`7da4103 chore(release): v0.6.3 归档`** — `package.json` 0.6.2 → 0.6.3 + `scripts/publish/publish-v063.cjs` + `scripts/publish/update-gitee-body.cjs`
 
-> 之前 v0.6.2 拆了 6 个 commit（feat-host / feat-ui / docs / chore-release / release 资产 / update-gitee-body）。v0.6.3 只 3 个——**bug fix 不需要"按 host / 按 UI 模块"那种细粒度拆批**。
+> 之前 v0.6.2 拆了 6 个 commit（feat-host / feat-ui / docs / chore-release / release 资产 / update-gitee-body）。v0.6.3 源码只 5 个——**bug fix 不需要"按 host / 按 UI 模块"那种细粒度拆批**。
+
+### 13.2.1 Post-release commit（v0.6.3 专属）
+
+发版收尾后又补了 4 个 commit，处理 v0.6.3 发布流程本身踩的坑（**严格说属于 v0.6.4 范畴**，但因为这些 commit 直接关联 v0.6.3 Release 状态，也带上了 `c43e960..c8313e6` 推送）：
+
+6. **`f02f09b fix(publish): RELEASE_BODY 反引号转义 + 下载说明纠正 + 发版工具脚本`** — dup 脚本生成的模板字符串含未转义反引号；download 说明纠正"附件配额 vs git 体积"概念混淆
+7. **`9d84e44 docs(release): README v0.6.3 banner + development-guide §8.6 纠正 + §13.5 发版三坑`** — 5 个文档头全部从 v0.6.0 升到 v0.6.3；§8.6 历史错误结论补"已过时"标
+8. **`c8313e6 docs(changelog): 统一 v0.6.3 bug 计数为 8** — CHANGELOG 写 6 / Release body 写 7 / README 写 8，三处对不上
+9. **`4d6fae7 docs(release): 补 §13.5.4 —— Release API 自动打 tag 导致的 tag 不一致`** — 4 个 commit 写完才意识到 tag 已自动建，force push 对齐
+
+> 这 4 个 commit 走完后 v0.6.3 tag 已在 `c8313e6` 定稿。按 §13.5.4 的边界约定，**后续 v0.6.3 关联改动不再移 tag**（如还想补文档属于 v0.6.4 范畴）。
+
 
 ### 13.3 Gitee 829MB 限制的应对
 

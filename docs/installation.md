@@ -2,7 +2,7 @@
 
 > 本指南介绍 KunyaoGit 在 Windows 平台的安装、卸载、应用内更新以及从源码构建打包的完整流程。
 >
-> 当前版本：**v0.6.0**（v0.3.0+ 文件管理 & 多远程推送、v0.3.1+ Gitee 下载源修复、v0.3.2+ 文件树折叠、v0.3.3+ 更新下载容错重试、v0.3.4+ 云端仓库搜索、v0.4+ 命令面板 / 快捷键 / Stash / Cherry-pick / Revert / PR 创建 / 状态栏、v0.5+ Ctrl+P 跳转文件 / 文件历史 + Blame、**v0.6+ Release 附件管理 / 编辑 / Markdown 渲染**）
+> 当前版本：**v0.6.3**（v0.3.0+ 文件管理 & 多远程推送、v0.3.1+ Gitee 下载源修复、v0.3.2+ 文件树折叠、v0.3.3+ 更新下载容错重试、v0.3.4+ 云端仓库搜索、v0.4+ 命令面板 / 快捷键 / Stash / Cherry-pick / Revert / PR 创建 / 状态栏、v0.5+ Ctrl+P 跳转文件 / 文件历史 + Blame、v0.6.0~0.6.2 Release 附件管理 / 编辑 / Markdown 渲染 / SSH 按 host 路由、**v0.6.3 真实使用 bug 修复（8 项）**）
 
 ---
 
@@ -39,24 +39,23 @@
 
 KunyaoGit 提供 NSIS 安装包（推荐）与便携版两种分发形式，均托管于 GitHub 与 Gitee Release。
 
-### 2.1 最新版（v0.6.0）下载地址
+### 2.1 最新版（v0.6.3）下载地址
 
 **NSIS 安装包（推荐，约 86 MB）**
 
 | 平台 | 下载地址 |
 |------|----------|
-| GitHub | https://github.com/buxiaju/KunyaoGit/releases/download/v0.6.0/KunyaoGit-Setup-0.6.0-x64.exe |
-| Gitee | https://gitee.com/buxiaju/KunyaoGit/releases/tag/v0.6.0 |
+| GitHub | https://github.com/buxiaju/KunyaoGit/releases/download/v0.6.3/KunyaoGit-Setup-0.6.3-x64.exe |
+| Gitee | https://gitee.com/buxiaju/KunyaoGit/releases/tag/v0.6.3 |
 
-> **v0.6.0 起**：Gitee Release 附件配额已恢复，86 MB 的 NSIS 安装包可直接从 Gitee Release 页面下载（此前 v0.5.x 因配额用尽只能走 GitHub）。
-> 另外仓库内 `.release-assets/KunyaoGit-Setup-0.6.0-x64.exe` 也可通过 `git clone` 获取。
+> **v0.6.3 起**：NSIS 安装包**不再随仓库提交**到 `.release-assets/`（Gitee 仓库 git 体积已近 819MB 上限），`git clone` 不会包含安装包，请从上表 Release 链接下载。Gitee Release 附件配额早已恢复，两边都带完整安装包，就近下载即可。
 
 **便携版（约 3.5 MB，需本机已安装 Node.js）**
 
 | 平台 | 下载地址 |
 |------|----------|
-| GitHub | https://github.com/buxiaju/KunyaoGit/releases/download/v0.6.0/KunyaoGit-portable-v0.6.0.zip |
-| Gitee | https://gitee.com/buxiaju/KunyaoGit/releases/tag/v0.6.0 |
+| GitHub | https://github.com/buxiaju/KunyaoGit/releases/download/v0.6.3/KunyaoGit-portable-v0.6.3.zip |
+| Gitee | https://gitee.com/buxiaju/KunyaoGit/releases/tag/v0.6.3 |
 
 > 完整发布列表见 [附录 A. 版本与下载速查](#附录-a-版本与下载速查)。
 
@@ -425,7 +424,10 @@ node scripts/build/package-portable.cjs
 
 | 版本 | 安装包（GitHub） | 便携版（GitHub） | 主要变化 |
 |------|-------------------|------------------|----------|
-| **v0.6.0** | `KunyaoGit-Setup-0.6.0-x64.exe` | `KunyaoGit-portable-v0.6.0.zip` | 📎 Release 附件上传/下载/删除 + ✏️ Release 编辑 + 🎨 详情抽屉（Markdown 渲染）+ 🔍 列表搜索 |
+| **v0.6.3** | `KunyaoGit-Setup-0.6.3-x64.exe` | `KunyaoGit-portable-v0.6.3.zip` | 🐛 真实使用 bug 集中修（8 项） + 🗝️ SSH 密钥管理（列表 / 删除 / 一键使用）|
+| v0.6.2 | `KunyaoGit-Setup-0.6.2-x64.exe` | `KunyaoGit-portable-v0.6.2.zip` | 🔑 SSH 按 host 路由（多 key + OpenSSH config 接管）|
+| v0.6.1 | `KunyaoGit-Setup-0.6.1-x64.exe` | `KunyaoGit-portable-v0.6.1.zip` | 🔒 SSH 推送支持（单一 key）|
+| v0.6.0 | `KunyaoGit-Setup-0.6.0-x64.exe` | `KunyaoGit-portable-v0.6.0.zip` | 📎 Release 附件上传/下载/删除 + ✏️ Release 编辑 + 🎨 详情抽屉（Markdown 渲染）+ 🔍 列表搜索 |
 | v0.5.0 | `KunyaoGit-Setup-0.5.0-x64.exe` | `KunyaoGit-portable-v0.5.0.zip` | ⌨️ Ctrl+P 跳转文件 + 📜 文件历史 / Blame |
 | v0.4.0 | `KunyaoGit-Setup-0.4.0-x64.exe` | `KunyaoGit-portable-v0.4.0.zip` | 🔍 命令面板 + ⌨️ 全局快捷键 + 📦 Stash 队列 + 🍒 Cherry-pick / Revert + 🌐 PR·MR 创建 + 📊 底部状态栏 |
 | v0.3.8 | `KunyaoGit-Setup-0.3.8-x64.exe` | `KunyaoGit-portable-v0.3.8.zip` | 📁 日志归档 + 🔧 变更面板布局修复 |
