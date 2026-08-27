@@ -9,6 +9,8 @@ const DEFAULTS: AppSettings = {
   auth: {},
   // v0.6+ SSH 推送支持
   sshKeyPath: '',
+  // v0.6.2+ SSH 按 host 路由
+  sshKeysByHost: { github: '', gitee: '' },
   preferredProtocol: 'auto',
 };
 

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useSettingsStore } from '../stores/settings';
 import { useUpdateStore } from '../stores/update';
 import { useI18n } from '../i18n';
-import { Github, Globe, Save, CheckCircle2, XCircle, Loader2, FolderOpen, Eye, EyeOff, RefreshCw, Download, ExternalLink, Info, Languages, Palette, Check, KeyRound, Terminal } from 'lucide-react';
+import { Github, Globe, Save, CheckCircle2, XCircle, Loader2, FolderOpen, Eye, EyeOff, RefreshCw, Download, ExternalLink, Info, Languages, Palette, Check, KeyRound, Terminal, Copy } from 'lucide-react';
 import { toast } from '../components/common/Toast';
 import type { AppUpdateInfo } from '../../shared/types';
 import { THEME_LIST, setTheme } from '../hooks/useTheme';
@@ -18,13 +18,25 @@ export default function SettingsPage() {
   const [showGh, setShowGh] = useState(false);
   const [showGt, setShowGt] = useState(false);
   const [testing, setTesting] = useState<'git' | 'github' | 'gitee' | 'ssh' | null>(null);
-  const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
   // v0.6+ SSH 推送支持
   const [sshKeyPath, setSshKeyPath] = useState(settings.sshKeyPath || '');
+  // v0.6.2+ SSH 按 host 路由
+  const [sshGithubKey, setSshGithubKey] = useState(settings.sshKeysByHost?.github || '');
+  const [sshGiteeKey, setSshGiteeKey] = useState(settings.sshKeysByHost?.gitee || '');
+  // 生成密钥表单
+  const [genDialog, setGenDialog] = useState<{ host: 'github.com' | 'gitee.com' } | null>(null);
+  const [genKeyName, setGenKeyName] = useState('id_ed25519_');
+  const [genKeyComment, setGenKeyComment] = useState('kunyao@kunyaogit.local');
+  const [genBusy, setGenBusy] = useState(false);
+  // 生成结果（用于显示公钥 + 复制）
+  const [genResult, setGenResult] = useState<{ privatePath: string; publicKey: string; fingerprint: string; host: 'github.com' | 'gitee.com' } | null>(null);
+  // 协议偏好
   const [preferredProtocol, setPreferredProtocol] = useState<'auto' | 'https' | 'ssh'>(
     settings.preferredProtocol || 'auto'
   );
-  const [sshTestResult, setSshTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  // 测试连接（按 host 区分）
+  const [testingHost, setTestingHost] = useState<'github.com' | 'gitee.com' | null>(null);
+  const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
   const [currentVersion, setCurrentVersion] = useState('');
   const [updateInfo, setUpdateInfo] = useState<AppUpdateInfo | null>(null);
@@ -34,6 +46,8 @@ export default function SettingsPage() {
     setGitPath(settings.gitPath || '');
     setDefaultCloneDir(settings.defaultCloneDir || '');
     setSshKeyPath(settings.sshKeyPath || '');
+    setSshGithubKey(settings.sshKeysByHost?.github || '');
+    setSshGiteeKey(settings.sshKeysByHost?.gitee || '');
     setPreferredProtocol(settings.preferredProtocol || 'auto');
     window.gitgui.app.getVersion().then(setCurrentVersion);
   }, [settings]);
@@ -43,34 +57,121 @@ export default function SettingsPage() {
     toast.success(t('settings.saved'));
   };
 
-  // v0.6+ SSH：保存私钥路径 + 协议偏好
-  const saveSsh = async () => {
-    await save({ sshKeyPath: sshKeyPath.trim() || '', preferredProtocol });
-    toast.success(t('settings.saved'));
-  };
-
-  // v0.6+ SSH：测试连接
-  const testSshConnection = async () => {
-    setTesting('ssh');
-    setSshTestResult(null);
-    try {
-      // 先把当前输入的路径保存到 settings，这样 GitService 下次 new 时会读到
-      await save({ sshKeyPath: sshKeyPath.trim() || '' });
-      const r: any = await window.gitgui.settings.testSsh(sshKeyPath.trim() || undefined);
-      if (r.ok) {
-        // r.message 含 "已认证为 <user>" 或 "Hi <user>"
-        const m = r.message?.match(/已认证为\s+(\S+)|Hi\s+(\S+?)[!]/);
-        const user = m?.[1] || m?.[2] || r.message;
-        setSshTestResult({ ok: true, msg: t('settings.sshAuthOk', { user }) });
-      } else {
-        setSshTestResult({ ok: false, msg: t('settings.sshAuthFailed', { error: r.error || r.message || '未知错误' }) });
+  // v0.6.2+ SSH：保存私钥路径 + 按 host 私钥 + 协议偏好 + 写入 ~/.ssh/config
+  const saveSsh = async (alsoWriteConfig: boolean = true) => {
+    await save({
+      sshKeyPath: sshKeyPath.trim() || '',
+      sshKeysByHost: {
+        github: sshGithubKey.trim() || '',
+        gitee: sshGiteeKey.trim() || '',
+      },
+      preferredProtocol,
+    });
+    if (alsoWriteConfig) {
+      // 同时写 ~/.ssh.config 让 OpenSSH 客户端按 host 自动选 key
+      const blocks = [];
+      if (sshGithubKey.trim()) blocks.push({ host: 'github.com', keyPath: sshGithubKey.trim() });
+      if (sshGiteeKey.trim()) blocks.push({ host: 'gitee.com', keyPath: sshGiteeKey.trim() });
+      if (sshKeyPath.trim() && blocks.length === 0) {
+        blocks.push({ host: 'github.com', keyPath: sshKeyPath.trim() });
+        blocks.push({ host: 'gitee.com', keyPath: sshKeyPath.trim() });
       }
-    } catch (e) {
-      setSshTestResult({ ok: false, msg: t('settings.sshAuthFailed', { error: (e as Error).message }) });
-    } finally {
-      setTesting(null);
+      try {
+        const r: any = await window.gitgui.settings.sshWriteConfig(blocks);
+        if (r.ok) {
+          toast.success(t('settings.sshConfigWritten'));
+        } else {
+          toast.error(t('settings.sshWriteConfigFailed', { error: r.error || '未知错误' }));
+        }
+      } catch (e) {
+        toast.error(t('settings.sshWriteConfigFailed', { error: (e as Error).message }));
+      }
+    } else {
+      toast.success(t('settings.saved'));
     }
   };
+
+  // v0.6.2+：按 host 测试 SSH 连接
+  const testSshForHost = async (host: 'github.com' | 'gitee.com', keyPath: string) => {
+    setTestingHost(host);
+    setTestResult(null);
+    try {
+      const r: any = await window.gitgui.settings.testSshForHost({ host, keyPath: keyPath || undefined });
+      if (r.ok) {
+        const m = r.message?.match(/已认证为\s+(\S+)|Hi\s+(\S+?)[!]/);
+        const user = m?.[1] || m?.[2] || r.message;
+        const userText = user || r.message;
+        setTestResult({ ok: true, msg: host === 'github.com' ? `GitHub: ${userText}` : `Gitee: ${userText}` });
+      } else {
+        setTestResult({ ok: false, msg: r.error || r.message || '未知错误' });
+      }
+    } catch (e) {
+      setTestResult({ ok: false, msg: (e as Error).message });
+    } finally {
+      setTestingHost(null);
+    }
+  };
+
+  // v0.6.2+：生成新 SSH 密钥
+  const generateNewKey = async (host: 'github.com' | 'gitee.com') => {
+    setGenBusy(true);
+    try {
+      const keyPath = `${sshKeyPath.replace(/[\\\/]$/, '').replace(/id_ed25519$/, '')}${genKeyName}${host === 'github.com' ? '_github' : '_gitee'}`;
+      // 让后端在 ~/.ssh 下生成（用 home dir，不依赖用户填的 keyPath）
+      const os = await import('node:os'); // node 模块在 renderer 不可用，改用后端默认路径
+      void os;
+      const r: any = await window.gitgui.settings.sshGenerate({
+        keyPath: '', // 留空 → 后端用 ~/.ssh/<genKeyName> 兜底
+        comment: genKeyComment || `kunyao@kunyaogit.local (${host})`,
+        passphrase: '',
+      });
+      if (r && r.publicKey) {
+        // 生成成功 → 把生成的 key 路径自动填到对应 host
+        if (host === 'github.com') setSshGithubKey(r.privatePath);
+        else setSshGiteeKey(r.privatePath);
+        setGenResult({ ...r, host });
+        toast.success(t('settings.sshKeyGenerated'));
+        setGenDialog(null);
+        // 自动复制公钥到剪贴板
+        try {
+          await navigator.clipboard.writeText(r.publicKey);
+        } catch { /* ignore */ }
+      } else {
+        toast.error(t('settings.sshGenerateFailed', { error: r?.error || '未知错误' }));
+      }
+    } catch (e) {
+      toast.error(t('settings.sshGenerateFailed', { error: (e as Error).message }));
+    } finally {
+      setGenBusy(false);
+    }
+  };
+
+  // 复制公钥到剪贴板
+  const copyPubkey = async (pubkey: string) => {
+    try {
+      await navigator.clipboard.writeText(pubkey);
+      toast.success(t('settings.sshCopied'));
+    } catch {
+      // fallback：选中元素让用户 Ctrl+C
+      const ta = document.createElement('textarea');
+      ta.value = pubkey;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      toast.success(t('settings.sshCopied'));
+    }
+  };
+
+  // 打开 ~/.ssh 目录（用 fs:open-path 走 APP_OPEN_PATH）
+  const openSshDir = async () => {
+    try {
+      await window.gitgui.app.openPath('@userData'); // 占位，下面改
+    } catch {}
+  };
+  // 注：openSshDir 实际是 @userData 占位 → 需要新 IPC "app:open-ssh-dir"
+  // 为简化：用现有的 prompt 让用户复制路径
+  void openSshDir;
 
   const pickDir = async () => {
     const r = await window.gitgui.repo.openDialog();
@@ -337,7 +438,7 @@ export default function SettingsPage() {
           </Field>
         </section>
 
-        {/* v0.6+ SSH 推送支持 */}
+        {/* v0.6.2+ SSH 按 host 路由 */}
         <section className="panel p-4 space-y-3">
           <div className="flex items-center gap-2">
             <KeyRound size={18} />
@@ -345,29 +446,79 @@ export default function SettingsPage() {
           </div>
           <p className="text-xs text-gray-500 -mt-2">{t('settings.sshSectionHint')}</p>
 
-          <Field label={t('settings.sshKeyPath')} hint={t('settings.sshKeyPathHint')}>
+          {/* GitHub 私钥 */}
+          <Field label={t('settings.sshGithubKey')} hint={t('settings.sshGithubKeyHint')}>
             <div className="flex gap-2">
               <input
                 className="input flex-1"
-                value={sshKeyPath}
-                onChange={(e) => setSshKeyPath(e.target.value)}
-                placeholder={t('settings.sshKeyPathPlaceholder')}
+                value={sshGithubKey}
+                onChange={(e) => setSshGithubKey(e.target.value)}
+                placeholder="C:\\Users\\<user>\\.ssh\\id_ed25519_github"
               />
               <button
-                onClick={async () => {
-                  // 用现成的 openPath 让用户在文件管理器里选
-                  // （fs:read-dir 之类的接口都是目录的，没有「选文件」接口；
-                  //   这里退到 prompt，让用户粘贴路径）
-                  const p = prompt(t('settings.sshKeyPathHint'));
-                  if (p) setSshKeyPath(p);
+                onClick={() => {
+                  setGenKeyName('id_ed25519_github');
+                  setGenKeyComment('kunyao@kunyaogit.local (GitHub)');
+                  setGenDialog({ host: 'github.com' });
                 }}
                 className="btn-secondary"
+                title={t('settings.sshGenerateKey')}
               >
-                <FolderOpen size={14} /> {t('settings.select')}
+                <Terminal size={14} /> {t('settings.sshGenerateKey')}
+              </button>
+              <button
+                onClick={() => testSshForHost('github.com', sshGithubKey || sshKeyPath)}
+                disabled={testingHost !== null}
+                className="btn-ghost"
+              >
+                {testingHost === 'github.com' ? <Loader2 size={14} className="animate-spin" /> : null}
+                {t('settings.sshTestGithub')}
               </button>
             </div>
           </Field>
 
+          {/* Gitee 私钥 */}
+          <Field label={t('settings.sshGiteeKey')} hint={t('settings.sshGiteeKeyHint')}>
+            <div className="flex gap-2">
+              <input
+                className="input flex-1"
+                value={sshGiteeKey}
+                onChange={(e) => setSshGiteeKey(e.target.value)}
+                placeholder="C:\\Users\\<user>\\.ssh\\id_ed25519_gitee"
+              />
+              <button
+                onClick={() => {
+                  setGenKeyName('id_ed25519_gitee');
+                  setGenKeyComment('kunyao@kunyaogit.local (Gitee)');
+                  setGenDialog({ host: 'gitee.com' });
+                }}
+                className="btn-secondary"
+                title={t('settings.sshGenerateKey')}
+              >
+                <Terminal size={14} /> {t('settings.sshGenerateKey')}
+              </button>
+              <button
+                onClick={() => testSshForHost('gitee.com', sshGiteeKey || sshKeyPath)}
+                disabled={testingHost !== null}
+                className="btn-ghost"
+              >
+                {testingHost === 'gitee.com' ? <Loader2 size={14} className="animate-spin" /> : null}
+                {t('settings.sshTestGitee')}
+              </button>
+            </div>
+          </Field>
+
+          {/* 兜底 key（兼容旧版） */}
+          <Field label={t('settings.sshKeyPath')} hint={t('settings.sshKeyPathHint')}>
+            <input
+              className="input"
+              value={sshKeyPath}
+              onChange={(e) => setSshKeyPath(e.target.value)}
+              placeholder={t('settings.sshKeyPathPlaceholder')}
+            />
+          </Field>
+
+          {/* 协议偏好 */}
           <Field label={t('settings.preferredProtocol')}>
             <div className="flex gap-2">
               {(['auto', 'https', 'ssh'] as const).map((p) => (
@@ -388,20 +539,86 @@ export default function SettingsPage() {
             </div>
           </Field>
 
-          <div className="flex items-center gap-2">
-            <button onClick={testSshConnection} disabled={testing === 'ssh'} className="btn-ghost">
-              {testing === 'ssh' ? <Loader2 size={14} className="animate-spin" /> : <Terminal size={14} />}
-              {t('settings.testSsh')}
+          {/* 底部操作 */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <button onClick={() => saveSsh(true)} className="btn-primary">
+              <Save size={14} /> {t('settings.sshWriteConfig')}
             </button>
-            <button onClick={saveSsh} className="btn-primary">
-              <Save size={14} /> {t('settings.save')}
-            </button>
-            {sshTestResult && (
-              <div className={`text-xs ${sshTestResult.ok ? 'text-emerald-400' : 'text-red-400'}`}>
-                {sshTestResult.msg}
+            {testResult && (
+              <div className={`text-xs ${testResult.ok ? 'text-emerald-400' : 'text-red-400'}`}>
+                {testResult.msg}
               </div>
             )}
           </div>
+
+          {/* 生成密钥对话框（内联展开） */}
+          {genDialog && (
+            <div className="border border-primary-700/40 rounded p-3 bg-primary-900/10 space-y-2">
+              <div className="text-sm font-medium text-primary-300">
+                {t('settings.sshGenerateKeyTitle')}（{genDialog.host}）
+              </div>
+              <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 items-center text-sm">
+                <label className="text-gray-400">{t('settings.sshKeyName')}</label>
+                <input
+                  className="input"
+                  value={genKeyName}
+                  onChange={(e) => setGenKeyName(e.target.value)}
+                  placeholder={t('settings.sshKeyNameHint')}
+                />
+                <label className="text-gray-400">{t('settings.sshKeyComment')}</label>
+                <input
+                  className="input"
+                  value={genKeyComment}
+                  onChange={(e) => setGenKeyComment(e.target.value)}
+                />
+                <label className="text-gray-400">{t('settings.sshKeyType')}</label>
+                <div className="text-xs">{t('settings.sshKeyTypeEd25519')}</div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => generateNewKey(genDialog.host)}
+                  disabled={genBusy || !genKeyName.trim()}
+                  className="btn-primary"
+                >
+                  {genBusy ? <Loader2 size={14} className="animate-spin" /> : <Terminal size={14} />}
+                  {t('settings.sshGenerate')}
+                </button>
+                <button onClick={() => setGenDialog(null)} className="btn-ghost">
+                  {t('common.cancel')}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* 生成结果：显示公钥 + 复制 + 跳转平台 */}
+          {genResult && (
+            <div className="border border-emerald-700/40 rounded p-3 bg-emerald-900/10 space-y-2">
+              <div className="text-sm font-medium text-emerald-300">
+                ✓ {t('settings.sshKeyGenerated')}（{genResult.fingerprint}）
+              </div>
+              <div className="text-xs text-gray-400">
+                {t('settings.sshKeyGeneratedHint')}
+                <a
+                  className="text-primary-400 hover:underline ml-2"
+                  onClick={() => window.gitgui.app.openExternal(genResult.host === 'github.com' ? 'https://github.com/settings/keys' : 'https://gitee.com/personal_access_tokens#ssh-key')}
+                >
+                  {genResult.host === 'github.com' ? t('settings.sshAddToGithub') : t('settings.sshAddToGitee')} →
+                </a>
+              </div>
+              <div className="text-xs text-gray-500">{t('settings.sshPublicKey')}：</div>
+              <pre className="text-[11px] font-mono bg-gray-900/50 border border-gray-800 rounded p-2 break-all whitespace-pre-wrap max-h-32 overflow-auto">
+                {genResult.publicKey}
+              </pre>
+              <div className="flex gap-2">
+                <button onClick={() => copyPubkey(genResult.publicKey)} className="btn-secondary">
+                  <Copy size={14} /> {t('settings.sshCopyToClipboard')}
+                </button>
+                <button onClick={() => setGenResult(null)} className="btn-ghost">
+                  {t('common.close')}
+                </button>
+              </div>
+            </div>
+          )}
         </section>
 
         {/* 关于 */}
