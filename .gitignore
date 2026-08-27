@@ -50,6 +50,7 @@ coverage/
 *.dll
 *.exe
 *.pdb
+logs/.commit-msg.tmp
 
 # 安装包（入 .release-assets/ 供 Gitee raw 路径分发，详见 development-guide §8.3）
 # 注：v0.6.3 起新版本 NSIS 不再入库（Gitee 仓库体积已近 819MB 上限），只走 Release API 上传
